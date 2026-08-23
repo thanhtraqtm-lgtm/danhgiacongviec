@@ -403,6 +403,16 @@ export const MeetingCalendar: React.FC<MeetingCalendarProps> = ({
                               <span>Vào họp online</span>
                             </a>
                           )}
+                          <button
+                            onClick={() => {
+                              const event = new CustomEvent('navigate-to-tab', { detail: 'meeting_register' });
+                              window.dispatchEvent(event);
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-[#006097] hover:underline"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Đăng ký lịch họp</span>
+                          </button>
 
                           {meeting.description && (
                             <div className="text-[11.5px] text-slate-600 dark:text-slate-300 mt-1 bg-white dark:bg-slate-700/50 p-2 rounded-lg border border-slate-200/80 dark:border-slate-700">

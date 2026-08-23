@@ -367,6 +367,20 @@ export default function App() {
     };
   }, []);
 
+  // Listen for navigation to specific tabs from meeting screens
+  useEffect(() => {
+    const handleNavigateToTab = (event: CustomEvent<string>) => {
+      const tab = event.detail;
+      if (tab === 'meeting_register') {
+        setActiveTab('meeting_register');
+      }
+    };
+    window.addEventListener('navigate-to-tab', handleNavigateToTab as EventListener);
+    return () => {
+      window.removeEventListener('navigate-to-tab', handleNavigateToTab as EventListener);
+    };
+  }, []);
+
   useEffect(() => {
     const rawUsers = getStoredUsers();
     let usersUpdated = false;
