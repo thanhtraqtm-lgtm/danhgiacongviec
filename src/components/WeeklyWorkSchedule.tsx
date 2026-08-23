@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -25,7 +25,14 @@ import {
   CheckCircle,
   Loader2,
   BarChart2,
-  XCircle
+  XCircle,
+  ChevronDown,
+  Eye,
+  Maximize2,
+  Calendar,
+  CalendarDays,
+  Download as DownloadIcon,
+  Upload as UploadIcon
 } from 'lucide-react';
 import { WeeklySchedule, User, DEPARTMENTS } from '../types';
 import * as XLSX from 'xlsx';
@@ -48,45 +55,16 @@ interface WeeklyWorkScheduleProps {
   addToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, desc?: string) => void;
 }
 
-const TASK_TYPES = ['Công tác', 'Họp', 'Đào tạo', 'Khác', 'Làm việc tại cơ quan'] as const;
-const TASK_TYPE_LABELS = ['Tổng lịch', 'Lịch Họp trực tuyến', 'Lịch Họp trực tiếp', 'Lịch làm việc tại cơ sở', 'Công tác ngoài tỉnh', 'Làm việc tại cơ quan'] as const;
 const STATUSES = ['Đã hoàn thành', 'Đang thực hiện', 'Chưa bắt đầu', 'Hủy'] as const;
 const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'];
+const DAY_LABELS_SHORT = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
-const WORK_UNITS = [
-  'Thống kê tỉnh Hưng Yên',
-  'Thống kê cơ sở Phố Hiến',
-  'Thống kê cơ sở Như Quỳnh',
-  'Thống kê cơ sở Yên Mỹ',
-  'Thống kê cơ sở Mỹ Hào',
-  'Thống kê cơ sở Khoái Châu',
-  'Thống kê cơ sở Lương Bằng',
-  'Thống kê cơ sở Hoàng Hoa Thám',
-  'Thống kê cơ sở Quỳnh Phụ',
-  'Thống kê cơ sở Hưng Hà',
-  'Thống kê cơ sở Đông Hưng',
-  'Thống kê cơ sở Thái Thụy',
-  'Thống kê cơ sở Tiền Hải',
-  'Thống kê cơ sở Kiến Xương',
-  'Thống kê cơ sở Vũ Thư',
-] as const;
-
-const BASE_UNITS = [
-  'Thống kê cơ sở Phố Hiến',
-  'Thống kê cơ sở Như Quỳnh',
-  'Thống kê cơ sở Yên Mỹ',
-  'Thống kê cơ sở Mỹ Hào',
-  'Thống kê cơ sở Khoái Châu',
-  'Thống kê cơ sở Lương Bằng',
-  'Thống kê cơ sở Hoàng Hoa Thám',
-  'Thống kê cơ sở Quỳnh Phụ',
-  'Thống kê cơ sở Hưng Hà',
-  'Thống kê cơ sở Đông Hưng',
-  'Thống kê cơ sở Thái Thụy',
-  'Thống kê cơ sở Tiền Hải',
-  'Thống kê cơ sở Kiến Xương',
-  'Thống kê cơ sở Vũ Thư',
-];
+const STATUS_ICONS = {
+  'Đã hoàn thành': '✓',
+  'Đang thực hiện': '📝',
+  'Chưa bắt đầu': '○',
+  'Hủy': '✕',
+};
 
 const STATUS_COLORS = {
   'Đã hoàn thành': '#10b981',
@@ -95,12 +73,35 @@ const STATUS_COLORS = {
   'Hủy': '#ef4444',
 };
 
+const TASK_TYPE_COLORS = {
+  'Họp': '#3b82f6',
+  'Công tác': '#10b981',
+  'Làm việc tại cơ quan': '#f59e0b',
+  'Đào tạo': '#ef4444',
+  'Khác': '#8b5cf6',
+};
+
 type DrillDownType = 'baseUnits' | null;
+type TimeFilter = 'week' | 'month' | 'quarter' | 'year';
+
+interface OrgUnit {
+  id: string;
+  name: string;
+  type: 'leader' | 'department' | 'baseUnit';
+  members: User[];
+  color: string;
+}
 
 interface DrillDownData {
   type: DrillDownType;
   name: string;
   schedules: WeeklySchedule[];
+}
+
+interface TimePeriod {
+  label: string;
+  startDate: Date;
+  endDate: Date;
 }
 
 export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
@@ -111,6 +112,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
   onDeleteSchedule,
   addToast
 }) => {
+  // State
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
     const now = new Date();
     const day = now.getDay();
@@ -121,6 +123,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
   const [selectedWorkUnit, setSelectedWorkUnit] = useState<string>('ALL');
   const [filterTaskType, setFilterTaskType] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('week');
   
   const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<WeeklySchedule>>({});
@@ -128,7 +131,61 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
   const [addForm, setAddForm] = useState<Partial<WeeklySchedule>>({});
   const [isImporting, setIsImporting] = useState(false);
   const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
+  const [showTimeFilterModal, setShowTimeFilterModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Derive org units from actual user data (no hardcoding)
+  const orgUnits = useMemo((): OrgUnit[] => {
+    const leaderUsers = users.filter(u => 
+      u.role === 'PROVINCE_LEADER' || 
+      /cục trưởng|phó cục trưởng|giám đốc|phó giám đốc/i.test(u.position || '')
+    );
+    
+    // Get unique departments from non-leader users
+    const nonLeaderUsers = users.filter(u => !leaderUsers.includes(u));
+    const deptMap = new Map<string, User[]>();
+    
+    nonLeaderUsers.forEach(u => {
+      const dept = u.department || 'Chưa phân bổ';
+      if (!deptMap.has(dept)) deptMap.set(dept, []);
+      deptMap.get(dept)!.push(u);
+    });
+
+    const units: OrgUnit[] = [];
+    
+    // Leaders group
+    if (leaderUsers.length > 0) {
+      units.push({
+        id: 'leaders',
+        name: 'Lãnh đạo Cục',
+        type: 'leader',
+        members: leaderUsers,
+        color: '#2d6e3e'
+      });
+    }
+    
+    // Departments and Base Units
+    deptMap.forEach((members, deptName) => {
+      const isBaseUnit = deptName.startsWith('Thống kê cơ sở');
+      units.push({
+        id: `dept_${deptName}`,
+        name: deptName,
+        type: isBaseUnit ? 'baseUnit' : 'department',
+        members,
+        color: isBaseUnit ? '#0d9488' : '#3b82f6'
+      });
+    });
+    
+    return units;
+  }, [users]);
+
+  // Filter org units by selected work unit
+  const filteredOrgUnits = useMemo(() => {
+    if (selectedWorkUnit === 'ALL') return orgUnits;
+    return orgUnits.filter(u => 
+      u.members.some(m => m.workUnit === selectedWorkUnit || m.department === selectedWorkUnit)
+    );
+  }, [orgUnits, selectedWorkUnit]);
 
   const weekStartDate = useMemo(() => {
     const d = new Date(currentWeekStart);
@@ -153,6 +210,28 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     return dates;
   }, [weekStartDate]);
 
+  // Get schedules for a specific org unit and day
+  const getSchedulesForUnitAndDay = useCallback((unit: OrgUnit, dayIndex: number) => {
+    const targetDate = weekDates[dayIndex].toISOString().split('T')[0];
+    const memberNames = new Set(unit.members.map(m => m.fullName));
+    
+    return schedules.filter(s => {
+      if (s.date !== targetDate) return false;
+      if (!memberNames.has(s.userName)) return false;
+      if (filterTaskType !== 'ALL' && s.taskType !== filterTaskType) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTask = s.taskName?.toLowerCase().includes(q);
+        const matchUser = s.userName?.toLowerCase().includes(q);
+        const matchNotes = s.notes?.toLowerCase().includes(q);
+        const matchLocation = s.location?.toLowerCase().includes(q);
+        if (!matchTask && !matchUser && !matchNotes && !matchLocation) return false;
+      }
+      return true;
+    }).sort((a, b) => a.taskName.localeCompare(b.taskName));
+  }, [schedules, weekDates, filterTaskType, searchQuery]);
+
+  // Navigation
   const handlePrevWeek = () => {
     setCurrentWeekStart(new Date(weekStartDate.getTime() - 7 * 24 * 60 * 60 * 1000));
     setSelectedDay(null);
@@ -173,76 +252,6 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     const todayIndex = new Date().getDay();
     setSelectedDay(todayIndex === 0 ? 6 : todayIndex - 1);
     setDrillDown(null);
-  };
-
-  const filteredSchedules = useMemo(() => {
-    return schedules.filter(s => {
-      if (selectedWorkUnit !== 'ALL' && s.workUnit !== selectedWorkUnit) return false;
-      if (filterTaskType !== 'ALL' && s.taskType !== filterTaskType) return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchTask = s.taskName?.toLowerCase().includes(q);
-        const matchUser = s.userName?.toLowerCase().includes(q);
-        const matchNotes = s.notes?.toLowerCase().includes(q);
-        const matchLocation = s.location?.toLowerCase().includes(q);
-        if (!matchTask && !matchUser && !matchNotes && !matchLocation) return false;
-      }
-      return true;
-    });
-  }, [schedules, selectedWorkUnit, filterTaskType, searchQuery]);
-
-  const getSchedulesForDay = (dayIndex: number) => {
-    const targetDate = weekDates[dayIndex].toISOString().split('T')[0];
-    return filteredSchedules.filter(s => s.date === targetDate)
-      .sort((a, b) => a.taskName.localeCompare(b.taskName));
-  };
-
-  // Task type breakdown chart data
-  const getTaskTypeChartData = useCallback((taskTypeFilter: string) => {
-    return BASE_UNITS.map(name => {
-      const unitSchedules = filteredSchedules.filter(s => s.workUnit === name);
-      const typeSchedules = taskTypeFilter === 'TOTAL' 
-        ? unitSchedules 
-        : unitSchedules.filter(s => s.taskType === taskTypeFilter);
-      return { name, value: typeSchedules.length };
-    }).filter(d => d.value > 0);
-  }, [filteredSchedules]);
-
-  const totalChartData = useMemo(() => getTaskTypeChartData('TOTAL'), [getTaskTypeChartData]);
-  const meetingOnlineChartData = useMemo(() => getTaskTypeChartData('Họp'), [getTaskTypeChartData]);
-  const meetingOfflineChartData = useMemo(() => getTaskTypeChartData('Công tác'), [getTaskTypeChartData]);
-  const workAtOfficeChartData = useMemo(() => getTaskTypeChartData('Làm việc tại cơ quan'), [getTaskTypeChartData]);
-  const businessTripChartData = useMemo(() => getTaskTypeChartData('Đào tạo'), [getTaskTypeChartData]);
-  const otherChartData = useMemo(() => getTaskTypeChartData('Khác'), [getTaskTypeChartData]);
-
-  const handleDrillDown = (type: DrillDownType, name: string) => {
-    const groupSchedules = filteredSchedules.filter(s => {
-      if (type === 'baseUnits') return s.workUnit === name;
-      return false;
-    });
-    setDrillDown({ type, name, schedules: groupSchedules });
-  };
-
-  const closeDrillDown = () => setDrillDown(null);
-
-  const getTaskTypeIcon = (type: string) => {
-    switch (type) {
-      case 'Công tác': return <Briefcase className="w-3.5 h-3.5 text-blue-600" />;
-      case 'Họp': return <Users className="w-3.5 h-3.5 text-emerald-600" />;
-      case 'Đào tạo': return <GraduationCap className="w-3.5 h-3.5 text-purple-600" />;
-      case 'Làm việc tại cơ quan': return <BookOpen className="w-3.5 h-3.5 text-slate-600" />;
-      default: return <MoreHorizontal className="w-3.5 h-3.5 text-amber-600" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Đã hoàn thành': return 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300';
-      case 'Đang thực hiện': return 'bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-300';
-      case 'Chưa bắt đầu': return 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300';
-      case 'Hủy': return 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-300';
-      default: return 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border-slate-300';
-    }
   };
 
   const handleEditClick = (schedule: WeeklySchedule) => {
@@ -294,7 +303,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     setAddForm(prev => ({ ...prev, date, dayOfWeek: dayIndex }));
   };
 
-  const openAddForm = (dayIndex?: number) => {
+  const openAddForm = (dayIndex?: number, unitId?: string) => {
     const initialForm: Partial<WeeklySchedule> = {
       date: dayIndex !== undefined ? weekDates[dayIndex].toISOString().split('T')[0] : weekDates[0]?.toISOString().split('T')[0],
       dayOfWeek: dayIndex ?? 0,
@@ -304,20 +313,30 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     if (selectedWorkUnit !== 'ALL') {
       initialForm.workUnit = selectedWorkUnit;
     }
+    // Pre-select unit if provided
+    if (unitId) {
+      const unit = orgUnits.find(u => u.id === unitId);
+      if (unit?.members[0]) {
+        initialForm.userName = unit.members[0].fullName;
+        initialForm.userPosition = unit.members[0].position;
+        initialForm.department = unit.members[0].department;
+        initialForm.workUnit = unit.members[0].workUnit;
+      }
+    }
     setAddForm(initialForm);
     setShowAddForm(true);
   };
 
+  // Excel Export/Import
   const downloadTemplate = useCallback(() => {
     const headers = [
-      'Đơn vị (workUnit)',
-      'Phòng ban (department)',
+      'Đối tượng (Lãnh đạo/Phòng ban/Cơ sở)',
+      'Nhân sự thực hiện',
+      'Chức vụ',
       'Ngày (YYYY-MM-DD)',
       'Thứ (0-6)',
       'Tên công việc',
       'Loại công việc',
-      'Nhân sự',
-      'Chức vụ',
       'Địa điểm',
       'Ghi chú',
       'Trạng thái'
@@ -325,27 +344,25 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
 
     const sampleData = [
       [
-        selectedWorkUnit !== 'ALL' ? selectedWorkUnit : 'Thống kê tỉnh Hưng Yên',
-        'Phòng Thống kê Tổng hợp',
+        'Lãnh đạo Cục',
+        'Đào Trọng Truyền',
+        'Cục trưởng',
         weekDates[0]?.toISOString().split('T')[0] || '',
         '0',
         'Họp triển khai kế hoạch quý',
         'Họp',
-        'Nguyễn Văn A',
-        'Trưởng phòng',
         'Phòng họp A',
         'Họp định kỳ',
         'Chưa bắt đầu'
       ],
       [
-        selectedWorkUnit !== 'ALL' ? selectedWorkUnit : 'Thống kê tỉnh Hưng Yên',
-        'Phòng TCHC',
+        'Phòng Thống kê Tổng hợp',
+        'Bùi Văn Thắng',
+        'Trưởng phòng',
         weekDates[1]?.toISOString().split('T')[0] || '',
         '1',
         'Công tác kiểm tra cơ sở',
         'Công tác',
-        'Trần Thị B',
-        'Chuyên viên',
         'Thống kê cơ sở Phố Hiến',
         'Kiểm tra định kỳ',
         'Chưa bắt đầu'
@@ -355,54 +372,54 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Mẫu lịch tuần');
-    XLSX.writeFile(wb, `Mau_Lich_Tuan_${selectedWorkUnit !== 'ALL' ? selectedWorkUnit.replace(/\s+/g, '_') : 'Tat_Ca'}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.writeFile(wb, `Mau_Lich_Tuan_${new Date().toISOString().split('T')[0]}.xlsx`);
     addToast('success', 'Thành công', 'Đã tải file mẫu về máy');
-  }, [selectedWorkUnit, weekDates, addToast]);
+  }, [weekDates, addToast]);
 
   const exportToExcel = useCallback(() => {
-    if (filteredSchedules.length === 0) {
+    if (schedules.length === 0) {
       addToast('warning', 'Cảnh báo', 'Không có dữ liệu để xuất');
       return;
     }
 
     const headers = [
-      'Đơn vị (workUnit)',
-      'Phòng ban (department)',
-      'Ngày (YYYY-MM-DD)',
-      'Thứ (0-6)',
-      'Tên công việc',
-      'Loại công việc',
+      'Đối tượng',
       'Nhân sự',
       'Chức vụ',
+      'Ngày',
+      'Thứ',
+      'Tên công việc',
+      'Loại công việc',
       'Địa điểm',
       'Ghi chú',
-      'Trạng thái',
-      'Ngày tạo',
-      'Người tạo'
+      'Trạng thái'
     ];
 
-    const data = filteredSchedules.map(s => [
-      s.workUnit || '',
-      s.department || '',
-      s.date,
-      s.dayOfWeek,
-      s.taskName,
-      s.taskType,
-      s.userName,
-      s.userPosition || '',
-      s.location || '',
-      s.notes || '',
-      s.status,
-      s.createdAt,
-      s.createdBy
-    ]);
+    const data = filteredOrgUnits.flatMap(unit => 
+      weekDates.map((date, dayIndex) => {
+        const daySchedules = getSchedulesForUnitAndDay(unit, dayIndex);
+        if (daySchedules.length === 0) return null;
+        return daySchedules.map(s => [
+          unit.name,
+          s.userName,
+          s.userPosition || '',
+          s.date,
+          DAY_LABELS[s.dayOfWeek],
+          s.taskName,
+          s.taskType,
+          s.location || '',
+          s.notes || '',
+          s.status
+        ]);
+      }).flat()
+    ).filter(Boolean);
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Lịch công tác tuần');
-    XLSX.writeFile(wb, `Lich_Cong_Tac_Tuan_${selectedWorkUnit !== 'ALL' ? selectedWorkUnit.replace(/\s+/g, '_') : 'Tat_Ca'}_${weekStartDate.toISOString().split('T')[0]}.xlsx`);
-    addToast('success', 'Thành công', `Đã xuất ${filteredSchedules.length} bản ghi ra Excel`);
-  }, [filteredSchedules, selectedWorkUnit, weekStartDate, addToast]);
+    XLSX.writeFile(wb, `Lich_Cong_Tac_Tuan_${weekStartDate.toISOString().split('T')[0]}.xlsx`);
+    addToast('success', 'Thành công', `Đã xuất ${data.length} bản ghi ra Excel`);
+  }, [schedules, filteredOrgUnits, weekDates, getSchedulesForUnitAndDay, weekStartDate, addToast]);
 
   const handleFileImport = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -428,60 +445,77 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
         const colMap: Record<string, number> = {};
         headers.forEach((h, i) => {
           const normalized = h.toLowerCase().trim();
-          if (normalized.includes('đơn vị') || normalized.includes('workunit')) colMap.workUnit = i;
-          else if (normalized.includes('phòng ban') || normalized.includes('department')) colMap.department = i;
+          if (normalized.includes('đối tượng') || normalized.includes('tổ chức') || normalized.includes('phòng') || normalized.includes('lãnh đạo')) colMap.orgUnit = i;
+          else if (normalized.includes('nhân sự') || normalized.includes('thực hiện') || normalized.includes('người')) colMap.userName = i;
+          else if (normalized.includes('chức vụ') || normalized.includes('position')) colMap.userPosition = i;
           else if (normalized.includes('ngày') || normalized.includes('date')) colMap.date = i;
           else if (normalized.includes('thứ') || normalized.includes('dayofweek')) colMap.dayOfWeek = i;
           else if (normalized.includes('tên công việc') || normalized.includes('taskname') || normalized.includes('nội dung')) colMap.taskName = i;
           else if (normalized.includes('loại') || normalized.includes('tasktype')) colMap.taskType = i;
-          else if (normalized.includes('nhân sự') || normalized.includes('username') || normalized.includes('người')) colMap.userName = i;
-          else if (normalized.includes('chức vụ') || normalized.includes('position') || normalized.includes('userposition')) colMap.userPosition = i;
           else if (normalized.includes('địa điểm') || normalized.includes('location')) colMap.location = i;
           else if (normalized.includes('ghi chú') || normalized.includes('notes') || normalized.includes('note')) colMap.notes = i;
           else if (normalized.includes('trạng thái') || normalized.includes('status')) colMap.status = i;
         });
 
+        // Build lookup for org units
+        const orgUnitLookup = new Map<string, OrgUnit>();
+        orgUnits.forEach(u => {
+          orgUnitLookup.set(u.name.toLowerCase(), u);
+          u.members.forEach(m => {
+            orgUnitLookup.set(m.fullName.toLowerCase(), u);
+          });
+        });
+
         const newSchedules: WeeklySchedule[] = [];
         let errorCount = 0;
-        let duplicateUnitCount = 0;
+        let mismatchCount = 0;
 
         rows.forEach((row, rowIndex) => {
-          const workUnit = row[colMap.workUnit]?.toString().trim() || '';
-          const department = row[colMap.department]?.toString().trim() || '';
+          const orgUnitName = row[colMap.orgUnit]?.toString().trim() || '';
+          const userName = row[colMap.userName]?.toString().trim() || '';
+          const userPosition = row[colMap.userPosition]?.toString().trim() || '';
           const date = row[colMap.date]?.toString().trim() || '';
           const dayOfWeek = parseInt(row[colMap.dayOfWeek]?.toString().trim() || '0', 10);
           const taskName = row[colMap.taskName]?.toString().trim() || '';
           const taskType = row[colMap.taskType]?.toString().trim() || 'Công tác';
-          const userName = row[colMap.userName]?.toString().trim() || '';
-          const userPosition = row[colMap.userPosition]?.toString().trim() || '';
           const location = row[colMap.location]?.toString().trim() || '';
           const notes = row[colMap.notes]?.toString().trim() || '';
           const status = row[colMap.status]?.toString().trim() || 'Chưa bắt đầu';
 
-          if (!taskName || !userName || !date) {
+          if (!taskName || !userName || !date || !orgUnitName) {
             errorCount++;
             return;
           }
 
-          if (selectedWorkUnit !== 'ALL' && workUnit && workUnit !== selectedWorkUnit) {
-            duplicateUnitCount++;
+          // Validate org unit exists in system
+          const matchedUnit = orgUnitLookup.get(orgUnitName.toLowerCase());
+          if (!matchedUnit) {
+            mismatchCount++;
             return;
           }
 
-          const finalWorkUnit = selectedWorkUnit !== 'ALL' ? selectedWorkUnit : (workUnit || '');
+          // Validate user belongs to that unit
+          const matchedUser = matchedUnit.members.find(m => m.fullName.toLowerCase() === userName.toLowerCase());
+          if (!matchedUser) {
+            mismatchCount++;
+            return;
+          }
+
+          const finalWorkUnit = matchedUser.workUnit || '';
+          const finalDept = matchedUser.department || '';
 
           newSchedules.push({
             id: 'ws_' + Date.now() + '_' + rowIndex,
             weekStartDate: weekStartDate.toISOString(),
             weekEndDate: weekEndDate.toISOString(),
-            department,
+            department: finalDept,
             workUnit: finalWorkUnit,
             userName,
-            userPosition,
+            userPosition: matchedUser.position,
             dayOfWeek: isNaN(dayOfWeek) ? 0 : dayOfWeek,
             date,
             taskName,
-            taskType: TASK_TYPES.includes(taskType as any) ? taskType as any : 'Công tác',
+            taskType: ['Công tác', 'Họp', 'Đào tạo', 'Khác', 'Làm việc tại cơ quan'].includes(taskType) ? taskType as any : 'Công tác',
             location,
             notes,
             status: STATUSES.includes(status as any) ? status as any : 'Chưa bắt đầu',
@@ -490,9 +524,9 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
           });
         });
 
-        if (duplicateUnitCount > 0) {
-          addToast('error', 'Lỗi đơn vị không khớp', 
-            `${duplicateUnitCount} dòng bị bỏ qua: Đơn vị trong file không trùng với đơn vị đang chọn (${selectedWorkUnit}). Vui lòng chọn đúng đơn vị hoặc sửa file Excel.`);
+        if (mismatchCount > 0) {
+          addToast('error', 'Lỗi dữ liệu không khớp', 
+            `${mismatchCount} dòng bị bỏ qua: Tên đơn vị/nhân sự không tồn tại trong hệ thống. Vui lòng kiểm tra file Excel.`);
         }
 
         if (newSchedules.length === 0) {
@@ -510,27 +544,57 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
       }
     };
     reader.readAsArrayBuffer(file);
-  }, [selectedWorkUnit, weekStartDate, weekEndDate, onAddSchedule, addToast]);
+  }, [orgUnits, weekStartDate, weekEndDate, onAddSchedule, addToast]);
 
   const triggerFileImport = () => {
     fileInputRef.current?.click();
   };
 
-  const stats = useMemo(() => {
-    const total = filteredSchedules.length;
-    const completed = filteredSchedules.filter(s => s.status === 'Đã hoàn thành').length;
-    const inProgress = filteredSchedules.filter(s => s.status === 'Đang thực hiện').length;
-    const pending = filteredSchedules.filter(s => s.status === 'Chưa bắt đầu').length;
-    const cancelled = filteredSchedules.filter(s => s.status === 'Hủy').length;
-    return { total, completed, inProgress, pending, cancelled };
-  }, [filteredSchedules]);
+  // Stats for footer dashboard
+  const weekStats = useMemo(() => {
+    const weekSchedules = schedules.filter(s => {
+      const scheduleDate = new Date(s.date);
+      return scheduleDate >= weekStartDate && scheduleDate <= weekEndDate;
+    });
+    const total = weekSchedules.length;
+    const completed = weekSchedules.filter(s => s.status === 'Đã hoàn thành').length;
+    const inProgress = weekSchedules.filter(s => s.status === 'Đang thực hiện').length;
+    const pending = weekSchedules.filter(s => s.status === 'Chưa bắt đầu').length;
+    const cancelled = weekSchedules.filter(s => s.status === 'Hủy').length;
+    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+    return { total, completed, inProgress, pending, cancelled, completionRate };
+  }, [schedules, weekStartDate, weekEndDate]);
+
+  // Chart data for task type breakdown by base unit
+  const BASE_UNITS = orgUnits.filter(u => u.type === 'baseUnit');
+  
+  const getTaskTypeChartData = useCallback((taskTypeFilter: string) => {
+    return BASE_UNITS.map(unit => {
+      const unitSchedules = schedules.filter(s => {
+        const scheduleDate = new Date(s.date);
+        if (scheduleDate < weekStartDate || scheduleDate > weekEndDate) return false;
+        return unit.members.some(m => m.fullName === s.userName);
+      });
+      const typeSchedules = taskTypeFilter === 'TOTAL' 
+        ? unitSchedules 
+        : unitSchedules.filter(s => s.taskType === taskTypeFilter);
+      return { name: unit.name.replace('Thống kê cơ sở ', ''), value: typeSchedules.length };
+    }).filter(d => d.value > 0);
+  }, [schedules, BASE_UNITS, weekStartDate, weekEndDate]);
+
+  const totalChartData = useMemo(() => getTaskTypeChartData('TOTAL'), [getTaskTypeChartData]);
+  const meetingOnlineChartData = useMemo(() => getTaskTypeChartData('Họp'), [getTaskTypeChartData]);
+  const meetingOfflineChartData = useMemo(() => getTaskTypeChartData('Công tác'), [getTaskTypeChartData]);
+  const workAtOfficeChartData = useMemo(() => getTaskTypeChartData('Làm việc tại cơ quan'), [getTaskTypeChartData]);
+  const businessTripChartData = useMemo(() => getTaskTypeChartData('Đào tạo'), [getTaskTypeChartData]);
+  const otherChartData = useMemo(() => getTaskTypeChartData('Khác'), [getTaskTypeChartData]);
 
   const HorizontalBarChart = ({ data, title, color }: { 
     data: any[], 
     title: string,
     color: string
   }) => {
-if (data.length === 0) return (
+    if (data.length === 0) return (
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3 h-48 flex items-center justify-center">
         <span className="text-slate-400 text-sm">Chưa có dữ liệu</span>
       </div>
@@ -568,7 +632,7 @@ if (data.length === 0) return (
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 rounded-t-2xl">
             <div className="flex items-center gap-3">
-              <button onClick={closeDrillDown} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+              <button onClick={() => setDrillDown(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
               <div>
@@ -577,7 +641,7 @@ if (data.length === 0) return (
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" onClick={closeDrillDown}>Đóng</button>
+              <button className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" onClick={() => setDrillDown(null)}>Đóng</button>
             </div>
           </div>
           
@@ -601,14 +665,27 @@ if (data.length === 0) return (
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            {getTaskTypeIcon(schedule.taskType)}
+                            <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                              {TASK_TYPE_COLORS[schedule.taskType as keyof typeof TASK_TYPE_COLORS] ? (
+                                <span style={{backgroundColor: TASK_TYPE_COLORS[schedule.taskType as keyof typeof TASK_TYPE_COLORS] + '20', color: TASK_TYPE_COLORS[schedule.taskType as keyof typeof TASK_TYPE_COLORS]}} className="px-1.5 py-0.5 rounded text-[10px] font-bold">
+                                  {schedule.taskType}
+                                </span>
+                              ) : (
+                                schedule.taskType
+                              )}
+                            </span>
                             <span className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">{schedule.taskName}</span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getStatusColor(schedule.status)}`}>
-                              {schedule.status}
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${{
+                              'Đã hoàn thành': 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300',
+                              'Đang thực hiện': 'bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-300',
+                              'Chưa bắt đầu': 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300',
+                              'Hủy': 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-300',
+                            }[schedule.status] || 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border-slate-300'}`}>
+                              {STATUS_ICONS[schedule.status as keyof typeof STATUS_ICONS]} {schedule.status}
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-3 text-xs text-slate-600 dark:text-slate-300">
-                            <span className="flex items-center gap-1"><CalendarIcon className="w-3 h-3" />{schedule.date} ({DAY_LABELS[schedule.dayOfWeek]})</span>
+                            <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{schedule.date} ({DAY_LABELS[schedule.dayOfWeek]})</span>
                             <span className="flex items-center gap-1"><Users className="w-3 h-3" />{schedule.userName}</span>
                             {schedule.userPosition && <span>{schedule.userPosition}</span>}
                             {schedule.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{schedule.location}</span>}
@@ -619,7 +696,7 @@ if (data.length === 0) return (
                           )}
                         </div>
                         <div className="flex gap-1 shrink-0">
-                          <button onClick={() => { handleEditClick(schedule); closeDrillDown(); }} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title="Sửa">
+                          <button onClick={() => { handleEditClick(schedule); setDrillDown(null); }} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title="Sửa">
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button onClick={() => {
@@ -649,15 +726,15 @@ if (data.length === 0) return (
         <div>
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <CalendarIcon className="w-5 h-5 text-[#2d6e3e]" />
-            <span>Lịch Công Tac Tuần</span>
+            <span>Lịch Công Tac Tuần - Bảng Tổng Hợp</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Quản lý lịch công tác, họp, đào tạo hàng tuần theo đơn vị & nhân sự
+            Xem lịch theo cấu trúc tổ chức: Lãnh đạo - Phòng ban - Cơ sở | 7 ngày trong tuần
           </p>
         </div>
       </div>
 
-      {/* Dashboard Stats Row */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
           <div className="flex items-center gap-2">
@@ -665,8 +742,8 @@ if (data.length === 0) return (
               <CalendarIcon className="w-5 h-5 text-slate-600 dark:text-slate-300" />
             </div>
             <div>
-              <p className="text-xs text-slate-500">Tổng lịch</p>
-              <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{stats.total}</p>
+              <p className="text-xs text-slate-500">Tổng lịch tuần</p>
+              <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{weekStats.total}</p>
             </div>
           </div>
         </div>
@@ -677,7 +754,7 @@ if (data.length === 0) return (
             </div>
             <div>
               <p className="text-xs text-slate-500">Đã hoàn thành</p>
-              <p className="text-2xl font-bold text-emerald-600">{stats.completed}</p>
+              <p className="text-2xl font-bold text-emerald-600">{weekStats.completed}</p>
             </div>
           </div>
         </div>
@@ -688,7 +765,7 @@ if (data.length === 0) return (
             </div>
             <div>
               <p className="text-xs text-slate-500">Đang thực hiện</p>
-              <p className="text-2xl font-bold text-sky-600">{stats.inProgress}</p>
+              <p className="text-2xl font-bold text-sky-600">{weekStats.inProgress}</p>
             </div>
           </div>
         </div>
@@ -699,7 +776,7 @@ if (data.length === 0) return (
             </div>
             <div>
               <p className="text-xs text-slate-500">Chưa bắt đầu</p>
-              <p className="text-2xl font-bold text-amber-600">{stats.pending}</p>
+              <p className="text-2xl font-bold text-amber-600">{weekStats.pending}</p>
             </div>
           </div>
         </div>
@@ -710,8 +787,94 @@ if (data.length === 0) return (
             </div>
             <div>
               <p className="text-xs text-slate-500">Đã hủy</p>
-              <p className="text-2xl font-bold text-rose-600">{stats.cancelled}</p>
+              <p className="text-2xl font-bold text-rose-600">{weekStats.cancelled}</p>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* Week Navigation */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <button onClick={handlePrevWeek} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Tuần trước">
+              <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+            </button>
+            
+            <div className="px-4 py-2 bg-[#2d6e3e] text-white rounded-lg shadow-sm">
+              <div className="text-xs font-medium opacity-80 uppercase tracking-wider">Tuần</div>
+              <div className="font-bold text-lg">
+                {weekStartDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} - 
+                {weekEndDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              </div>
+            </div>
+
+            <button onClick={handleNextWeek} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Tuần sau">
+              <ChevronRight className="w-5 h-5 text-slate-600 dark:text-slate-300" />
+            </button>
+
+            <button onClick={handleThisWeek} className="ml-2 px-3 py-1.5 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+              Tuần này
+            </button>
+          </div>
+
+          {/* Filters & Actions */}
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedWorkUnit}
+              onChange={e => { setSelectedWorkUnit(e.target.value); setSelectedDay(null); setDrillDown(null); }}
+              className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:ring-1 focus:ring-[#2d6e3e] min-w-[200px]"
+            >
+              <option value="ALL">Tất cả đơn vị</option>
+              {orgUnits.filter(u => u.type !== 'leader').map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+            </select>
+
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Tìm kiếm công việc, nhân sự, địa điểm..."
+                className="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:ring-1 focus:ring-[#2d6e3e] min-w-[200px]"
+              />
+            </div>
+
+            <select
+              value={filterTaskType}
+              onChange={e => setFilterTaskType(e.target.value)}
+              className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none"
+            >
+              <option value="ALL">Tất cả loại</option>
+              <option value="Họp">Họp</option>
+              <option value="Công tác">Công tác</option>
+              <option value="Làm việc tại cơ quan">Làm việc tại cơ quan</option>
+              <option value="Đào tạo">Đào tạo</option>
+              <option value="Khác">Khác</option>
+            </select>
+
+            <button onClick={downloadTemplate} className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
+              <FileSpreadsheet className="w-4 h-4" />
+              File Mẫu
+            </button>
+
+            <button onClick={exportToExcel} disabled={schedules.length === 0} className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              <DownloadIcon className="w-4 h-4" />
+              Xuất Excel
+            </button>
+
+            <button onClick={triggerFileImport} disabled={isImporting} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50">
+              <UploadIcon className="w-4 h-4" />
+              {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tải Lên'}
+            </button>
+
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileImport} className="hidden" />
+
+            <button onClick={() => openAddForm()} className="px-4 py-2 text-sm font-bold text-white bg-[#2d6e3e] hover:bg-[#235832] rounded-lg flex items-center gap-2 transition-colors shadow-sm">
+              <Plus className="w-4 h-4" />
+              Đăng Ký / Nhập Lịch
+            </button>
           </div>
         </div>
       </div>
@@ -726,574 +889,300 @@ if (data.length === 0) return (
         <HorizontalBarChart data={otherChartData} title="Làm việc tại cơ quan" color="#8b5cf6" />
       </div>
 
-      {/* Toolbar */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          {/* Unit Filter & Search */}
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-              <Building className="w-4 h-4 text-[#2d6e3e]" />
-              <span>Đơn vị:</span>
-            </label>
-            <select
-              value={selectedWorkUnit}
-              onChange={e => { setSelectedWorkUnit(e.target.value); setSelectedDay(null); setDrillDown(null); }}
-              className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:ring-1 focus:ring-[#2d6e3e] min-w-[280px]"
-            >
-              <option value="ALL">Tất cả đơn vị (15 đơn vị)</option>
-              {WORK_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-            </select>
-
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Tìm kiếm công việc, nhân sự, địa điểm..."
-                className="pl-8 pr-3 py-1.5 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:ring-1 focus:ring-[#2d6e3e] min-w-[250px]"
-              />
+      {/* Main Table Grid */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
+        {/* Table Header */}
+        <div className="grid grid-cols-[1fr_repeat(7,minmax(120px,1fr))] bg-[#2d6e3e] text-white border-b border-[#1b4426]">
+          <div className="px-3 py-3 font-bold text-sm text-center sticky left-0 z-10 bg-[#2d6e3e] border-r border-[#1b4426]">
+            ĐỐI TƯỢNG / NGÀY
+          </div>
+          {weekDates.map((date, idx) => (
+            <div key={idx} className={`px-2 py-3 text-center text-xs font-medium border-r border-[#1b4426] ${idx >= 5 ? 'bg-[#235832]' : ''} ${date.toDateString() === new Date().toDateString() ? 'bg-[#1e4d2b] ring-2 ring-yellow-300/50' : ''}`}>
+              <div className="text-[10px] opacity-80">{date.toLocaleDateString('vi-VN', { month: '2-digit', day: '2-digit' })}</div>
+              <div className="font-bold">{DAY_LABELS[idx]}</div>
+              <div className="text-[10px]">{date.getDate()}</div>
             </div>
-
-            <select
-              value={filterTaskType}
-              onChange={e => setFilterTaskType(e.target.value)}
-              className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none"
-            >
-              <option value="ALL">Tất cả loại</option>
-              {TASK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={downloadTemplate}
-              className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors"
-              title="Tải file mẫu Excel"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              File Mẫu
-            </button>
-
-            <button
-              onClick={exportToExcel}
-              disabled={filteredSchedules.length === 0}
-              className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Xuất ra file Excel"
-            >
-              <Download className="w-4 h-4" />
-              Xuất Excel
-            </button>
-
-            <button
-              onClick={triggerFileImport}
-              disabled={isImporting}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
-              title="Nhập từ file Excel"
-            >
-              <Upload className="w-4 h-4" />
-              {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Tải Lên'}
-            </button>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileImport}
-              className="hidden"
-            />
-
-            <button
-              onClick={() => openAddForm()}
-              className="px-4 py-2 text-sm font-bold text-white bg-[#2d6e3e] hover:bg-[#235832] rounded-lg flex items-center gap-2 transition-colors shadow-sm"
-            >
-              <Plus className="w-4 h-4" />
-              Đăng Ký / Nhập Lịch
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Week Navigation */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <button onClick={handlePrevWeek} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Tuần trước">
-            <ChevronLeft className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-          </button>
-          
-          <div className="px-4 py-2 bg-[#2d6e3e] text-white rounded-lg shadow-sm">
-            <div className="text-xs font-medium opacity-80 uppercase tracking-wider">Tuần</div>
-            <div className="font-bold text-lg">
-              {weekStartDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} - 
-              {weekEndDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-            </div>
-          </div>
-
-          <button onClick={handleNextWeek} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Tuần sau">
-            <ChevronRight className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-          </button>
-
-          <button onClick={handleThisWeek} className="ml-2 px-3 py-1.5 text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-            Tuần này
-          </button>
+          ))}
         </div>
 
-        <div className="text-sm text-slate-500">
-          Đơn vị: <span className="font-semibold text-slate-800 dark:text-slate-100">{selectedWorkUnit === 'ALL' ? 'Tất cả' : selectedWorkUnit}</span> | 
-          {filteredSchedules.length} lịch
-        </div>
-      </div>
-
-      {/* Main Grid: Left Week Calendar + Right Day Schedule */}
-      <div className="flex flex-col lg:flex-row gap-5">
-        
-        {/* Calendar Area - Weekly View */}
-        <div className="flex-1 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col">
-          {/* Week Header */}
-          <div className="p-3.5 bg-[#2d6e3e] text-white flex items-center justify-between">
-            <h3 className="text-base font-bold flex items-center gap-2 tracking-wide uppercase">
-              <CalendarIcon className="w-4 h-4" />
-              Lịch tuần
-            </h3>
-          </div>
-          
-          {/* Weekday headers */}
-          <div className="grid grid-cols-7 bg-[#235832] text-white border-b border-[#1b4426]">
-            {weekDates.map((date, idx) => {
-              const isToday = date.toDateString() === new Date().toDateString();
-              const isSelected = selectedDay === idx;
-              return (
-                <div 
-                  key={idx} 
-                  onClick={() => setSelectedDay(idx)}
-                  className={`py-3 text-center cursor-pointer transition-all relative ${
-                    isSelected 
-                      ? 'bg-[#2d6e3e] text-white font-bold' 
-                      : isToday
-                      ? 'bg-white/10 text-yellow-300 font-bold'
-                      : 'text-white/90 hover:bg-white/10'
-                  }`}
-                >
-                  <div className={`text-xs font-medium ${idx >= 5 ? 'text-amber-300' : ''}`}>
-                    {DAY_LABELS[idx]}
-                  </div>
-                  <div className={`text-lg font-bold mt-0.5 ${isToday ? 'text-yellow-200' : ''}`}>
-                    {date.getDate()}
-                  </div>
-                  <div className="text-[10px] opacity-70 mt-0.5">
-                    {date.toLocaleDateString('vi-VN', { month: '2-digit' })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          
-          {/* Days Grid - List View */}
-          <div className="grid grid-cols-7 flex-1 min-h-[400px]">
-            {weekDates.map((date, dayIndex) => {
-              const daySchedules = getSchedulesForDay(dayIndex);
-              const isToday = date.toDateString() === new Date().toDateString();
-              const isSelected = selectedDay === dayIndex;
-              const hasSchedules = daySchedules.length > 0;
-
-              return (
-                <div 
-                  key={dayIndex} 
-                  onClick={() => setSelectedDay(dayIndex)}
-                  className={`border border-slate-200 dark:border-slate-800 p-2 flex flex-col min-h-[150px] ${
-                    isSelected 
-                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-[#2d6e3e] ring-2 ring-[#2d6e3e]/50 z-10' 
-                      : isToday
-                      ? 'bg-sky-50/40 dark:bg-sky-950/20 border-sky-300/50'
-                      : hasSchedules
-                      ? 'bg-amber-50/40 dark:bg-amber-950/20 hover:bg-amber-50 dark:hover:bg-amber-950/30'
-                      : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${
-                      isToday 
-                        ? 'bg-sky-600 text-white shadow-xs' 
-                        : isSelected
-                        ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900'
-                        : 'text-slate-700 dark:text-slate-300'
-                    }`}>
-                      {date.getDate()}
+        {/* Table Body */}
+        <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
+          <div className="grid grid-cols-[1fr_repeat(7,minmax(120px,1fr))]">
+            {filteredOrgUnits.map((unit, unitIdx) => (
+              <React.Fragment key={unit.id}>
+                {/* Row Header */}
+                <div className={`px-3 py-2 border-b border-slate-200 dark:border-slate-800 border-r border-slate-200 dark:border-slate-800 sticky left-0 z-10 ${unit.type === 'leader' ? 'bg-emerald-50 dark:bg-emerald-950/30' : unit.type === 'department' ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-teal-50 dark:bg-teal-950/30'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${unit.type === 'leader' ? 'bg-emerald-600' : unit.type === 'department' ? 'bg-blue-600' : 'bg-teal-600'}`} />
+                    <span className={`font-medium text-xs ${unit.type === 'leader' ? 'text-emerald-800 dark:text-emerald-200' : unit.type === 'department' ? 'text-blue-800 dark:text-blue-200' : 'text-teal-800 dark:text-teal-200'}`}>
+                      {unit.name}
                     </span>
-                    {hasSchedules && (
-                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white shadow-xs">
-                        {daySchedules.length} việc
-                      </span>
-                    )}
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50">
+                      {unit.members.length} NV
+                    </span>
                   </div>
-
-                  <div className="flex-1 overflow-y-auto space-y-1.5 custom-scrollbar">
-                    {daySchedules.map((schedule, idx) => (
-                      <div 
-                        key={schedule.id} 
-                        className={`text-[10.5px] px-1.5 py-1 rounded font-medium border cursor-pointer hover:shadow-sm transition-shadow ${
-                          getStatusColor(schedule.status)
-                        }`}
-                        title={`${schedule.taskName} - ${schedule.userName}`}
-                      >
-                        <div className="flex items-center gap-1 mb-0.5">
-                          {getTaskTypeIcon(schedule.taskType)}
-                          <span className="font-bold truncate">{schedule.taskName}</span>
-                        </div>
-                        <div className="flex items-center gap-1 text-[10px] opacity-80">
-                          <span className="truncate">{schedule.userName}</span>
-                          {schedule.location && (
-                            <>
-                              <MapPin className="w-3 h-3 shrink-0" />
-                              <span className="truncate">{schedule.location}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    {!hasSchedules && (
-                      <div className="text-center py-6 text-slate-400">
-                        <span className="text-[11px]">Chưa có lịch</span>
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={(e) => { e.stopPropagation(); openAddForm(dayIndex); }}
-                    className="mt-2 text-center text-[11px] text-slate-400 hover:text-[#2d6e3e] font-medium transition-colors"
-                  >
-                    + Thêm
-                  </button>
                 </div>
-              );
-            })}
-          </div>
-        </div>
 
-        {/* Selected Day Detail / Add Form (Right Pane) */}
-        <div className="w-full lg:w-[420px] flex flex-col gap-4 shrink-0">
-          {showAddForm && (
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-5 flex flex-col min-h-[500px]">
-              <div className="pb-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide flex items-center gap-2">
-                  <Plus className="w-4 h-4 text-[#2d6e3e]" />
-                  Thêm lịch mới
-                </h3>
-                <button onClick={() => { setShowAddForm(false); setAddForm({}); }} className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto custom-scrollbar py-3 space-y-3">
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Ngày</label>
-                    <div className="grid grid-cols-7 gap-1">
-                      {weekDates.map((date, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => handleAddFormDateChange(idx)}
-                          className={`py-2 text-center text-xs rounded-lg transition-all ${
-                            addForm.dayOfWeek === idx
-                              ? 'bg-[#2d6e3e] text-white font-bold'
-                              : date.toDateString() === new Date().toDateString()
-                              ? 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 font-medium'
-                              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                          }`}
-                        >
-                          <div>{DAY_LABELS[idx].charAt(0)}</div>
-                          <div className="font-bold">{date.getDate()}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <input 
-                    type="text" 
-                    value={addForm.taskName || ''} 
-                    onChange={e => setAddForm({...addForm, taskName: e.target.value})}
-                    placeholder="Tên công việc / Nội dung"
-                    className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                  />
+                {/* Cells for 7 days */}
+                {weekDates.map((date, dayIndex) => {
+                  const daySchedules = getSchedulesForUnitAndDay(unit, dayIndex);
+                  const isToday = date.toDateString() === new Date().toDateString();
                   
-                  <select 
-                    value={addForm.taskType || 'Công tác'}
-                    onChange={e => setAddForm({...addForm, taskType: e.target.value})}
-                    className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                  >
-                    {TASK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-
-                  <select 
-                    value={addForm.userName || ''}
-                    onChange={e => {
-                      const selectedUser = users.find(u => u.fullName === e.target.value);
-                      setAddForm(prev => ({ 
-                        ...prev, 
-                        userName: e.target.value,
-                        userPosition: selectedUser?.position,
-                        department: selectedUser?.department,
-                        workUnit: selectedUser?.workUnit
-                      }));
-                    }}
-                    className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                  >
-                    <option value="">Chọn nhân sự</option>
-                    {users.map(u => <option key={u.id} value={u.fullName}>{u.fullName} - {u.position}</option>)}
-                  </select>
-
-                  {/* WorkUnit field - pre-filled and disabled when unit is selected */}
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      Đơn vị (Cơ sở) {selectedWorkUnit !== 'ALL' && <span className="text-xs text-emerald-600">(Đã khóa theo bộ lọc)</span>}
-                    </label>
-                    <select 
-                      value={addForm.workUnit || (selectedWorkUnit !== 'ALL' ? selectedWorkUnit : '')}
-                      onChange={selectedWorkUnit === 'ALL' ? e => setAddForm({...addForm, workUnit: e.target.value}) : undefined}
-                      disabled={selectedWorkUnit !== 'ALL'}
-                      className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:cursor-not-allowed"
+                  return (
+                    <div 
+                      key={dayIndex} 
+                      className={`px-2 py-2 border-b border-slate-200 dark:border-slate-800 border-r border-slate-200 dark:border-slate-800 min-h-[80px] ${isToday ? 'bg-sky-50 dark:bg-sky-950/20' : daySchedules.length > 0 ? 'bg-amber-50/30 dark:bg-amber-950/10' : 'bg-white dark:bg-slate-900'} hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors`}
                     >
-                      <option value="">Chọn đơn vị</option>
-                      {WORK_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                    </select>
-                  </div>
-
-                  <input 
-                    type="text" 
-                    value={addForm.location || ''} 
-                    onChange={e => setAddForm({...addForm, location: e.target.value})}
-                    placeholder="Địa điểm (tùy chọn)"
-                    className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                  />
-
-                  <textarea 
-                    value={addForm.notes || ''} 
-                    onChange={e => setAddForm({...addForm, notes: e.target.value})}
-                    placeholder="Ghi chú (tùy chọn)"
-                    className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs resize-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                    rows={2}
-                  />
-
-                  <select 
-                    value={addForm.status || 'Chưa bắt đầu'}
-                    onChange={e => setAddForm({...addForm, status: e.target.value})}
-                    className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                  >
-                    {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-
-                  <div className="flex gap-2 justify-end pt-2">
-                    <button onClick={() => { setShowAddForm(false); setAddForm({}); }} className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg">Hủy</button>
-                    <button onClick={handleAddSchedule} className="px-3 py-1.5 text-xs text-white bg-[#2d6e3e] rounded-lg flex items-center gap-1 font-bold hover:bg-[#235832]">
-                      <Save className="w-3 h-3" /> Lưu
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!showAddForm && (
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-5 flex flex-col min-h-[500px]">
-              <div className="pb-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wide">
-                    {selectedDay !== null 
-                      ? `Chi tiết ${DAY_LABELS[selectedDay]} (${weekDates[selectedDay]?.toLocaleDateString('vi-VN')})`
-                      : 'Chọn ngày trên lịch'
-                    }
-                  </h3>
-                  <span className="text-xs text-slate-500">
-                    {selectedDay !== null ? getSchedulesForDay(selectedDay).length : 0} lịch trong ngày
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto custom-scrollbar py-3 space-y-3">
-                {selectedDay === null && (
-                  <div className="text-center py-12 text-slate-400">
-                    <CalendarIcon className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                    <p className="text-xs">Chọn một ngày trong tuần để xem chi tiết</p>
-                  </div>
-                )}
-
-                {selectedDay !== null && getSchedulesForDay(selectedDay).length === 0 && (
-                  <div className="text-center py-12 text-slate-400">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto text-slate-400 mb-2">
-                      <Briefcase className="w-5 h-5" />
-                    </div>
-                    <p className="text-xs font-medium text-slate-600 dark:text-slate-300">Không có lịch công tác trong ngày này</p>
-                    <button 
-                      onClick={() => openAddForm(selectedDay)}
-                      className="mt-3 px-3 py-1.5 text-xs text-white bg-[#2d6e3e] rounded-lg hover:bg-[#235832] transition-colors"
-                    >
-                      Thêm lịch đầu tiên
-                    </button>
-                  </div>
-                )}
-
-                {selectedDay !== null && getSchedulesForDay(selectedDay).length > 0 && (
-                  getSchedulesForDay(selectedDay).map((schedule, idx) => (
-                    <div key={schedule.id} className="border border-slate-200 dark:border-slate-700 rounded-xl p-3.5 bg-slate-50 dark:bg-slate-800/60 space-y-2.5 shadow-xs">
-                      {editingSchedule === schedule.id ? (
-                        <div className="space-y-2.5">
-                          <input 
-                            type="text" 
-                            value={editForm.taskName} 
-                            onChange={e => setEditForm({...editForm, taskName: e.target.value})}
-                            className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-bold bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                          />
-                          <select 
-                            value={editForm.taskType}
-                            onChange={e => setEditForm({...editForm, taskType: e.target.value})}
-                            className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                          >
-                            {TASK_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                          </select>
-                          <input 
-                            type="text" 
-                            value={editForm.userName || ''} 
-                            onChange={e => {
-                              const selectedUser = users.find(u => u.fullName === e.target.value);
-                              setEditForm(prev => ({ 
-                                ...prev, 
-                                userName: e.target.value,
-                                userPosition: selectedUser?.position,
-                                department: selectedUser?.department,
-                                workUnit: selectedUser?.workUnit
-                              }));
-                            }}
-                            className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                            list="user-list"
-                          />
-                          <datalist id="user-list">
-                            {users.map(u => <option key={u.id} value={u.fullName} />)}
-                          </datalist>
-                          
-                          {/* WorkUnit in edit form - also locked to selected unit */}
-                          <div>
-                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                              Đơn vị (Cơ sở) {selectedWorkUnit !== 'ALL' && <span className="text-xs text-emerald-600">(Đã khóa theo bộ lọc)</span>}
-                            </label>
-                            <select 
-                              value={editForm.workUnit || (selectedWorkUnit !== 'ALL' ? selectedWorkUnit : '')}
-                              onChange={selectedWorkUnit === 'ALL' ? e => setEditForm({...editForm, workUnit: e.target.value}) : undefined}
-                              disabled={selectedWorkUnit !== 'ALL'}
-                              className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 disabled:bg-slate-100 dark:disabled:bg-slate-800 disabled:cursor-not-allowed"
-                            >
-                              <option value="">Chọn đơn vị</option>
-                              {WORK_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
-                            </select>
-                          </div>
-
-                          <input 
-                            type="text" 
-                            value={editForm.location || ''} 
-                            onChange={e => setEditForm({...editForm, location: e.target.value})}
-                            placeholder="Địa điểm"
-                            className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                          />
-                          <textarea 
-                            value={editForm.notes || ''} 
-                            onChange={e => setEditForm({...editForm, notes: e.target.value})}
-                            className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs resize-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                            rows={2}
-                          />
-                          <select 
-                            value={editForm.status}
-                            onChange={e => setEditForm({...editForm, status: e.target.value})}
-                            className="w-full px-2.5 py-1.5 border border-slate-300 dark:border-slate-600 rounded-lg text-xs bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-                          >
-                            {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                          </select>
-                          
-                          <div className="flex gap-2 justify-end pt-1">
-                            <button onClick={() => setEditingSchedule(null)} className="px-2.5 py-1 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg">Hủy</button>
-                            <button onClick={() => handleSaveEdit(schedule.id)} className="px-2.5 py-1 text-xs text-white bg-[#2d6e3e] rounded-lg flex items-center gap-1 font-bold hover:bg-[#235832]">
-                              <Save className="w-3 h-3" /> Lưu
-                            </button>
+                      {daySchedules.map((schedule, taskIdx) => (
+                        <div 
+                          key={schedule.id} 
+                          className="mb-1.5 p-1.5 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 hover:shadow-sm transition-shadow cursor-pointer"
+                          onClick={() => handleEditClick(schedule)}
+                          title="Click để chỉnh sửa"
+                        >
+                          <div className="flex items-start gap-1.5">
+                            <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${{
+                              'Đã hoàn thành': 'bg-emerald-100 text-emerald-700',
+                              'Đang thực hiện': 'bg-sky-100 text-sky-700',
+                              'Chưa bắt đầu': 'bg-amber-100 text-amber-700',
+                              'Hủy': 'bg-rose-100 text-rose-700',
+                            }[schedule.status] || 'bg-slate-100 text-slate-700'}`}>
+                              {STATUS_ICONS[schedule.status as keyof typeof STATUS_ICONS]}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[10px] font-medium text-slate-800 dark:text-slate-200 truncate">
+                                {schedule.taskName}
+                              </div>
+                              <div className="flex items-center gap-1 text-[9px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                <span>{schedule.userName}</span>
+                                {schedule.location && <span className="truncate">· {schedule.location}</span>}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      ) : (
-                        <div>
-                          <div className="flex justify-between items-start mb-1.5">
-                            <div className="flex items-center gap-2">
-                              {getTaskTypeIcon(schedule.taskType)}
-                              <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs leading-snug">
-                                {idx + 1}. {schedule.taskName}
-                              </h4>
-                            </div>
-                            <div className="flex gap-1 shrink-0 ml-2">
-                              <button onClick={() => handleEditClick(schedule)} className="p-1 text-slate-400 hover:text-indigo-600 rounded transition-colors" title="Sửa">
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button onClick={() => {
-                                if (confirm('Bạn có chắc muốn xóa lịch công tác này?')) {
-                                  onDeleteSchedule(schedule.id);
-                                  addToast('success', 'Đã xóa', 'Lịch công tác đã được xóa thành công');
-                                }
-                              }} className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors" title="Xóa">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
-                            <div className="flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200">
-                              <Clock className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                              <span>Loại: {schedule.taskType}</span>
-                            </div>
-
-                            <div className="flex items-center gap-1.5">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getStatusColor(schedule.status)}`}>
-                                {schedule.status}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-1.5">
-                              <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                              <span>{schedule.userName} - {schedule.userPosition || ''}</span>
-                            </div>
-
-                            {schedule.location && (
-                              <div className="flex items-center gap-1.5">
-                                <MapPin className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                                <span>{schedule.location}</span>
-                              </div>
-                            )}
-
-                            {schedule.department && (
-                              <div className="flex items-center gap-1.5">
-                                <Building className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                                <span>Phòng ban: {schedule.department}</span>
-                              </div>
-                            )}
-
-                            {schedule.workUnit && (
-                              <div className="flex items-center gap-1.5">
-                                <Building className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                                <span className="font-medium">Cơ sở: {schedule.workUnit}</span>
-                              </div>
-                            )}
-
-                            {schedule.notes && (
-                              <div className="text-[11.5px] text-slate-600 dark:text-slate-300 mt-1 bg-white dark:bg-slate-700/50 p-2 rounded-lg border border-slate-200/80 dark:border-slate-700">
-                                {schedule.notes}
-                              </div>
-                            )}
-                          </div>
+                      ))}
+                      {daySchedules.length === 0 && (
+                        <div className="text-center text-slate-300 dark:text-slate-600 py-4">
+                          <span className="text-[10px]">—</span>
                         </div>
                       )}
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Dashboard: Progress Bars + Time Filter */}
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-[#2d6e3e]" />
+            Tổng Hợp Tuần: {weekStartDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} - {weekEndDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+          </h3>
+          <button 
+            onClick={() => setShowTimeFilterModal(true)} 
+            className="px-4 py-2 text-sm font-medium text-white bg-[#2d6e3e] hover:bg-[#235832] rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <Calendar className="w-4 h-4" />
+            Xem Tháng/Quý/Năm
+          </button>
         </div>
 
+        {/* Progress Bars */}
+        <div className="space-y-3">
+          <div>
+            <div className="flex justify-between text-xs mb-1">
+              <span className="font-medium text-slate-700 dark:text-slate-300">Tổng tiến độ hoàn thành</span>
+              <span className="font-bold text-emerald-600">{weekStats.completionRate}%</span>
+            </div>
+            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500" 
+                style={{ width: `${weekStats.completionRate}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg border border-emerald-200 dark:border-emerald-900">
+              <p className="text-xs text-emerald-700 dark:text-emerald-300">Đã hoàn thành</p>
+              <p className="text-2xl font-bold text-emerald-600">{weekStats.completed}</p>
+              <p className="text-[10px] text-emerald-500">{weekStats.total > 0 ? Math.round((weekStats.completed/weekStats.total)*100) : 0}%</p>
+            </div>
+            <div className="p-3 bg-sky-50 dark:bg-sky-950/30 rounded-lg border border-sky-200 dark:border-sky-900">
+              <p className="text-xs text-sky-700 dark:text-sky-300">Đang thực hiện</p>
+              <p className="text-2xl font-bold text-sky-600">{weekStats.inProgress}</p>
+              <p className="text-[10px] text-sky-500">{weekStats.total > 0 ? Math.round((weekStats.inProgress/weekStats.total)*100) : 0}%</p>
+            </div>
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-900">
+              <p className="text-xs text-amber-700 dark:text-amber-300">Chưa bắt đầu</p>
+              <p className="text-2xl font-bold text-amber-600">{weekStats.pending}</p>
+              <p className="text-[10px] text-amber-500">{weekStats.total > 0 ? Math.round((weekStats.pending/weekStats.total)*100) : 0}%</p>
+            </div>
+            <div className="p-3 bg-rose-50 dark:bg-rose-950/30 rounded-lg border border-rose-200 dark:border-rose-900">
+              <p className="text-xs text-rose-700 dark:text-rose-300">Đã hủy</p>
+              <p className="text-2xl font-bold text-rose-600">{weekStats.cancelled}</p>
+              <p className="text-[10px] text-rose-500">{weekStats.total > 0 ? Math.round((weekStats.cancelled/weekStats.total)*100) : 0}%</p>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Add/Edit Form Modal (Right Side Panel) */}
+      {showAddForm && (
+        <div className="fixed right-0 top-0 bottom-0 z-50 w-full lg:w-[480px] bg-white dark:bg-slate-900 shadow-xl border-l border-slate-200 dark:border-slate-800 flex flex-col animate-in slide-in-from-right">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900">
+            <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <Plus className="w-5 h-5 text-[#2d6e3e]" />
+              {editingSchedule ? 'Chỉnh sửa lịch' : 'Thêm lịch mới'}
+            </h3>
+            <button onClick={() => { setShowAddForm(false); setAddForm({}); setEditingSchedule(null); }} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+            {/* Assignee Selection - Dropdown from actual org units */}
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Đối tượng thực hiện <span className="text-rose-500">*</span></label>
+              <select 
+                value={addForm.userName || ''}
+                onChange={e => {
+                  const selectedUser = users.find(u => u.fullName === e.target.value);
+                  setAddForm(prev => ({ 
+                    ...prev, 
+                    userName: e.target.value,
+                    userPosition: selectedUser?.position,
+                    department: selectedUser?.department,
+                    workUnit: selectedUser?.workUnit
+                  }));
+                }}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+              >
+                <option value="">Chọn nhân sự...</option>
+                <optgroup label="🟢 Lãnh đạo Cục">
+                  {users.filter(u => u.role === 'PROVINCE_LEADER' || /cục trưởng|phó cục trưởng/i.test(u.position || '')).map(u => (
+                    <option key={u.id} value={u.fullName}>{u.fullName} - {u.position}</option>
+                  ))}
+                </optgroup>
+                {(() => {
+                    const nonLeaderUsers = users.filter(u => !(u.role === 'PROVINCE_LEADER' || /cục trưởng|phó cục trưởng/i.test(u.position || '')));
+                    const departments = Array.from(new Set(nonLeaderUsers.map(u => u.department)));
+                    return departments.map(dept => (
+                      <optgroup key={dept} label={`🔵 ${dept}`}>
+                        {nonLeaderUsers.filter(u => u.department === dept).map(u => (
+                          <option key={u.id} value={u.fullName}>{u.fullName} - {u.position}</option>
+                        ))}
+                      </optgroup>
+                    ));
+                  })()}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Ngày <span className="text-rose-500">*</span></label>
+              <div className="grid grid-cols-7 gap-1">
+                {weekDates.map((date, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleAddFormDateChange(idx)}
+                    className={`py-2 text-center text-xs rounded-lg transition-all ${
+                      addForm.dayOfWeek === idx
+                        ? 'bg-[#2d6e3e] text-white font-bold'
+                        : date.toDateString() === new Date().toDateString()
+                        ? 'bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 font-medium'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <div>{DAY_LABELS_SHORT[idx]}</div>
+                    <div className="font-bold">{date.getDate()}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <input 
+              type="text" 
+              value={addForm.taskName || ''} 
+              onChange={e => setAddForm({...addForm, taskName: e.target.value})}
+              placeholder="Tên công việc / Nội dung *"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+            />
+            
+            <select 
+              value={addForm.taskType || 'Công tác'}
+              onChange={e => setAddForm({...addForm, taskType: e.target.value})}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+            >
+              <option value="Công tác">Công tác</option>
+              <option value="Họp">Họp</option>
+              <option value="Làm việc tại cơ quan">Làm việc tại cơ quan</option>
+              <option value="Đào tạo">Đào tạo</option>
+              <option value="Khác">Khác</option>
+            </select>
+
+            <input 
+              type="text" 
+              value={addForm.location || ''} 
+              onChange={e => setAddForm({...addForm, location: e.target.value})}
+              placeholder="Địa điểm"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+            />
+
+            <textarea 
+              value={addForm.notes || ''} 
+              onChange={e => setAddForm({...addForm, notes: e.target.value})}
+              placeholder="Ghi chú"
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm resize-none bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+              rows={2}
+            />
+
+            <select 
+              value={addForm.status || 'Chưa bắt đầu'}
+              onChange={e => setAddForm({...addForm, status: e.target.value})}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+            >
+              {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+
+            <div className="flex gap-2 pt-2">
+              <button onClick={() => { setShowAddForm(false); setAddForm({}); setEditingSchedule(null); }} className="flex-1 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg">Hủy</button>
+              <button onClick={editingSchedule ? () => handleSaveEdit(editingSchedule) : handleAddSchedule} className="flex-1 px-3 py-2 text-sm text-white bg-[#2d6e3e] rounded-lg flex items-center justify-center gap-2 font-bold hover:bg-[#235832]">
+                <Save className="w-4 h-4" /> {editingSchedule ? 'Cập nhật' : 'Lưu'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Time Filter Modal */}
+      {showTimeFilterModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-md w-full">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100">Báo cáo tổng hợp theo thời gian</h3>
+              <button onClick={() => setShowTimeFilterModal(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-2">
+              {['week', 'month', 'quarter', 'year'].map((filter: TimeFilter) => (
+                <button
+                  key={filter}
+                  onClick={() => { setTimeFilter(filter); setShowTimeFilterModal(false); addToast('info', 'Chuyển chế độ', `Đang xem báo cáo theo ${filter === 'week' ? 'Tuần' : filter === 'month' ? 'Tháng' : filter === 'quarter' ? 'Quý' : 'Năm'}`); }}
+                  className={`w-full p-3 rounded-lg text-left transition-colors ${timeFilter === filter ? 'bg-[#2d6e3e] text-white' : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                >
+                  <div className="font-medium">{filter === 'week' ? 'Tuần hiện tại' : filter === 'month' ? 'Tháng hiện tại' : filter === 'quarter' ? 'Quý hiện tại' : 'Năm hiện tại'}</div>
+                  <div className="text-xs opacity-70">Thống kê tổng hợp lịch công tác</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
