@@ -23,10 +23,29 @@ import {
   FileSpreadsheet,
   AlertCircle,
   CheckCircle,
-  Loader2
+  Loader2,
+  BarChart2,
+  PieChart,
+  ChevronDown,
+  Eye,
+  XCircle,
+  Maximize2
 } from 'lucide-react';
 import { WeeklySchedule, User, DEPARTMENTS } from '../types';
 import * as XLSX from 'xlsx';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  Pie,
+  Cell,
+  PieChart as RechartsPieChart
+} from 'recharts';
 
 interface WeeklyWorkScheduleProps {
   schedules: WeeklySchedule[];
@@ -59,6 +78,53 @@ const WORK_UNITS = [
   'Thống kê cơ sở Vũ Thư',
 ] as const;
 
+const LEADERS = [
+  'Đào Trọng Truyền',
+  'Đỗ Xuân Phú',
+  'Nguyễn Thị Hoài Thảo',
+  'Nguyễn Duy Minh',
+];
+
+const DEPARTMENTS_LIST = [
+  'Phòng Thống kê Tổng hợp',
+  'Phòng TCHC',
+  'Phòng Thống kê TMDV & Giá',
+  'Phòng Thống kê CNXD',
+  'Phòng Thống kê NN&XH',
+];
+
+const BASE_UNITS = [
+  'Thống kê cơ sở Phố Hiến',
+  'Thống kê cơ sở Như Quỳnh',
+  'Thống kê cơ sở Yên Mỹ',
+  'Thống kê cơ sở Mỹ Hào',
+  'Thống kê cơ sở Khoái Châu',
+  'Thống kê cơ sở Lương Bằng',
+  'Thống kê cơ sở Hoàng Hoa Thám',
+  'Thống kê cơ sở Quỳnh Phụ',
+  'Thống kê cơ sở Hưng Hà',
+  'Thống kê cơ sở Đông Hưng',
+  'Thống kê cơ sở Thái Thụy',
+  'Thống kê cơ sở Tiền Hải',
+  'Thống kê cơ sở Kiến Xương',
+  'Thống kê cơ sở Vũ Thư',
+];
+
+const STATUS_COLORS = {
+  'Đã hoàn thành': '#10b981',
+  'Đang thực hiện': '#0ea5e9',
+  'Chưa bắt đầu': '#f59e0b',
+  'Hủy': '#ef4444',
+};
+
+type DrillDownType = 'leaders' | 'departments' | 'baseUnits' | null;
+
+interface DrillDownData {
+  type: DrillDownType;
+  name: string;
+  schedules: WeeklySchedule[];
+}
+
 export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
   schedules,
   users,
@@ -83,6 +149,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState<Partial<WeeklySchedule>>({});
   const [isImporting, setIsImporting] = useState(false);
+  const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const weekStartDate = useMemo(() => {
@@ -111,11 +178,13 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
   const handlePrevWeek = () => {
     setCurrentWeekStart(new Date(weekStartDate.getTime() - 7 * 24 * 60 * 60 * 1000));
     setSelectedDay(null);
+    setDrillDown(null);
   };
 
   const handleNextWeek = () => {
     setCurrentWeekStart(new Date(weekStartDate.getTime() + 7 * 24 * 60 * 60 * 1000));
     setSelectedDay(null);
+    setDrillDown(null);
   };
 
   const handleThisWeek = () => {
@@ -125,6 +194,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     setCurrentWeekStart(new Date(now.setDate(diff)));
     const todayIndex = new Date().getDay();
     setSelectedDay(todayIndex === 0 ? 6 : todayIndex - 1);
+    setDrillDown(null);
   };
 
   const filteredSchedules = useMemo(() => {
@@ -148,6 +218,43 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     return filteredSchedules.filter(s => s.date === targetDate)
       .sort((a, b) => a.taskName.localeCompare(b.taskName));
   };
+
+  // Chart data computation
+  const getChartData = useCallback((groupList: string[], groupType: 'leader' | 'department' | 'baseUnit') => {
+    return groupList.map(name => {
+      const groupSchedules = filteredSchedules.filter(s => {
+        if (groupType === 'leader') {
+          return LEADERS.includes(s.userName) && s.userName === name;
+        } else if (groupType === 'department') {
+          return s.department === name;
+        } else {
+          return s.workUnit === name;
+        }
+      });
+      const counts = STATUSES.reduce((acc, status) => {
+        acc[status] = groupSchedules.filter(s => s.status === status).length;
+        return acc;
+      }, {} as Record<string, number>);
+      const total = groupSchedules.length;
+      return { name, ...counts, total };
+    }).filter(d => d.total > 0);
+  }, [filteredSchedules]);
+
+  const leaderChartData = useMemo(() => getChartData(LEADERS, 'leader'), [getChartData]);
+  const deptChartData = useMemo(() => getChartData(DEPARTMENTS_LIST, 'department'), [getChartData]);
+  const baseChartData = useMemo(() => getChartData(BASE_UNITS, 'baseUnit'), [getChartData]);
+
+  const handleDrillDown = (type: DrillDownType, name: string) => {
+    const groupSchedules = filteredSchedules.filter(s => {
+      if (type === 'leaders') return LEADERS.includes(s.userName) && s.userName === name;
+      if (type === 'departments') return s.department === name;
+      if (type === 'baseUnits') return s.workUnit === name;
+      return false;
+    });
+    setDrillDown({ type, name, schedules: groupSchedules });
+  };
+
+  const closeDrillDown = () => setDrillDown(null);
 
   const getTaskTypeIcon = (type: string) => {
     switch (type) {
@@ -449,6 +556,190 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     return { total, completed, inProgress, pending, cancelled };
   }, [filteredSchedules]);
 
+  // Chart Components
+  const StackedBarChart = ({ data, title, color, onClick, unitName }: { 
+    data: any[], 
+    title: string, 
+    color: string,
+    onClick: (name: string) => void,
+    unitName: string
+  }) => {
+    if (data.length === 0) return (
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4 h-64 flex items-center justify-center">
+        <span className="text-slate-400 text-sm">Chưa có dữ liệu</span>
+      </div>
+    );
+
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4 h-64 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onClick(unitName)}>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{title}</h4>
+          <span className="text-xs text-slate-400 flex items-center gap-1">
+            <BarChart2 className="w-3 h-3" />
+            Chi tiết
+          </span>
+        </div>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} layout="vertical">
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+            <XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+            <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+            <Tooltip 
+              formatter={(value: number) => [value, 'lịch']}
+              labelFormatter={(label: string) => label}
+              contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+            />
+            <Legend />
+            {STATUSES.map((status, index) => (
+              <Bar 
+                key={status} 
+                dataKey={status} 
+                stackId="a" 
+                fill={STATUS_COLORS[status as keyof typeof STATUS_COLORS]} 
+                name={status}
+                radius={[0, 4, 4, 0]}
+                maxBarSize={24}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  };
+
+  const PieChartCard = ({ data, title, onClick, unitName }: { 
+    data: any[], 
+    title: string,
+    onClick: (name: string) => void,
+    unitName: string
+  }) => {
+    if (data.length === 0) return (
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4 h-64 flex items-center justify-center">
+        <span className="text-slate-400 text-sm">Chưa có dữ liệu</span>
+      </div>
+    );
+
+    const pieData = data.map(d => ({
+      name: d.name,
+      value: d.total,
+      color: STATUS_COLORS['Đang thực hiện']
+    }));
+
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4 h-64 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onClick(unitName)}>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{title}</h4>
+          <span className="text-xs text-slate-400 flex items-center gap-1">
+            <PieChart className="w-3 h-3" />
+            Chi tiết
+          </span>
+        </div>
+        <ResponsiveContainer width="100%" height="100%">
+          <RechartsPieChart>
+            <Pie
+              data={pieData}
+              cx="50%"
+              cy="50%"
+              innerRadius={40}
+              outerRadius={60}
+              paddingAngle={2}
+              dataKey="value"
+              nameKey="name"
+              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+              labelLine={false}
+            >
+              {pieData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={Object.values(STATUS_COLORS)[index % Object.values(STATUS_COLORS).length]} />
+              ))}
+            </Pie>
+            <Tooltip formatter={(value: number) => [value, 'lịch']} />
+          </RechartsPieChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  };
+
+  // Drill-down Detail Modal
+  if (drillDown) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 rounded-t-2xl">
+            <div className="flex items-center gap-3">
+              <button onClick={closeDrillDown} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+              <div>
+                <h3 className="font-bold text-slate-800 dark:text-slate-100">{drillDown.name}</h3>
+                <p className="text-xs text-slate-500">{drillDown.schedules.length} lịch công tác trong tuần</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" onClick={closeDrillDown}>Đóng</button>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {drillDown.schedules.length === 0 ? (
+              <div className="text-center py-12 text-slate-400">
+                <CalendarIcon className="w-12 h-12 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">Không có lịch công tác</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {drillDown.schedules
+                  .sort((a, b) => {
+                    const dayA = parseInt(a.dayOfWeek?.toString() || '0');
+                    const dayB = parseInt(b.dayOfWeek?.toString() || '0');
+                    if (dayA !== dayB) return dayA - dayB;
+                    return a.taskName.localeCompare(b.taskName);
+                  })
+                  .map((schedule, idx) => (
+                    <div key={schedule.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-slate-50 dark:bg-slate-800/50 hover:shadow-sm transition-shadow">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            {getTaskTypeIcon(schedule.taskType)}
+                            <span className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">{schedule.taskName}</span>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${getStatusColor(schedule.status)}`}>
+                              {schedule.status}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-3 text-xs text-slate-600 dark:text-slate-300">
+                            <span className="flex items-center gap-1"><CalendarIcon className="w-3 h-3" />{schedule.date} ({DAY_LABELS[schedule.dayOfWeek]})</span>
+                            <span className="flex items-center gap-1"><Users className="w-3 h-3" />{schedule.userName}</span>
+                            {schedule.userPosition && <span>{schedule.userPosition}</span>}
+                            {schedule.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{schedule.location}</span>}
+                            {schedule.workUnit && <span className="flex items-center gap-1"><Building className="w-3 h-3" />{schedule.workUnit}</span>}
+                          </div>
+                          {schedule.notes && (
+                            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-700/50 p-2 rounded border border-slate-200/50 dark:border-slate-700">{schedule.notes}</p>
+                          )}
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <button onClick={() => { handleEditClick(schedule); closeDrillDown(); }} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title="Sửa">
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button onClick={() => {
+                            if (confirm('Bạn có chắc muốn xóa lịch công tác này?')) {
+                              onDeleteSchedule(schedule.id);
+                              addToast('success', 'Đã xóa', 'Lịch công tác đã được xóa thành công');
+                            }
+                          }} className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20" title="Xóa">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-full mx-auto pb-12 space-y-5 px-4">
       {/* Top Header */}
@@ -464,7 +755,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Dashboard Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
           <div className="flex items-center gap-2">
@@ -513,13 +804,61 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-lg bg-rose-100 dark:bg-rose-950/30 flex items-center justify-center">
-              <X className="w-5 h-5 text-rose-600" />
+              <XCircle className="w-5 h-5 text-rose-600" />
             </div>
             <div>
               <p className="text-xs text-slate-500">Đã hủy</p>
               <p className="text-2xl font-bold text-rose-600">{stats.cancelled}</p>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Charts Dashboard - 3 Blocks */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Block 1: 4 Lãnh đạo */}
+        <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
+          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2">
+            <Users className="w-5 h-5 text-[#2d6e3e]" />
+            4 Lãnh đạo Cục
+          </h4>
+          <StackedBarChart 
+            data={leaderChartData} 
+            title="Lịch theo trạng thái" 
+            color="#2d6e3e"
+            onClick={(name) => handleDrillDown('leaders', name)}
+            unitName=""
+          />
+        </div>
+
+        {/* Block 2: 5 Phòng ban */}
+        <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
+          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2">
+            <Building className="w-5 h-5 text-blue-600" />
+            5 Phòng ban
+          </h4>
+          <StackedBarChart 
+            data={deptChartData} 
+            title="Lịch theo trạng thái" 
+            color="#3b82f6"
+            onClick={(name) => handleDrillDown('departments', name)}
+            unitName=""
+          />
+        </div>
+
+        {/* Block 3: 14 Cơ sở */}
+        <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
+          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-teal-600" />
+            14 Cơ sở Thống kê
+          </h4>
+          <StackedBarChart 
+            data={baseChartData} 
+            title="Lịch theo trạng thái" 
+            color="#0d9488"
+            onClick={(name) => handleDrillDown('baseUnits', name)}
+            unitName=""
+          />
         </div>
       </div>
 
@@ -534,7 +873,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
             </label>
             <select
               value={selectedWorkUnit}
-              onChange={e => { setSelectedWorkUnit(e.target.value); setSelectedDay(null); }}
+              onChange={e => { setSelectedWorkUnit(e.target.value); setSelectedDay(null); setDrillDown(null); }}
               className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:ring-1 focus:ring-[#2d6e3e] min-w-[280px]"
             >
               <option value="ALL">Tất cả đơn vị (15 đơn vị)</option>
