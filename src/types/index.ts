@@ -170,6 +170,40 @@ export interface TaskCatalogItem {
   notes?: string;
 }
 
+export interface Meeting {
+  id: string;
+  title: string;
+  description: string;
+  meetingType: 'google_meet' | 'offline' | 'polycom' | 'hybrid';
+  startDate: string; // ISO string
+  endDate: string; // ISO string
+  repeat: boolean;
+  googleMeetLink?: string;
+  attendees: string[]; // emails
+  reminders: { type: 'notification' | 'email'; minutesBefore: number }[];
+  attachments: { name: string; url: string }[];
+  createdAt: string;
+}
+
+export interface WeeklySchedule {
+  id: string;
+  weekStartDate: string; // ISO string (Monday of the week)
+  weekEndDate: string; // ISO string (Sunday of the week)
+  department: string; // Department name
+  workUnit?: string; // Base unit for 14 cơ sở
+  userName: string; // Person responsible
+  userPosition?: string;
+  dayOfWeek: number; // 0=Mon, 1=Tue, ..., 6=Sun
+  date: string; // YYYY-MM-DD
+  taskName: string;
+  taskType: 'Công tác' | 'Họp' | 'Đào tạo' | 'Khác' | 'Làm việc tại cơ quan';
+  location?: string;
+  notes?: string;
+  status: 'Đã hoàn thành' | 'Đang thực hiện' | 'Chưa bắt đầu' | 'Hủy';
+  createdAt: string;
+  createdBy: string;
+}
+
 export type ActiveTab = 
   | 'dashboard'
   | 'users_list'
@@ -187,20 +221,5 @@ export type ActiveTab =
   | 'eval_results'
   | 'eval_lock'
   | 'meeting_register'
-  | 'meeting_calendar';
-
-
-export interface Meeting {
-  id: string;
-  title: string;
-  description: string;
-  meetingType: 'google_meet' | 'offline' | 'polycom' | 'hybrid';
-  startDate: string; // ISO string
-  endDate: string; // ISO string
-  repeat: boolean;
-  googleMeetLink?: string;
-  attendees: string[]; // emails
-  reminders: { type: 'notification' | 'email'; minutesBefore: number }[];
-  attachments: { name: string; url: string }[];
-  createdAt: string;
-}
+  | 'meeting_calendar'
+  | 'weekly_schedule';

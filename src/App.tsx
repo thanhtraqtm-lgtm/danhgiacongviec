@@ -12,7 +12,9 @@ import {
   saveSubmissions,
   getStoredPeriodConfig,
   savePeriodConfig,
-  resetAllData 
+  resetAllData,
+  getStoredWeeklySchedules,
+  saveWeeklySchedules
 } from './utils/storage';
 import { 
   User, 
@@ -22,7 +24,8 @@ import {
   WorkflowSubmission, 
   EvaluationPeriodConfig, 
   ActiveTab,
-  DEPARTMENTS
+  DEPARTMENTS,
+  WeeklySchedule
 } from './types';
 import { evaluateTaskKpi, normalizeTaskStatus } from './utils/kpiLogic';
 
@@ -49,6 +52,7 @@ import { PeriodManagement } from './components/PeriodManagement';
 import { TaskCatalogManager } from './components/TaskCatalogManager';
 import { MeetingRegistration } from './components/MeetingRegistration';
 import { MeetingCalendar } from './components/MeetingCalendar';
+import { WeeklyWorkSchedule } from './components/WeeklyWorkSchedule';
 import { Meeting } from './types';
 import { getStoredMeetings, saveMeetings } from './utils/storage';
 import { db, OperationType, handleFirestoreError } from './firebase';
@@ -79,6 +83,7 @@ export default function App() {
   const [users, setUsersState] = useState<User[]>([]);
   const [tasks, setTasksState] = useState<KpiTask[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [weeklySchedules, setWeeklySchedulesState] = useState<WeeklySchedule[]>([]);
 
   // Guarded setters that prevent accidental wipes. If something tries to set
   // users/tasks to an EMPTY array while we already have data, we treat it as an
@@ -447,6 +452,7 @@ export default function App() {
     setDocs(getStoredDocs());
     setSubmissions(getStoredSubmissions());
     setMeetings(getStoredMeetings());
+    setWeeklySchedulesState(getStoredWeeklySchedules());
   }, [resetKey]);
 
   // ---- Firestore sync: load users + tasks from cloud (fallback localStorage),
@@ -639,6 +645,26 @@ export default function App() {
     setMeetings(updated);
     saveMeetings(updated);
   }, [meetings]);
+
+  const handleAddWeeklySchedule = useCallback((schedule: WeeklySchedule) => {
+    const updated = [schedule, ...weeklySchedules];
+    setWeeklySchedulesState(updated);
+    saveWeeklySchedules(updated);
+    addToast('success', 'Thành công', 'Đã thêm lịch công tác mới.');
+    setActiveTab('weekly_schedule');
+  }, [weeklySchedules, addToast]);
+
+  const handleUpdateWeeklySchedule = useCallback((schedule: WeeklySchedule) => {
+    const updated = weeklySchedules.map(s => s.id === schedule.id ? schedule : s);
+    setWeeklySchedulesState(updated);
+    saveWeeklySchedules(updated);
+  }, [weeklySchedules]);
+
+  const handleDeleteWeeklySchedule = useCallback((scheduleId: string) => {
+    const updated = weeklySchedules.filter(s => s.id !== scheduleId);
+    setWeeklySchedulesState(updated);
+    saveWeeklySchedules(updated);
+  }, [weeklySchedules]);
 
   const handleSyncDepartments = useCallback(() => {
     let updated = false;
@@ -893,6 +919,7 @@ export default function App() {
     setSubmissions(getStoredSubmissions());
     setPeriodConfig(freshPeriodConfig);
     setMeetings(getStoredMeetings());
+    setWeeklySchedulesState(getStoredWeeklySchedules());
 
     // Đồng bộ trạng thái reset lên Firebase để các thiết bị khác cũng nhận
     fsSaveUsers(freshUsers);
@@ -1236,6 +1263,16 @@ export default function App() {
             meetings={meetings}
             onUpdateMeeting={handleUpdateMeeting}
             onDeleteMeeting={handleDeleteMeeting}
+            addToast={addToast}
+          />
+        )}
+        {activeTab === 'weekly_schedule' && (
+          <WeeklyWorkSchedule 
+            schedules={weeklySchedules}
+            users={users}
+            onAddSchedule={handleAddWeeklySchedule}
+            onUpdateSchedule={handleUpdateWeeklySchedule}
+            onDeleteSchedule={handleDeleteWeeklySchedule}
             addToast={addToast}
           />
         )}

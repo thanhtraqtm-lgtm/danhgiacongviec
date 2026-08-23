@@ -1,4 +1,4 @@
-import { User, KpiTask, LateRuleConfig, SelfAssessmentDoc, WorkflowSubmission, EvaluationPeriodConfig, DEPARTMENTS } from '../types';
+import { User, KpiTask, LateRuleConfig, SelfAssessmentDoc, WorkflowSubmission, EvaluationPeriodConfig, DEPARTMENTS, WeeklySchedule } from '../types';
 import { DEFAULT_LATE_CONFIG, evaluateTaskKpi } from './kpiLogic';
 
 const STORAGE_KEYS = {
@@ -436,6 +436,32 @@ export function getStoredMeetings(): any[] {
 export function saveMeetings(meetings: any[]): void {
   try {
     localStorage.setItem('kpi_admin_meetings_v1', JSON.stringify(meetings));
+  } catch {
+    // Silently ignore localStorage write errors
+  }
+}
+
+// Weekly Schedule Storage
+const WEEKLY_SCHEDULE_KEY = 'kpi_admin_weekly_schedule_v1';
+
+export const INITIAL_WEEKLY_SCHEDULES: WeeklySchedule[] = [];
+
+export function getStoredWeeklySchedules(): WeeklySchedule[] {
+  try {
+    const raw = localStorage.getItem(WEEKLY_SCHEDULE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // Silently ignore localStorage read errors
+  }
+  return [];
+}
+
+export function saveWeeklySchedules(schedules: WeeklySchedule[]): void {
+  try {
+    localStorage.setItem(WEEKLY_SCHEDULE_KEY, JSON.stringify(schedules));
   } catch {
     // Silently ignore localStorage write errors
   }
