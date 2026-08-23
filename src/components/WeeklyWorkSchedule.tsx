@@ -734,65 +734,6 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-              <CalendarIcon className="w-5 h-5 text-slate-600 dark:text-slate-300" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">Tổng lịch tuần</p>
-              <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{weekStats.total}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-950/30 flex items-center justify-center">
-              <CheckCircle className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">Đã hoàn thành</p>
-              <p className="text-2xl font-bold text-emerald-600">{weekStats.completed}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-sky-100 dark:bg-sky-950/30 flex items-center justify-center">
-              <Loader2 className="w-5 h-5 text-sky-600" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">Đang thực hiện</p>
-              <p className="text-2xl font-bold text-sky-600">{weekStats.inProgress}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-950/30 flex items-center justify-center">
-              <Clock className="w-5 h-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">Chưa bắt đầu</p>
-              <p className="text-2xl font-bold text-amber-600">{weekStats.pending}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-rose-100 dark:bg-rose-950/30 flex items-center justify-center">
-              <XCircle className="w-5 h-5 text-rose-600" />
-            </div>
-            <div>
-              <p className="text-xs text-slate-500">Đã hủy</p>
-              <p className="text-2xl font-bold text-rose-600">{weekStats.cancelled}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Toolbar */}
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -892,12 +833,12 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
       {/* Main Table Grid */}
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
         {/* Table Header */}
-        <div className="grid grid-cols-[1fr_repeat(7,minmax(120px,1fr))] bg-[#2d6e3e] text-white border-b border-[#1b4426]">
-          <div className="px-3 py-3 font-bold text-sm text-center sticky left-0 z-10 bg-[#2d6e3e] border-r border-[#1b4426]">
+        <div className="grid grid-cols-[1fr_repeat(7,minmax(120px,1fr))] bg-[#006097] text-white border-b border-[#004d7a]">
+          <div className="px-3 py-3 font-bold text-sm text-center sticky left-0 z-10 bg-[#006097] border-r border-[#004d7a]">
             ĐỐI TƯỢNG / NGÀY
           </div>
           {weekDates.map((date, idx) => (
-            <div key={idx} className={`px-2 py-3 text-center text-xs font-medium border-r border-[#1b4426] ${idx >= 5 ? 'bg-[#235832]' : ''} ${date.toDateString() === new Date().toDateString() ? 'bg-[#1e4d2b] ring-2 ring-yellow-300/50' : ''}`}>
+            <div key={idx} className={`px-2 py-3 text-center text-xs font-medium border-r border-[#004d7a] ${idx >= 5 ? 'bg-[#005685]' : ''} ${date.toDateString() === new Date().toDateString() ? 'bg-[#004d7a] ring-2 ring-yellow-300/50' : ''}`}>
               <div className="text-[10px] opacity-80">{date.toLocaleDateString('vi-VN', { month: '2-digit', day: '2-digit' })}</div>
               <div className="font-bold">{DAY_LABELS[idx]}</div>
               <div className="text-[10px]">{date.getDate()}</div>
