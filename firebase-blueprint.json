@@ -1,0 +1,97 @@
+{
+  "entities": {
+    "SelfAssessmentDoc": {
+      "title": "SelfAssessmentDoc",
+      "description": "User's self assessment evaluation document",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "periodId": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "submitted", "approved", "rejected"] },
+        "docType": { "type": "string", "enum": ["WORD_OFFICIAL", "EXCEL_3SHEETS"] },
+        "fileUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "managerScore": { "type": "number" },
+        "totalScore": { "type": "number" }
+      },
+      "required": ["userId", "periodId", "status", "docType", "createdAt"]
+    },
+    "EvaluationPeriod": {
+      "title": "EvaluationPeriod",
+      "description": "Evaluation period configuration",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "month": { "type": "number" },
+        "year": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "locked"] },
+        "createdAt": { "type": "string" },
+        "lockedAt": { "type": "string" }
+      },
+      "required": ["title", "month", "year", "status"]
+    },
+    "WorkflowSubmission": {
+      "title": "WorkflowSubmission",
+      "description": "Evaluation workflow submission and approval record",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPosition": { "type": "string" },
+        "department": { "type": "string" },
+        "period": { "type": "string" },
+        "selfScoreTotal": { "type": "number" },
+        "status": { "type": "string" },
+        "submittedAt": { "type": "string" },
+        "deptHeadName": { "type": "string" },
+        "deptHeadComment": { "type": "string" },
+        "deptHeadScore": { "type": "number" },
+        "deptApprovedAt": { "type": "string" },
+        "approverName": { "type": "string" },
+        "approverTitle": { "type": "string" },
+        "provinceLeaderComment": { "type": "string" },
+        "finalScore": { "type": "number" },
+        "finalApprovedAt": { "type": "string" },
+        "evaluationType": { "type": "string" }
+      },
+      "required": ["userName", "department", "period", "status"]
+    },
+    "AppUser": {
+      "title": "AppUser",
+      "description": "User account profile and authentication details",
+      "type": "object",
+      "properties": {
+        "fullName": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "position": { "type": "string" },
+        "department": { "type": "string" },
+        "role": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["fullName", "username", "department"]
+    }
+  },
+  "firestore": {
+    "/evaluation_docs/{docId}": {
+      "schema": "SelfAssessmentDoc",
+      "description": "Store assessment documents for each user"
+    },
+    "/evaluation_periods/{periodId}": {
+      "schema": "EvaluationPeriod",
+      "description": "Store system evaluation periods"
+    },
+    "/workflow_submissions/{subId}": {
+      "schema": "WorkflowSubmission",
+      "description": "Store workflow submissions and approvals"
+    },
+    "/users/{userId}": {
+      "schema": "AppUser",
+      "description": "Store user accounts and credentials"
+    }
+  }
+}

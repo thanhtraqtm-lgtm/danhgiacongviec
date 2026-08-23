@@ -1,0 +1,12 @@
+{
+  "projectId": "kpimoi",
+  "appId": "1:125630563353:web:d9f709e01a54388580d688",
+  "apiKey": "AIzaSyAgRCpHGejABI0iuFOGGoBR7Entf2WmFfU",
+  "authDomain": "kpimoi.firebaseapp.com",
+  "storageBucket": "kpimoi.firebasestorage.app",
+  "messagingSenderId": "125630563353",
+  "measurementId": "G-W4YGQPRKM8",
+  "firestoreDatabaseId": "(default)",
+  "oAuthClientId": "",
+  "recaptchaSiteKey": ""
+}
