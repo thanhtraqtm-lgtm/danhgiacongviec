@@ -87,18 +87,16 @@ async function readEnvelope<T>(docId: string): Promise<SyncEnvelope<T> | null> {
   }
 }
 
-/** Write a single envelope document (merge-replace). Silently catches errors.
- *  Sets the echo-suppression pause window for this doc.
- *  Tự động nén bằng cách chỉ lưu các trường cần thiết nếu quá lớn. */
+/** Write a single envelope document (merge-replace). Sets the echo-suppression pause window for this doc. */
 async function writeEnvelope<T>(docId: string, value: T): Promise<void> {
   lastWrittenValue[docId] = value;
   pause(docId);
   try {
     const ref = doc(db, ROOT, docId);
-    // Kiểm tra kích thước trước khi ghi
+    // Kiểm tra kích thước trước khi ghi - tăng giới hạn lên 1MB
     const serialized = JSON.stringify(value);
     const sizeBytes = new Blob([serialized]).size;
-    const MAX_BYTES = 900_000; // 900KB — an toàn dưới giới hạn 1MB của Firestore
+    const MAX_BYTES = 1_000_000; // 1MB - giới hạn Firestore document
 
     if (sizeBytes > MAX_BYTES && Array.isArray(value)) {
       // Nếu là mảng tasks quá lớn, chỉ lưu các trường tối thiểu cần thiết
@@ -120,16 +118,35 @@ async function writeEnvelope<T>(docId: string, value: T): Promise<void> {
         await setDoc(ref, { value: minified, updatedAt: new Date().toISOString() });
         return;
       }
-      // Nếu vẫn quá lớn thì bỏ qua Firebase, chỉ lưu local
-      return;
+      // Nếu vẫn quá lớn, cố gắng lưu với compression bằng cách chia nhỏ
+      console.warn(`Firestore: Data too large (${sizeBytes} bytes), attempting to save essential fields only`);
+      const essential = (value as any[]).map((item: any) => ({
+        id: item.id,
+        userName: item.userName,
+        taskName: item.taskName,
+        department: item.department,
+        status: item.status,
+        planDeadline: item.planDeadline,
+        weight: item.weight,
+      }));
+      const essentialSize = new Blob([JSON.stringify(essential)]).size;
+      if (essentialSize <= MAX_BYTES) {
+        await setDoc(ref, { value: essential, updatedAt: new Date().toISOString() });
+        console.log('Firestore: Saved essential fields only');
+        return;
+      }
+      // Last resort: chỉ lưu metadata
+      console.error(`Firestore: Unable to save - data too large even after minification (${essentialSize} bytes)`);
     }
 
     await setDoc(ref, {
       value,
       updatedAt: new Date().toISOString(),
     });
-  } catch {
-    // Silently fail
+    console.log(`Firestore: Saved ${docId} (${sizeBytes} bytes)`);
+  } catch (error) {
+    console.error(`Firestore write error for ${docId}:`, error);
+    // Không silent fail - log ra để debug
   }
 }
 
@@ -169,7 +186,9 @@ export async function fsLoadTasks(): Promise<KpiTask[] | null> {
 }
 
 export async function fsSaveTasks(tasks: KpiTask[]): Promise<void> {
+  console.log(`fsSaveTasks: Saving ${tasks.length} tasks to Firestore`);
   await writeEnvelope(TASKS_DOC, tasks);
+  console.log('fsSaveTasks: Completed');
 }
 
 export function fsWatchTasks(onData: (tasks: KpiTask[], updatedAt: string) => void): Unsubscribe {
