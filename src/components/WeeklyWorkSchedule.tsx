@@ -25,11 +25,7 @@ import {
   CheckCircle,
   Loader2,
   BarChart2,
-  PieChart,
-  ChevronDown,
-  Eye,
-  XCircle,
-  Maximize2
+  XCircle
 } from 'lucide-react';
 import { WeeklySchedule, User, DEPARTMENTS } from '../types';
 import * as XLSX from 'xlsx';
@@ -40,11 +36,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
-  ResponsiveContainer,
-  Pie,
-  Cell,
-  PieChart as RechartsPieChart
+  ResponsiveContainer
 } from 'recharts';
 
 interface WeeklyWorkScheduleProps {
@@ -79,21 +71,6 @@ const WORK_UNITS = [
   'Thống kê cơ sở Vũ Thư',
 ] as const;
 
-const LEADERS = [
-  'Đào Trọng Truyền',
-  'Đỗ Xuân Phú',
-  'Nguyễn Thị Hoài Thảo',
-  'Nguyễn Duy Minh',
-];
-
-const DEPARTMENTS_LIST = [
-  'Phòng Thống kê Tổng hợp',
-  'Phòng TCHC',
-  'Phòng Thống kê TMDV & Giá',
-  'Phòng Thống kê CNXD',
-  'Phòng Thống kê NN&XH',
-];
-
 const BASE_UNITS = [
   'Thống kê cơ sở Phố Hiến',
   'Thống kê cơ sở Như Quỳnh',
@@ -118,7 +95,7 @@ const STATUS_COLORS = {
   'Hủy': '#ef4444',
 };
 
-type DrillDownType = 'leaders' | 'departments' | 'baseUnits' | null;
+type DrillDownType = 'baseUnits' | null;
 
 interface DrillDownData {
   type: DrillDownType;
@@ -220,31 +197,6 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
       .sort((a, b) => a.taskName.localeCompare(b.taskName));
   };
 
-  // Chart data computation
-  const getChartData = useCallback((groupList: string[], groupType: 'leader' | 'department' | 'baseUnit') => {
-    return groupList.map(name => {
-      const groupSchedules = filteredSchedules.filter(s => {
-        if (groupType === 'leader') {
-          return LEADERS.includes(s.userName) && s.userName === name;
-        } else if (groupType === 'department') {
-          return s.department === name;
-        } else {
-          return s.workUnit === name;
-        }
-      });
-      const counts = STATUSES.reduce((acc, status) => {
-        acc[status] = groupSchedules.filter(s => s.status === status).length;
-        return acc;
-      }, {} as Record<string, number>);
-      const total = groupSchedules.length;
-      return { name, ...counts, total };
-    }).filter(d => d.total > 0);
-  }, [filteredSchedules]);
-
-  const leaderChartData = useMemo(() => getChartData(LEADERS, 'leader'), [getChartData]);
-  const deptChartData = useMemo(() => getChartData(DEPARTMENTS_LIST, 'department'), [getChartData]);
-  const baseChartData = useMemo(() => getChartData(BASE_UNITS, 'baseUnit'), [getChartData]);
-
   // Task type breakdown chart data
   const getTaskTypeChartData = useCallback((taskTypeFilter: string) => {
     return BASE_UNITS.map(name => {
@@ -265,8 +217,6 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
 
   const handleDrillDown = (type: DrillDownType, name: string) => {
     const groupSchedules = filteredSchedules.filter(s => {
-      if (type === 'leaders') return LEADERS.includes(s.userName) && s.userName === name;
-      if (type === 'departments') return s.department === name;
       if (type === 'baseUnits') return s.workUnit === name;
       return false;
     });
@@ -575,56 +525,6 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     return { total, completed, inProgress, pending, cancelled };
   }, [filteredSchedules]);
 
-  // Chart Components
-  const StackedBarChart = ({ data, title, color, onClick, unitName }: { 
-    data: any[], 
-    title: string, 
-    color: string,
-    onClick: (name: string) => void,
-    unitName: string
-  }) => {
-    if (data.length === 0) return (
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4 h-64 flex items-center justify-center">
-        <span className="text-slate-400 text-sm">Chưa có dữ liệu</span>
-      </div>
-    );
-
-    return (
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3 h-48 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onClick(unitName)}>
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="font-medium text-slate-800 dark:text-slate-100 text-xs">{title}</h4>
-          <span className="text-[10px] text-slate-400 flex items-center gap-1">
-            <BarChart2 className="w-2.5 h-2.5" />
-            Chi tiết
-          </span>
-        </div>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-            <XAxis type="number" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-            <YAxis dataKey="name" type="category" width={70} tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-            <Tooltip 
-              formatter={(value: number) => [value, 'lịch']}
-              contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-            />
-            <Legend />
-            {STATUSES.map((status, index) => (
-              <Bar 
-                key={status} 
-                dataKey={status} 
-                stackId="a" 
-                fill={STATUS_COLORS[status as keyof typeof STATUS_COLORS]} 
-                name={status}
-                radius={[0, 4, 4, 0]}
-                maxBarSize={20}
-              />
-            ))}
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    );
-  };
-
   const HorizontalBarChart = ({ data, title, color }: { 
     data: any[], 
     title: string,
@@ -656,58 +556,6 @@ if (data.length === 0) return (
               maxBarSize={20}
             />
           </BarChart>
-        </ResponsiveContainer>
-      </div>
-    );
-  };
-
-  const PieChartCard = ({ data, title, onClick, unitName }: { 
-    data: any[], 
-    title: string,
-    onClick: (name: string) => void,
-    unitName: string
-  }) => {
-    if (data.length === 0) return (
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4 h-64 flex items-center justify-center">
-        <span className="text-slate-400 text-sm">Chưa có dữ liệu</span>
-      </div>
-    );
-
-    const pieData = data.map(d => ({
-      name: d.name,
-      value: d.total,
-      color: STATUS_COLORS['Đang thực hiện']
-    }));
-
-    return (
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3 h-48 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onClick(unitName)}>
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="font-medium text-slate-800 dark:text-slate-100 text-xs">{title}</h4>
-          <span className="text-[10px] text-slate-400 flex items-center gap-1">
-            <PieChart className="w-2.5 h-2.5" />
-            Chi tiết
-          </span>
-        </div>
-        <ResponsiveContainer width="100%" height="100%">
-          <RechartsPieChart>
-            <Pie
-              data={pieData}
-              cx="50%"
-              cy="50%"
-              innerRadius={30}
-              outerRadius={45}
-              paddingAngle={2}
-              dataKey="value"
-              nameKey="name"
-              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-              labelLine={false}
-            >
-              {pieData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={Object.values(STATUS_COLORS)[index % Object.values(STATUS_COLORS).length]} />
-              ))}
-            </Pie>
-            <Tooltip formatter={(value: number) => [value, 'lịch']} />
-          </RechartsPieChart>
         </ResponsiveContainer>
       </div>
     );
@@ -868,53 +716,7 @@ if (data.length === 0) return (
         </div>
       </div>
 
-      {/* Charts Dashboard - Row 1: Pie charts for Leaders & Departments, Bar for Base Units */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-        {/* 4 Lãnh đạo - Pie Chart */}
-        <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3">
-          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-2">
-            <Users className="w-4 h-4 text-[#2d6e3e]" />
-            4 Lãnh đạo Cục
-          </h4>
-          <PieChartCard 
-            data={leaderChartData} 
-            title="Phân bố lịch" 
-            onClick={(name) => handleDrillDown('leaders', name)}
-            unitName=""
-          />
-        </div>
-
-        {/* 5 Phòng ban - Pie Chart */}
-        <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3">
-          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-2">
-            <Building className="w-4 h-4 text-blue-600" />
-            5 Phòng ban
-          </h4>
-          <PieChartCard 
-            data={deptChartData} 
-            title="Phân bố lịch" 
-            onClick={(name) => handleDrillDown('departments', name)}
-            unitName=""
-          />
-        </div>
-
-        {/* 14 Cơ sở - Stacked Bar Chart (wider) */}
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3">
-          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-teal-600" />
-            14 Cơ sở Thống kê
-          </h4>
-          <StackedBarChart 
-            data={baseChartData} 
-            title="Lịch theo trạng thái" 
-            color="#0d9488"
-            onClick={(name) => handleDrillDown('baseUnits', name)}
-            unitName=""
-          />
-        </div>
-      </div>
-
-      {/* Charts Dashboard - Row 2: 6 Task Type Breakdown Horizontal Bar Charts */}
+      {/* Charts Dashboard: 6 Task Type Breakdown Horizontal Bar Charts */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
         <HorizontalBarChart data={totalChartData} title="Tổng lịch" color="#2d6e3e" />
         <HorizontalBarChart data={meetingOnlineChartData} title="Lịch Họp trực tuyến" color="#3b82f6" />
