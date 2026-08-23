@@ -57,6 +57,7 @@ interface WeeklyWorkScheduleProps {
 }
 
 const TASK_TYPES = ['Công tác', 'Họp', 'Đào tạo', 'Khác', 'Làm việc tại cơ quan'] as const;
+const TASK_TYPE_LABELS = ['Tổng lịch', 'Lịch Họp trực tuyến', 'Lịch Họp trực tiếp', 'Lịch làm việc tại cơ sở', 'Công tác ngoài tỉnh', 'Làm việc tại cơ quan'] as const;
 const STATUSES = ['Đã hoàn thành', 'Đang thực hiện', 'Chưa bắt đầu', 'Hủy'] as const;
 const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'];
 
@@ -243,6 +244,24 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
   const leaderChartData = useMemo(() => getChartData(LEADERS, 'leader'), [getChartData]);
   const deptChartData = useMemo(() => getChartData(DEPARTMENTS_LIST, 'department'), [getChartData]);
   const baseChartData = useMemo(() => getChartData(BASE_UNITS, 'baseUnit'), [getChartData]);
+
+  // Task type breakdown chart data
+  const getTaskTypeChartData = useCallback((taskTypeFilter: string) => {
+    return BASE_UNITS.map(name => {
+      const unitSchedules = filteredSchedules.filter(s => s.workUnit === name);
+      const typeSchedules = taskTypeFilter === 'TOTAL' 
+        ? unitSchedules 
+        : unitSchedules.filter(s => s.taskType === taskTypeFilter);
+      return { name, value: typeSchedules.length };
+    }).filter(d => d.value > 0);
+  }, [filteredSchedules]);
+
+  const totalChartData = useMemo(() => getTaskTypeChartData('TOTAL'), [getTaskTypeChartData]);
+  const meetingOnlineChartData = useMemo(() => getTaskTypeChartData('Họp'), [getTaskTypeChartData]);
+  const meetingOfflineChartData = useMemo(() => getTaskTypeChartData('Công tác'), [getTaskTypeChartData]);
+  const workAtOfficeChartData = useMemo(() => getTaskTypeChartData('Làm việc tại cơ quan'), [getTaskTypeChartData]);
+  const businessTripChartData = useMemo(() => getTaskTypeChartData('Đào tạo'), [getTaskTypeChartData]);
+  const otherChartData = useMemo(() => getTaskTypeChartData('Khác'), [getTaskTypeChartData]);
 
   const handleDrillDown = (type: DrillDownType, name: string) => {
     const groupSchedules = filteredSchedules.filter(s => {
@@ -571,22 +590,21 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     );
 
     return (
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4 h-64 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onClick(unitName)}>
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{title}</h4>
-          <span className="text-xs text-slate-400 flex items-center gap-1">
-            <BarChart2 className="w-3 h-3" />
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3 h-48 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onClick(unitName)}>
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="font-medium text-slate-800 dark:text-slate-100 text-xs">{title}</h4>
+          <span className="text-[10px] text-slate-400 flex items-center gap-1">
+            <BarChart2 className="w-2.5 h-2.5" />
             Chi tiết
           </span>
         </div>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} layout="vertical">
+          <BarChart data={data} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-            <XAxis type="number" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
-            <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
+            <XAxis type="number" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+            <YAxis dataKey="name" type="category" width={70} tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
             <Tooltip 
               formatter={(value: number) => [value, 'lịch']}
-              labelFormatter={(label: string) => label}
               contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
             />
             <Legend />
@@ -598,9 +616,45 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
                 fill={STATUS_COLORS[status as keyof typeof STATUS_COLORS]} 
                 name={status}
                 radius={[0, 4, 4, 0]}
-                maxBarSize={24}
+                maxBarSize={20}
               />
             ))}
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  };
+
+  const HorizontalBarChart = ({ data, title, color }: { 
+    data: any[], 
+    title: string,
+    color: string
+  }) => {
+if (data.length === 0) return (
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3 h-48 flex items-center justify-center">
+        <span className="text-slate-400 text-sm">Chưa có dữ liệu</span>
+      </div>
+    );
+
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3 h-48">
+        <h4 className="font-medium text-slate-800 dark:text-slate-100 text-xs mb-2 truncate">{title}</h4>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+            <XAxis type="number" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+            <YAxis dataKey="name" type="category" width={70} tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+            <Tooltip 
+              formatter={(value: number) => [value, 'lịch']}
+              contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
+            />
+            <Bar 
+              dataKey="value" 
+              fill={color} 
+              name={title}
+              radius={[0, 4, 4, 0]}
+              maxBarSize={20}
+            />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -626,11 +680,11 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     }));
 
     return (
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4 h-64 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onClick(unitName)}>
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="font-semibold text-slate-800 dark:text-slate-100 text-sm">{title}</h4>
-          <span className="text-xs text-slate-400 flex items-center gap-1">
-            <PieChart className="w-3 h-3" />
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3 h-48 cursor-pointer hover:shadow-md transition-shadow" onClick={() => onClick(unitName)}>
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="font-medium text-slate-800 dark:text-slate-100 text-xs">{title}</h4>
+          <span className="text-[10px] text-slate-400 flex items-center gap-1">
+            <PieChart className="w-2.5 h-2.5" />
             Chi tiết
           </span>
         </div>
@@ -640,8 +694,8 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
               data={pieData}
               cx="50%"
               cy="50%"
-              innerRadius={40}
-              outerRadius={60}
+              innerRadius={30}
+              outerRadius={45}
               paddingAngle={2}
               dataKey="value"
               nameKey="name"
@@ -814,42 +868,40 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
         </div>
       </div>
 
-      {/* Charts Dashboard - 3 Blocks */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Block 1: 4 Lãnh đạo */}
-        <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
-          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2">
-            <Users className="w-5 h-5 text-[#2d6e3e]" />
+      {/* Charts Dashboard - Row 1: Pie charts for Leaders & Departments, Bar for Base Units */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+        {/* 4 Lãnh đạo - Pie Chart */}
+        <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3">
+          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-2">
+            <Users className="w-4 h-4 text-[#2d6e3e]" />
             4 Lãnh đạo Cục
           </h4>
-          <StackedBarChart 
+          <PieChartCard 
             data={leaderChartData} 
-            title="Lịch theo trạng thái" 
-            color="#2d6e3e"
+            title="Phân bố lịch" 
             onClick={(name) => handleDrillDown('leaders', name)}
             unitName=""
           />
         </div>
 
-        {/* Block 2: 5 Phòng ban */}
-        <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
-          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2">
-            <Building className="w-5 h-5 text-blue-600" />
+        {/* 5 Phòng ban - Pie Chart */}
+        <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3">
+          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-2">
+            <Building className="w-4 h-4 text-blue-600" />
             5 Phòng ban
           </h4>
-          <StackedBarChart 
+          <PieChartCard 
             data={deptChartData} 
-            title="Lịch theo trạng thái" 
-            color="#3b82f6"
+            title="Phân bố lịch" 
             onClick={(name) => handleDrillDown('departments', name)}
             unitName=""
           />
         </div>
 
-        {/* Block 3: 14 Cơ sở */}
-        <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
-          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-teal-600" />
+        {/* 14 Cơ sở - Stacked Bar Chart (wider) */}
+        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3">
+          <h4 className="font-semibold text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-teal-600" />
             14 Cơ sở Thống kê
           </h4>
           <StackedBarChart 
@@ -860,6 +912,16 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
             unitName=""
           />
         </div>
+      </div>
+
+      {/* Charts Dashboard - Row 2: 6 Task Type Breakdown Horizontal Bar Charts */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+        <HorizontalBarChart data={totalChartData} title="Tổng lịch" color="#2d6e3e" />
+        <HorizontalBarChart data={meetingOnlineChartData} title="Lịch Họp trực tuyến" color="#3b82f6" />
+        <HorizontalBarChart data={meetingOfflineChartData} title="Lịch Họp trực tiếp" color="#10b981" />
+        <HorizontalBarChart data={workAtOfficeChartData} title="Lịch làm việc tại cơ sở" color="#f59e0b" />
+        <HorizontalBarChart data={businessTripChartData} title="Công tác ngoài tỉnh" color="#ef4444" />
+        <HorizontalBarChart data={otherChartData} title="Làm việc tại cơ quan" color="#8b5cf6" />
       </div>
 
       {/* Toolbar */}
