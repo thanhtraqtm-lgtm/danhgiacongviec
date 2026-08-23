@@ -15,7 +15,6 @@ coverage/
 !package.json
 !package-lock.json
 !tsconfig.json
-!firebase-applet-config.json
 !firebase-blueprint.json
 !firestore.rules
 !metadata.json
