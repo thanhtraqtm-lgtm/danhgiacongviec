@@ -35,7 +35,6 @@ import {
   Upload as UploadIcon,
   Circle,
   Activity,
-  Grid,
   Layout
 } from 'lucide-react';
 import { WeeklySchedule, User, DEPARTMENTS } from '../types';
@@ -169,7 +168,6 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
   });
   const [inlineEditingCell, setInlineEditingCell] = useState<{ unitId: string; dayIndex: number } | null>(null);
   const [inlineEditForm, setInlineEditForm] = useState<Partial<WeeklySchedule>>({});
-  const [showOverview, setShowOverview] = useState(true);
 
   // Derive org units from actual user data (no hardcoding)
   const orgUnits = useMemo((): OrgUnit[] => {
@@ -989,83 +987,6 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Week Overview Bar - 23 units with colored dots per day */}
-      {showOverview && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
-              <Grid className="w-4 h-4 text-[#2d6e3e]" />
-              <span>Tổng quan tuần: {orgUnits.length} đơn vị</span>
-            </h3>
-            <button 
-              onClick={() => setShowOverview(!showOverview)}
-              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500"
-              title="Ẩn tổng quan"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800">
-                  <th className="px-2 py-1 text-left font-medium w-48 sticky left-0 z-10">Đơn vị</th>
-                  {weekDates.map((date, idx) => (
-                    <th key={idx} className={`px-2 py-1 text-center font-medium ${DAY_HEADER_COLORS[idx]}`}>
-                      <div className="text-[10px]">{date.toLocaleDateString('vi-VN', { month: '2-digit', day: '2-digit' })}</div>
-                      <div>{DAY_LABELS_SHORT[idx]}</div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {orgUnits.map((unit) => (
-                  <tr key={unit.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
-                    onClick={() => {
-                      setSelectedWorkUnit(unit.name);
-                      setSelectedGroupFilter(unit.type === 'leader' ? 'leader' : unit.type === 'department' ? 'department' : 'baseUnit');
-                    }}>
-                    <td className="px-2 py-1.5 sticky left-0 z-10 bg-white dark:bg-slate-900">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full ${unit.type === 'leader' ? 'bg-emerald-600' : unit.type === 'department' ? 'bg-blue-600' : 'bg-teal-600'}`} />
-                        <span className={`font-medium truncate max-w-[160px] ${unit.type === 'leader' ? 'text-emerald-800 dark:text-emerald-200' : unit.type === 'department' ? 'text-blue-800 dark:text-blue-200' : 'text-teal-800 dark:text-teal-200'}`}>
-                          {unit.name}
-                        </span>
-                        <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800">{unit.members.length} NV</span>
-                      </div>
-                    </td>
-                    {weekDates.map((date, dayIndex) => {
-                      const daySchedules = getSchedulesForUnitAndDay(unit, dayIndex);
-                      const completed = daySchedules.filter(s => s.status === 'Đã hoàn thành').length;
-                      const inProgress = daySchedules.filter(s => s.status === 'Đang thực hiện').length;
-                      const pending = daySchedules.filter(s => s.status === 'Chưa bắt đầu').length;
-                      const total = daySchedules.length;
-                      
-                      return (
-                        <td key={dayIndex} className={`px-1 py-1 text-center ${DAY_COLUMN_STRIPES[dayIndex]}`}>
-                          <div className="flex justify-center gap-0.5 items-center">
-                            {total > 0 && (
-                              <>
-                                {completed > 0 && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title={`${completed} hoàn thành`} />}
-                                {inProgress > 0 && <span className="w-1.5 h-1.5 rounded-full bg-sky-500" title={`${inProgress} đang làm`} />}
-                                {pending > 0 && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title={`${pending} chưa bắt đầu`} />}
-                                {total > 3 && <span className="text-[9px] text-slate-500">+{total - 3}</span>}
-                              </>
-                            )}
-                            {total === 0 && <span className="text-slate-300 dark:text-slate-600 text-[10px]">—</span>}
-                          </div>
-                          <div className="text-[9px] text-slate-400 mt-0.5">{total}</div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
       {/* Charts Dashboard: 6 Task Type Breakdown Horizontal Bar Charts */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
