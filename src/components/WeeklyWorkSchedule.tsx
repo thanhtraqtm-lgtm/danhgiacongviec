@@ -32,7 +32,11 @@ import {
   Calendar,
   CalendarDays,
   Download as DownloadIcon,
-  Upload as UploadIcon
+  Upload as UploadIcon,
+  Circle,
+  Activity,
+  Grid,
+  Layout
 } from 'lucide-react';
 import { WeeklySchedule, User, DEPARTMENTS } from '../types';
 import * as XLSX from 'xlsx';
@@ -80,6 +84,27 @@ const TASK_TYPE_COLORS = {
   'Đào tạo': '#ef4444',
   'Khác': '#8b5cf6',
 };
+
+// Subtle stripe colors for each weekday column (7 days)
+const DAY_COLUMN_STRIPES = [
+  'bg-blue-50/30 dark:bg-blue-950/10',   // Thứ 2
+  'bg-green-50/30 dark:bg-green-950/10', // Thứ 3
+  'bg-amber-50/30 dark:bg-amber-950/10', // Thứ 4
+  'bg-orange-50/30 dark:bg-orange-950/10', // Thứ 5
+  'bg-red-50/30 dark:bg-red-950/10',     // Thứ 6
+  'bg-purple-50/30 dark:bg-purple-950/10', // Thứ 7
+  'bg-slate-50/30 dark:bg-slate-950/10', // Chủ Nhật
+];
+
+const DAY_HEADER_COLORS = [
+  'bg-blue-100 dark:bg-blue-900/30',   // Thứ 2
+  'bg-green-100 dark:bg-green-900/30', // Thứ 3
+  'bg-amber-100 dark:bg-amber-900/30', // Thứ 4
+  'bg-orange-100 dark:bg-orange-900/30', // Thứ 5
+  'bg-red-100 dark:bg-red-900/30',     // Thứ 6
+  'bg-purple-100 dark:bg-purple-900/30', // Thứ 7
+  'bg-slate-100 dark:bg-slate-900/30', // Chủ Nhật
+];
 
 type DrillDownType = 'baseUnits' | null;
 type TimeFilter = 'week' | 'month' | 'quarter' | 'year';
@@ -134,6 +159,17 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
   const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
   const [showTimeFilterModal, setShowTimeFilterModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // New states for sidebar and inline editing
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
+    leader: true,
+    department: true,
+    baseUnit: true,
+  });
+  const [inlineEditingCell, setInlineEditingCell] = useState<{ unitId: string; dayIndex: number } | null>(null);
+  const [inlineEditForm, setInlineEditForm] = useState<Partial<WeeklySchedule>>({});
+  const [showOverview, setShowOverview] = useState(true);
 
   // Derive org units from actual user data (no hardcoding)
   const orgUnits = useMemo((): OrgUnit[] => {
@@ -723,11 +759,124 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
                   ))}
               </div>
             )}
-          </div>
+</div>
         </div>
       </div>
     );
   }
+
+  // Inline Edit Form Component
+  const InlineEditForm: React.FC<{
+    unit: OrgUnit;
+    dayIndex: number;
+    date: Date;
+    form: Partial<WeeklySchedule>;
+    onChange: (form: Partial<WeeklySchedule>) => void;
+    onSave: () => void;
+    onCancel: () => void;
+  }> = ({ unit, dayIndex, date, form, onChange, onSave, onCancel }) => {
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') onSave();
+      if (e.key === 'Escape') onCancel();
+    };
+
+    return (
+      <div className="p-2 bg-white dark:bg-slate-800 rounded border-2 border-[#2d6e3e] shadow-lg animate-in slide-in-from-top-2" onKeyDown={handleKeyDown}>
+        <div className="flex items-center gap-1 mb-2 text-xs">
+          <span className="px-1.5 py-0.5 rounded bg-[#2d6e3e] text-white font-bold">
+            {DAY_LABELS_SHORT[dayIndex]} {date.getDate()}/{date.getMonth() + 1}
+          </span>
+          <span className="text-slate-500">{unit.name}</span>
+        </div>
+        <div className="space-y-1.5">
+          <select
+            value={form.userName || ''}
+            onChange={e => onChange({ ...form, userName: e.target.value, 
+              userPosition: unit.members.find(m => m.fullName === e.target.value)?.position || '',
+              department: unit.members.find(m => m.fullName === e.target.value)?.department || '',
+              workUnit: unit.members.find(m => m.fullName === e.target.value)?.workUnit || ''
+            })}
+            className="w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+          >
+            <option value="">Chọn nhân sự...</option>
+            {unit.members.map(m => (
+              <option key={m.id} value={m.fullName}>{m.fullName} - {m.position}</option>
+            ))}
+          </select>
+          
+          <input
+            type="text"
+            value={form.taskName || ''}
+            onChange={e => onChange({ ...form, taskName: e.target.value })}
+            placeholder="Tên công việc *"
+            className="w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 font-medium"
+            autoFocus
+          />
+          
+          <select
+            value={form.taskType || 'Công tác'}
+            onChange={e => onChange({ ...form, taskType: e.target.value })}
+            className="w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+          >
+            <option value="Công tác">Công tác</option>
+            <option value="Họp">Họp</option>
+            <option value="Làm việc tại cơ quan">Làm việc tại cơ quan</option>
+            <option value="Đào tạo">Đào tạo</option>
+            <option value="Khác">Khác</option>
+          </select>
+          
+          <input
+            type="text"
+            value={form.location || ''}
+            onChange={e => onChange({ ...form, location: e.target.value })}
+            placeholder="Địa điểm"
+            className="w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+          />
+          
+          <div className="flex gap-1">
+            <button onClick={onSave} className="flex-1 px-2 py-1 text-xs text-white bg-[#2d6e3e] rounded hover:bg-[#235832] font-bold">
+              <Save className="w-3 h-3 inline mr-0.5" /> Lưu
+            </button>
+            <button onClick={onCancel} className="flex-1 px-2 py-1 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded">
+              Hủy
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Handle inline save
+  const handleInlineSave = useCallback((unit: OrgUnit, dayIndex: number, date: Date) => {
+    if (!inlineEditForm.taskName?.trim() || !inlineEditForm.userName?.trim()) {
+      addToast('error', 'Lỗi', 'Vui lòng nhập tên công việc và chọn nhân sự');
+      return;
+    }
+    
+    const newSchedule: WeeklySchedule = {
+      id: 'ws_' + Date.now(),
+      weekStartDate: weekStartDate.toISOString(),
+      weekEndDate: weekEndDate.toISOString(),
+      department: inlineEditForm.department || '',
+      workUnit: inlineEditForm.workUnit || '',
+      userName: inlineEditForm.userName || '',
+      userPosition: inlineEditForm.userPosition || '',
+      dayOfWeek: dayIndex,
+      date: date.toISOString().split('T')[0],
+      taskName: inlineEditForm.taskName || '',
+      taskType: (inlineEditForm.taskType as WeeklySchedule['taskType']) || 'Công tác',
+      location: inlineEditForm.location || '',
+      notes: inlineEditForm.notes || '',
+      status: (inlineEditForm.status as WeeklySchedule['status']) || 'Chưa bắt đầu',
+      createdAt: new Date().toISOString(),
+      createdBy: 'inline_edit',
+    };
+    
+    onAddSchedule(newSchedule);
+    setInlineEditingCell(null);
+    setInlineEditForm({});
+    addToast('success', 'Thành công', 'Đã thêm lịch công tác mới');
+  }, [inlineEditForm, weekStartDate, weekEndDate, onAddSchedule, addToast]);
 
   return (
     <div className="max-w-full mx-auto pb-12 space-y-5 px-4">
@@ -841,6 +990,83 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
         </div>
       </div>
 
+      {/* Week Overview Bar - 23 units with colored dots per day */}
+      {showOverview && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
+              <Grid className="w-4 h-4 text-[#2d6e3e]" />
+              <span>Tổng quan tuần: {orgUnits.length} đơn vị</span>
+            </h3>
+            <button 
+              onClick={() => setShowOverview(!showOverview)}
+              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500"
+              title="Ẩn tổng quan"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800">
+                  <th className="px-2 py-1 text-left font-medium w-48 sticky left-0 z-10">Đơn vị</th>
+                  {weekDates.map((date, idx) => (
+                    <th key={idx} className={`px-2 py-1 text-center font-medium ${DAY_HEADER_COLORS[idx]}`}>
+                      <div className="text-[10px]">{date.toLocaleDateString('vi-VN', { month: '2-digit', day: '2-digit' })}</div>
+                      <div>{DAY_LABELS_SHORT[idx]}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {orgUnits.map((unit) => (
+                  <tr key={unit.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer"
+                    onClick={() => {
+                      setSelectedWorkUnit(unit.name);
+                      setSelectedGroupFilter(unit.type === 'leader' ? 'leader' : unit.type === 'department' ? 'department' : 'baseUnit');
+                    }}>
+                    <td className="px-2 py-1.5 sticky left-0 z-10 bg-white dark:bg-slate-900">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${unit.type === 'leader' ? 'bg-emerald-600' : unit.type === 'department' ? 'bg-blue-600' : 'bg-teal-600'}`} />
+                        <span className={`font-medium truncate max-w-[160px] ${unit.type === 'leader' ? 'text-emerald-800 dark:text-emerald-200' : unit.type === 'department' ? 'text-blue-800 dark:text-blue-200' : 'text-teal-800 dark:text-teal-200'}`}>
+                          {unit.name}
+                        </span>
+                        <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800">{unit.members.length} NV</span>
+                      </div>
+                    </td>
+                    {weekDates.map((date, dayIndex) => {
+                      const daySchedules = getSchedulesForUnitAndDay(unit, dayIndex);
+                      const completed = daySchedules.filter(s => s.status === 'Đã hoàn thành').length;
+                      const inProgress = daySchedules.filter(s => s.status === 'Đang thực hiện').length;
+                      const pending = daySchedules.filter(s => s.status === 'Chưa bắt đầu').length;
+                      const total = daySchedules.length;
+                      
+                      return (
+                        <td key={dayIndex} className={`px-1 py-1 text-center ${DAY_COLUMN_STRIPES[dayIndex]}`}>
+                          <div className="flex justify-center gap-0.5 items-center">
+                            {total > 0 && (
+                              <>
+                                {completed > 0 && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title={`${completed} hoàn thành`} />}
+                                {inProgress > 0 && <span className="w-1.5 h-1.5 rounded-full bg-sky-500" title={`${inProgress} đang làm`} />}
+                                {pending > 0 && <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title={`${pending} chưa bắt đầu`} />}
+                                {total > 3 && <span className="text-[9px] text-slate-500">+{total - 3}</span>}
+                              </>
+                            )}
+                            {total === 0 && <span className="text-slate-300 dark:text-slate-600 text-[10px]">—</span>}
+                          </div>
+                          <div className="text-[9px] text-slate-400 mt-0.5">{total}</div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Charts Dashboard: 6 Task Type Breakdown Horizontal Bar Charts */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
         <HorizontalBarChart data={totalChartData} title="Tổng lịch" color="#2d6e3e" />
@@ -851,15 +1077,126 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
         <HorizontalBarChart data={otherChartData} title="Làm việc tại cơ quan" color="#8b5cf6" />
       </div>
 
-      {/* Main Table Grid */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
+      {/* Main Layout with Sidebar */}
+      <div className="flex gap-4">
+        {/* Sidebar Navigation - Collapsible Tree */}
+        {sidebarOpen && (
+          <aside className="w-64 lg:w-72 flex-shrink-0 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
+                <Layout className="w-4 h-4 text-[#2d6e3e]" />
+                <span>Cây đơn vị</span>
+              </h3>
+              <button onClick={() => setSidebarOpen(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded" title="Thu gọn">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </div>
+            <nav className="p-2 space-y-1 max-h-[600px] overflow-y-auto custom-scrollbar">
+              {/* Leaders Group */}
+              <details className={expandedGroups.leader ? 'open' : ''} onToggle={() => setExpandedGroups(prev => ({ ...prev, leader: !prev.leader }))}>
+                <summary className="flex items-center gap-2 px-2 py-1.5 font-semibold text-emerald-700 dark:text-emerald-300 text-xs cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded">
+                  <ChevronDown className="w-3 h-3 transition-transform duration-200" />
+                  <Users className="w-3 h-3" />
+                  <span>Lãnh đạo Cục</span>
+                  <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300">
+                    {orgUnits.filter(u => u.type === 'leader').reduce((sum, u) => sum + u.members.length, 0)} NV
+                  </span>
+                </summary>
+                <div className="pl-6 space-y-1">
+                  {orgUnits.filter(u => u.type === 'leader').map(unit => (
+                    <button
+                      key={unit.id}
+                      onClick={() => {
+                        setSelectedWorkUnit(unit.name);
+                        setSelectedGroupFilter('leader');
+                      }}
+                      className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors flex items-center gap-2"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span className="truncate font-medium text-emerald-800 dark:text-emerald-200">{unit.name}</span>
+                      <span className="ml-auto text-[9px] text-slate-500">{unit.members.length} NV</span>
+                    </button>
+                  ))}
+                </div>
+              </details>
+
+              {/* Departments Group */}
+              <details className={expandedGroups.department ? 'open' : ''} onToggle={() => setExpandedGroups(prev => ({ ...prev, department: !prev.department }))}>
+                <summary className="flex items-center gap-2 px-2 py-1.5 font-semibold text-blue-700 dark:text-blue-300 text-xs cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded">
+                  <ChevronDown className="w-3 h-3 transition-transform duration-200" />
+                  <Building className="w-3 h-3" />
+                  <span>Phòng ban</span>
+                  <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+                    {orgUnits.filter(u => u.type === 'department').reduce((sum, u) => sum + u.members.length, 0)} NV
+                  </span>
+                </summary>
+                <div className="pl-6 space-y-1">
+                  {orgUnits.filter(u => u.type === 'department').map(unit => (
+                    <button
+                      key={unit.id}
+                      onClick={() => {
+                        setSelectedWorkUnit(unit.name);
+                        setSelectedGroupFilter('department');
+                      }}
+                      className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors flex items-center gap-2"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                      <span className="truncate font-medium text-blue-800 dark:text-blue-200">{unit.name}</span>
+                      <span className="ml-auto text-[9px] text-slate-500">{unit.members.length} NV</span>
+                    </button>
+                  ))}
+                </div>
+              </details>
+
+              {/* Base Units Group */}
+              <details className={expandedGroups.baseUnit ? 'open' : ''} onToggle={() => setExpandedGroups(prev => ({ ...prev, baseUnit: !prev.baseUnit }))}>
+                <summary className="flex items-center gap-2 px-2 py-1.5 font-semibold text-teal-700 dark:text-teal-300 text-xs cursor-pointer hover:bg-teal-50 dark:hover:bg-teal-950/30 rounded">
+                  <ChevronDown className="w-3 h-3 transition-transform duration-200" />
+                  <MapPin className="w-3 h-3" />
+                  <span>Thống kê cơ sở</span>
+                  <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-100 dark:bg-teal-900 text-teal-700 dark:text-teal-300">
+                    {orgUnits.filter(u => u.type === 'baseUnit').reduce((sum, u) => sum + u.members.length, 0)} NV
+                  </span>
+                </summary>
+                <div className="pl-6 space-y-1">
+                  {orgUnits.filter(u => u.type === 'baseUnit').map(unit => (
+                    <button
+                      key={unit.id}
+                      onClick={() => {
+                        setSelectedWorkUnit(unit.name);
+                        setSelectedGroupFilter('baseUnit');
+                      }}
+                      className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-teal-50 dark:hover:bg-teal-950/30 transition-colors flex items-center gap-2"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                      <span className="truncate font-medium text-teal-800 dark:text-teal-200">{unit.name.replace('Thống kê cơ sở ', 'TKCS ')}</span>
+                      <span className="ml-auto text-[9px] text-slate-500">{unit.members.length} NV</span>
+                    </button>
+                  ))}
+                </div>
+              </details>
+            </nav>
+            <div className="p-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="w-full text-center text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 py-1"
+              >
+                <ChevronRight className="w-3 h-3 inline mr-1" /> Thu gọn sidebar
+              </button>
+            </div>
+          </aside>
+        )}
+
+        {/* Main Table Grid */}
+        <div className="flex-1 min-w-0">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
         {/* Table Header */}
         <div className="grid grid-cols-[1fr_repeat(7,minmax(120px,1fr))] bg-[#006097] text-white border-b border-[#004d7a]">
           <div className="px-3 py-3 font-bold text-sm text-center sticky left-0 z-10 bg-[#006097] border-r border-[#004d7a]">
             ĐỐI TƯỢNG / NGÀY
           </div>
           {weekDates.map((date, idx) => (
-            <div key={idx} className={`px-2 py-3 text-center text-xs font-medium border-r border-[#004d7a] ${idx >= 5 ? 'bg-[#005685]' : ''} ${date.toDateString() === new Date().toDateString() ? 'bg-[#004d7a] ring-2 ring-yellow-300/50' : ''}`}>
+            <div key={idx} className={`px-2 py-3 text-center text-xs font-medium border-r border-[#004d7a] ${DAY_HEADER_COLORS[idx]} ${date.toDateString() === new Date().toDateString() ? 'ring-2 ring-yellow-300/50' : ''}`}>
               <div className="text-[10px] opacity-80">{date.toLocaleDateString('vi-VN', { month: '2-digit', day: '2-digit' })}</div>
               <div className="font-bold">{DAY_LABELS[idx]}</div>
               <div className="text-[10px]">{date.getDate()}</div>
@@ -889,44 +1226,78 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
                 {weekDates.map((date, dayIndex) => {
                   const daySchedules = getSchedulesForUnitAndDay(unit, dayIndex);
                   const isToday = date.toDateString() === new Date().toDateString();
+                  const isInlineEditing = inlineEditingCell?.unitId === unit.id && inlineEditingCell?.dayIndex === dayIndex;
+                  
+                  const handleCellClick = (e: React.MouseEvent) => {
+                    if (daySchedules.length === 0 && !isInlineEditing) {
+                      e.stopPropagation();
+                      setInlineEditingCell({ unitId: unit.id, dayIndex });
+                      const firstMember = unit.members[0];
+                      setInlineEditForm({
+                        date: date.toISOString().split('T')[0],
+                        dayOfWeek: dayIndex,
+                        taskType: 'Công tác',
+                        status: 'Chưa bắt đầu',
+                        userName: firstMember?.fullName || '',
+                        userPosition: firstMember?.position || '',
+                        department: firstMember?.department || '',
+                        workUnit: firstMember?.workUnit || '',
+                      });
+                    }
+                  };
                   
                   return (
                     <div 
                       key={dayIndex} 
-                      className={`px-2 py-2 border-b border-slate-200 dark:border-slate-800 border-r border-slate-200 dark:border-slate-800 min-h-[80px] ${isToday ? 'bg-sky-50 dark:bg-sky-950/20' : daySchedules.length > 0 ? 'bg-amber-50/30 dark:bg-amber-950/10' : 'bg-white dark:bg-slate-900'} hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors`}
+                      className={`px-2 py-2 border-b border-slate-200 dark:border-slate-800 border-r border-slate-200 dark:border-slate-800 min-h-[80px] ${DAY_COLUMN_STRIPES[dayIndex]} ${isToday ? 'ring-2 ring-sky-400/50' : ''} ${daySchedules.length > 0 ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''} hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors relative`}
+                      onClick={handleCellClick}
                     >
-                      {daySchedules.map((schedule, taskIdx) => (
-                        <div 
-                          key={schedule.id} 
-                          className="mb-1.5 p-1.5 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 hover:shadow-sm transition-shadow cursor-pointer"
-                          onClick={() => handleEditClick(schedule)}
-                          title="Click để chỉnh sửa"
-                        >
-                          <div className="flex items-start gap-1.5">
-                            <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${{
-                              'Đã hoàn thành': 'bg-emerald-100 text-emerald-700',
-                              'Đang thực hiện': 'bg-sky-100 text-sky-700',
-                              'Chưa bắt đầu': 'bg-amber-100 text-amber-700',
-                              'Hủy': 'bg-rose-100 text-rose-700',
-                            }[schedule.status] || 'bg-slate-100 text-slate-700'}`}>
-                              {STATUS_ICONS[schedule.status as keyof typeof STATUS_ICONS]}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[10px] font-medium text-slate-800 dark:text-slate-200 truncate">
-                                {schedule.taskName}
-                              </div>
-                              <div className="flex items-center gap-1 text-[9px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                <span>{schedule.userName}</span>
-                                {schedule.location && <span className="truncate">· {schedule.location}</span>}
+                      {isInlineEditing ? (
+                        <InlineEditForm
+                          unit={unit}
+                          dayIndex={dayIndex}
+                          date={date}
+                          form={inlineEditForm}
+                          onChange={setInlineEditForm}
+                          onSave={() => handleInlineSave(unit, dayIndex, date)}
+                          onCancel={() => setInlineEditingCell(null)}
+                        />
+                      ) : (
+                        <>
+{daySchedules.map((schedule, taskIdx) => (
+                            <div 
+                              key={schedule.id} 
+                              className="mb-1.5 p-1.5 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 hover:shadow-sm transition-shadow cursor-pointer"
+                              onClick={(e) => { e.stopPropagation(); handleEditClick(schedule); }}
+                              title="Click để chỉnh sửa"
+                            >
+                              <div className="flex items-start gap-1.5">
+                                <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${{
+                                  'Đã hoàn thành': 'bg-emerald-100 text-emerald-700',
+                                  'Đang thực hiện': 'bg-sky-100 text-sky-700',
+                                  'Chưa bắt đầu': 'bg-amber-100 text-amber-700',
+                                  'Hủy': 'bg-rose-100 text-rose-700',
+                                }[schedule.status] || 'bg-slate-100 text-slate-700'}`}>
+                                  {STATUS_ICONS[schedule.status as keyof typeof STATUS_ICONS]}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[10px] font-medium text-slate-800 dark:text-slate-200 truncate">
+                                    {schedule.taskName}
+                                  </div>
+                                  <div className="flex items-center gap-1 text-[9px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    <span>{schedule.userName}</span>
+                                    {schedule.location && <span className="truncate">· {schedule.location}</span>}
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
-                      ))}
-                      {daySchedules.length === 0 && (
-                        <div className="text-center text-slate-300 dark:text-slate-600 py-4">
-                          <span className="text-[10px]">—</span>
-                        </div>
+                          ))}
+                          {daySchedules.length === 0 && !isInlineEditing && (
+                            <div className="text-center text-slate-300 dark:text-slate-600 py-4">
+                              <span className="text-[10px]">—</span>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   );
@@ -935,6 +1306,8 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
             ))}
           </div>
         </div>
+      </div>
+      </div>
       </div>
 
       {/* Footer Dashboard: Progress Bars + Time Filter */}
