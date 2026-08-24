@@ -130,9 +130,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Tự Nhận Xét & Chấm Điểm',
       icon: <ClipboardCheck className="w-4 h-4 text-yellow-300" />,
       children: [
-        { id: 'self_eval_30', label: 'Bản nhận xét 30 điểm', icon: <FileText className="w-3.5 h-3.5" />, tab: 'self_eval_30' as ActiveTab },
-        { id: 'self_eval_70', label: 'Tự chấm điểm KPI 70đ', icon: <Calculator className="w-3.5 h-3.5" />, tab: 'self_eval_70' as ActiveTab },
-        { id: 'self_eval_workflow', label: 'Trình phê duyệt', icon: <Workflow className="w-3.5 h-3.5" />, tab: 'self_eval_workflow' as ActiveTab },
+        { id: 'self_eval_30', label: 'Mẫu tự nhận xét', icon: <FileText className="w-3.5 h-3.5" />, tab: 'self_eval_30' as ActiveTab },
+        { id: 'self_eval_70', label: 'Tự chấm điểm KPI', icon: <Calculator className="w-3.5 h-3.5" />, tab: 'self_eval_70' as ActiveTab },
+        { id: 'self_eval_workflow', label: 'Phê duyệt', icon: <Workflow className="w-3.5 h-3.5" />, tab: 'self_eval_workflow' as ActiveTab },
       ]
     },
     {
