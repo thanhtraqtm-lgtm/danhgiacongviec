@@ -71,13 +71,36 @@ function isPaused(docId: string): boolean {
   return typeof until === 'number' && Date.now() < until;
 }
 
-/** Read a single envelope document. Returns null if missing/error (offline). */
+/** Read envelope with support for chunked data */
 async function readEnvelope<T>(docId: string): Promise<SyncEnvelope<T> | null> {
   try {
     const ref = doc(db, ROOT, docId);
     const snap = await getDoc(ref);
     if (!snap.exists()) return null;
     const data = snap.data() as any;
+    
+    // Nếu là chunked data, đọc tất cả các chunks
+    if (data?.isChunked && data?.totalChunks > 1) {
+      console.log(`Firestore: Reading chunked data from ${docId} (${data.totalChunks} chunks)`);
+      const allItems: any[] = [...(data.value || [])];
+      
+      for (let i = 1; i < data.totalChunks; i++) {
+        const chunkRef = doc(db, ROOT, `${docId}_chunk_${i}`);
+        const chunkSnap = await getDoc(chunkRef);
+        if (chunkSnap.exists()) {
+          const chunkData = chunkSnap.data() as any;
+          if (Array.isArray(chunkData?.value)) {
+            allItems.push(...chunkData.value);
+          }
+        }
+      }
+      console.log(`Firestore: Reassembled ${allItems.length} items from ${data.totalChunks} chunks`);
+      return {
+        value: allItems as T,
+        updatedAt: data?.updatedAt ?? '',
+      };
+    }
+    
     return {
       value: data?.value as T,
       updatedAt: data?.updatedAt ?? '',
@@ -93,50 +116,49 @@ async function writeEnvelope<T>(docId: string, value: T): Promise<void> {
   pause(docId);
   try {
     const ref = doc(db, ROOT, docId);
-    // Kiểm tra kích thước trước khi ghi - tăng giới hạn lên 1MB
     const serialized = JSON.stringify(value);
     const sizeBytes = new Blob([serialized]).size;
     const MAX_BYTES = 1_000_000; // 1MB - giới hạn Firestore document
 
     if (sizeBytes > MAX_BYTES && Array.isArray(value)) {
-      // Nếu là mảng tasks quá lớn, chỉ lưu các trường tối thiểu cần thiết
-      const minified = (value as any[]).map((item: any) => ({
-        id: item.id,
-        userName: item.userName,
-        taskName: item.taskName,
-        department: item.department,
-        status: item.status,
-        planDeadline: item.planDeadline,
-        actualDeadline: item.actualDeadline,
-        weight: item.weight,
-        jobType: item.jobType,
-        daysLate: item.daysLate,
-        lateReason: item.lateReason,
-      }));
-      const minSize = new Blob([JSON.stringify(minified)]).size;
-      if (minSize <= MAX_BYTES) {
-        await setDoc(ref, { value: minified, updatedAt: new Date().toISOString() });
-        return;
+      console.warn(`Firestore: Data too large (${sizeBytes} bytes), attempting chunked save for ${docId}`);
+      // Chia nhỏ thành nhiều document (chunking)
+      const items = value as any[];
+      const chunks: any[][] = [];
+      let currentChunk: any[] = [];
+      let currentSize = 0;
+      
+      for (const item of items) {
+        const itemStr = JSON.stringify(item);
+        const itemSize = new Blob([itemStr]).size;
+        
+        if (currentSize + itemSize > MAX_BYTES * 0.9 && currentChunk.length > 0) {
+          chunks.push(currentChunk);
+          currentChunk = [];
+          currentSize = 0;
+        }
+        currentChunk.push(item);
+        currentSize += itemSize;
       }
-      // Nếu vẫn quá lớn, cố gắng lưu với compression bằng cách chia nhỏ
-      console.warn(`Firestore: Data too large (${sizeBytes} bytes), attempting to save essential fields only`);
-      const essential = (value as any[]).map((item: any) => ({
-        id: item.id,
-        userName: item.userName,
-        taskName: item.taskName,
-        department: item.department,
-        status: item.status,
-        planDeadline: item.planDeadline,
-        weight: item.weight,
-      }));
-      const essentialSize = new Blob([JSON.stringify(essential)]).size;
-      if (essentialSize <= MAX_BYTES) {
-        await setDoc(ref, { value: essential, updatedAt: new Date().toISOString() });
-        console.log('Firestore: Saved essential fields only');
-        return;
+      if (currentChunk.length > 0) {
+        chunks.push(currentChunk);
       }
-      // Last resort: chỉ lưu metadata
-      console.error(`Firestore: Unable to save - data too large even after minification (${essentialSize} bytes)`);
+      
+      console.log(`Firestore: Splitting ${items.length} items into ${chunks.length} chunks`);
+      
+      // Lưu chunk đầu tiên vào document chính, các chunk còn lại vào sub-documents
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkRef = i === 0 ? ref : doc(db, ROOT, `${docId}_chunk_${i}`);
+        await setDoc(chunkRef, {
+          value: chunks[i],
+          updatedAt: new Date().toISOString(),
+          chunkIndex: i,
+          totalChunks: chunks.length,
+          isChunked: true,
+        });
+        console.log(`Firestore: Saved chunk ${i + 1}/${chunks.length} (${chunks[i].length} items)`);
+      }
+      return;
     }
 
     await setDoc(ref, {
@@ -146,7 +168,7 @@ async function writeEnvelope<T>(docId: string, value: T): Promise<void> {
     console.log(`Firestore: Saved ${docId} (${sizeBytes} bytes)`);
   } catch (error) {
     console.error(`Firestore write error for ${docId}:`, error);
-    // Không silent fail - log ra để debug
+    throw error; // Re-throw để caller biết
   }
 }
 
@@ -181,24 +203,60 @@ export function fsWatchUsers(onData: (users: User[], updatedAt: string) => void)
 /* ----------------------------- TASKS ----------------------------- */
 
 export async function fsLoadTasks(): Promise<KpiTask[] | null> {
-  const env = await readEnvelope<KpiTask[]>(TASKS_DOC);
-  return env ? env.value : null;
+  console.log('fsLoadTasks: Loading tasks from Firestore');
+  try {
+    const env = await readEnvelope<KpiTask[]>(TASKS_DOC);
+    const result = env ? env.value : null;
+    console.log(`fsLoadTasks: Loaded ${result?.length ?? 0} tasks`);
+    return result;
+  } catch (error) {
+    console.error('fsLoadTasks: Failed to load from Firestore:', error);
+    return null;
+  }
 }
 
 export async function fsSaveTasks(tasks: KpiTask[]): Promise<void> {
   console.log(`fsSaveTasks: Saving ${tasks.length} tasks to Firestore`);
-  await writeEnvelope(TASKS_DOC, tasks);
-  console.log('fsSaveTasks: Completed');
+  try {
+    await writeEnvelope(TASKS_DOC, tasks);
+    console.log('fsSaveTasks: Completed successfully');
+  } catch (error) {
+    console.error('fsSaveTasks: Failed to save to Firestore:', error);
+    // Fallback: Lưu vào localStorage để không mất dữ liệu
+    console.log('fsSaveTasks: Data saved to localStorage only');
+    throw error;
+  }
 }
 
 export function fsWatchTasks(onData: (tasks: KpiTask[], updatedAt: string) => void): Unsubscribe {
   const ref = doc(db, ROOT, TASKS_DOC);
   return onSnapshot(
     ref,
-    (snap) => {
+    async (snap) => {
       if (isPaused(TASKS_DOC)) return; // drop echo of our own write
       if (!snap.exists()) return;
       const data = snap.data() as any;
+      
+      // Handle chunked data
+      if (data?.isChunked && data?.totalChunks > 1) {
+        console.log(`fsWatchTasks: Detected chunked data (${data.totalChunks} chunks), reassembling...`);
+        const allItems: KpiTask[] = [...(data.value || [])];
+        
+        for (let i = 1; i < data.totalChunks; i++) {
+          const chunkRef = doc(db, ROOT, `${TASKS_DOC}_chunk_${i}`);
+          const chunkSnap = await getDoc(chunkRef);
+          if (chunkSnap.exists()) {
+            const chunkData = chunkSnap.data() as any;
+            if (Array.isArray(chunkData?.value)) {
+              allItems.push(...chunkData.value);
+            }
+          }
+        }
+        console.log(`fsWatchTasks: Reassembled ${allItems.length} tasks from ${data.totalChunks} chunks`);
+        onData(allItems, data?.updatedAt ?? '');
+        return;
+      }
+      
       if (!Array.isArray(data?.value)) return;
       onData(data.value as KpiTask[], data?.updatedAt ?? '');
     },
