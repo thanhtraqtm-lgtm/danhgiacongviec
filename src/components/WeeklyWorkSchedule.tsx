@@ -188,16 +188,16 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
 
     const units: OrgUnit[] = [];
     
-    // Leaders group
-    if (leaderUsers.length > 0) {
+    // Leaders group - each leader as separate unit
+    leaderUsers.forEach((leader, idx) => {
       units.push({
-        id: 'leaders',
-        name: 'Lãnh đạo Cục',
+        id: `leader_${leader.id}`,
+        name: leader.fullName,
         type: 'leader',
-        members: leaderUsers,
+        members: [leader],
         color: '#2d6e3e'
       });
-    }
+    });
     
     // Departments and Base Units
     deptMap.forEach((members, deptName) => {
