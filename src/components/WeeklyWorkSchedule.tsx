@@ -33,9 +33,14 @@ import {
   CalendarDays,
   Download as DownloadIcon,
   Upload as UploadIcon,
-  Circle,
-  Activity,
-  Layout
+  Layout,
+  Grid,
+  Table,
+  FileText,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Minimize2,
+  Maximize
 } from 'lucide-react';
 import { WeeklySchedule, User, DEPARTMENTS } from '../types';
 import * as XLSX from 'xlsx';
@@ -61,19 +66,13 @@ interface WeeklyWorkScheduleProps {
 const STATUSES = ['Đã hoàn thành', 'Đang thực hiện', 'Chưa bắt đầu', 'Hủy'] as const;
 const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'];
 const DAY_LABELS_SHORT = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+const SESSIONS = ['Sáng', 'Chiều'];
 
 const STATUS_ICONS = {
   'Đã hoàn thành': '✓',
   'Đang thực hiện': '📝',
   'Chưa bắt đầu': '○',
   'Hủy': '✕',
-};
-
-const STATUS_COLORS = {
-  'Đã hoàn thành': '#10b981',
-  'Đang thực hiện': '#0ea5e9',
-  'Chưa bắt đầu': '#f59e0b',
-  'Hủy': '#ef4444',
 };
 
 const TASK_TYPE_COLORS = {
@@ -84,28 +83,27 @@ const TASK_TYPE_COLORS = {
   'Khác': '#8b5cf6',
 };
 
-// Subtle stripe colors for each weekday column (7 days)
 const DAY_COLUMN_STRIPES = [
-  'bg-blue-50/30 dark:bg-blue-950/10',   // Thứ 2
-  'bg-green-50/30 dark:bg-green-950/10', // Thứ 3
-  'bg-amber-50/30 dark:bg-amber-950/10', // Thứ 4
-  'bg-orange-50/30 dark:bg-orange-950/10', // Thứ 5
-  'bg-red-50/30 dark:bg-red-950/10',     // Thứ 6
-  'bg-purple-50/30 dark:bg-purple-950/10', // Thứ 7
-  'bg-slate-50/30 dark:bg-slate-950/10', // Chủ Nhật
+  'bg-blue-50/30 dark:bg-blue-950/10',
+  'bg-green-50/30 dark:bg-green-950/10',
+  'bg-amber-50/30 dark:bg-amber-950/10',
+  'bg-orange-50/30 dark:bg-orange-950/10',
+  'bg-red-50/30 dark:bg-red-950/10',
+  'bg-purple-50/30 dark:bg-purple-950/10',
+  'bg-slate-50/30 dark:bg-slate-950/10',
 ];
 
 const DAY_HEADER_COLORS = [
-  'bg-blue-100 dark:bg-blue-900/30',   // Thứ 2
-  'bg-green-100 dark:bg-green-900/30', // Thứ 3
-  'bg-amber-100 dark:bg-amber-900/30', // Thứ 4
-  'bg-orange-100 dark:bg-orange-900/30', // Thứ 5
-  'bg-red-100 dark:bg-red-900/30',     // Thứ 6
-  'bg-purple-100 dark:bg-purple-900/30', // Thứ 7
-  'bg-slate-100 dark:bg-slate-900/30', // Chủ Nhật
+  'bg-blue-100 dark:bg-blue-900/30',
+  'bg-green-100 dark:bg-green-900/30',
+  'bg-amber-100 dark:bg-amber-900/30',
+  'bg-orange-100 dark:bg-orange-900/30',
+  'bg-red-100 dark:bg-red-900/30',
+  'bg-purple-100 dark:bg-purple-900/30',
+  'bg-slate-100 dark:bg-slate-900/30',
 ];
 
-type DrillDownType = 'baseUnits' | null;
+type ViewMode = 'matrix' | 'cards' | 'list';
 type TimeFilter = 'week' | 'month' | 'quarter' | 'year';
 
 interface OrgUnit {
@@ -117,15 +115,19 @@ interface OrgUnit {
 }
 
 interface DrillDownData {
-  type: DrillDownType;
-  name: string;
+  unit: OrgUnit;
+  dayIndex: number;
+  session: string;
   schedules: WeeklySchedule[];
 }
 
-interface TimePeriod {
-  label: string;
-  startDate: Date;
-  endDate: Date;
+interface MatrixCellData {
+  dayIndex: number;
+  session: string;
+  leaderName: string;
+  content: string;
+  taskType: string;
+  location: string;
 }
 
 export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
@@ -143,12 +145,12 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
     return new Date(now.setDate(diff));
   });
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('ALL');
   const [selectedWorkUnit, setSelectedWorkUnit] = useState<string>('ALL');
   const [filterTaskType, setFilterTaskType] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('week');
+  const [viewMode, setViewMode] = useState<ViewMode>('matrix');
   
   const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<WeeklySchedule>>({});
@@ -157,26 +159,23 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
   const [isImporting, setIsImporting] = useState(false);
   const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
   const [showTimeFilterModal, setShowTimeFilterModal] = useState(false);
+  const [showImportOptions, setShowImportOptions] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // New states for sidebar and inline editing
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
     leader: true,
     department: true,
     baseUnit: true,
   });
-  const [inlineEditingCell, setInlineEditingCell] = useState<{ unitId: string; dayIndex: number } | null>(null);
-  const [inlineEditForm, setInlineEditForm] = useState<Partial<WeeklySchedule>>({});
 
-  // Derive org units from actual user data (no hardcoding)
+  // Derive org units from actual user data
   const orgUnits = useMemo((): OrgUnit[] => {
     const leaderUsers = users.filter(u => 
       u.role === 'PROVINCE_LEADER' || 
       /cục trưởng|phó cục trưởng|giám đốc|phó giám đốc/i.test(u.position || '')
     );
     
-    // Get unique departments from non-leader users
     const nonLeaderUsers = users.filter(u => !leaderUsers.includes(u));
     const deptMap = new Map<string, User[]>();
     
@@ -188,8 +187,8 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
 
     const units: OrgUnit[] = [];
     
-    // Leaders group - each leader as separate unit
-    leaderUsers.forEach((leader, idx) => {
+    // Leaders - each as separate unit
+    leaderUsers.forEach((leader) => {
       units.push({
         id: `leader_${leader.id}`,
         name: leader.fullName,
@@ -214,7 +213,6 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     return units;
   }, [users]);
 
-  // Filter org units by selected group filter and work unit
   const filteredOrgUnits = useMemo(() => {
     let units = orgUnits;
     
@@ -254,8 +252,8 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     return dates;
   }, [weekStartDate]);
 
-  // Get schedules for a specific org unit and day
-  const getSchedulesForUnitAndDay = useCallback((unit: OrgUnit, dayIndex: number) => {
+  // Get schedules for unit, day, session
+  const getSchedulesForUnitDaySession = useCallback((unit: OrgUnit, dayIndex: number, session: string) => {
     const targetDate = weekDates[dayIndex].toISOString().split('T')[0];
     const memberNames = new Set(unit.members.map(m => m.fullName));
     
@@ -275,16 +273,43 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     }).sort((a, b) => a.taskName.localeCompare(b.taskName));
   }, [schedules, weekDates, filterTaskType, searchQuery]);
 
+  // Build matrix data for leaders
+  const leaderMatrix = useMemo((): MatrixCellData[][] => {
+    const leaderUnits = orgUnits.filter(u => u.type === 'leader');
+    const matrix: MatrixCellData[][] = [];
+    
+    weekDates.forEach((date, dayIndex) => {
+      SESSIONS.forEach(session => {
+        const row: MatrixCellData[] = [];
+        leaderUnits.forEach(unit => {
+          const daySchedules = getSchedulesForUnitDaySession(unit, dayIndex, session);
+          const content = daySchedules.map(s => s.taskName).join('; ') || '—';
+          const taskType = daySchedules[0]?.taskType || '';
+          const location = daySchedules[0]?.location || '';
+          row.push({
+            dayIndex,
+            session,
+            leaderName: unit.name,
+            content,
+            taskType,
+            location
+          });
+        });
+        matrix.push(row);
+      });
+    });
+    
+    return matrix;
+  }, [orgUnits, weekDates, getSchedulesForUnitDaySession]);
+
   // Navigation
   const handlePrevWeek = () => {
     setCurrentWeekStart(new Date(weekStartDate.getTime() - 7 * 24 * 60 * 60 * 1000));
-    setSelectedDay(null);
     setDrillDown(null);
   };
 
   const handleNextWeek = () => {
     setCurrentWeekStart(new Date(weekStartDate.getTime() + 7 * 24 * 60 * 60 * 1000));
-    setSelectedDay(null);
     setDrillDown(null);
   };
 
@@ -293,8 +318,6 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     const day = now.getDay();
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
     setCurrentWeekStart(new Date(now.setDate(diff)));
-    const todayIndex = new Date().getDay();
-    setSelectedDay(todayIndex === 0 ? 6 : todayIndex - 1);
     setDrillDown(null);
   };
 
@@ -357,7 +380,6 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     if (selectedWorkUnit !== 'ALL') {
       initialForm.workUnit = selectedWorkUnit;
     }
-    // Pre-select unit if provided
     if (unitId) {
       const unit = orgUnits.find(u => u.id === unitId);
       if (unit?.members[0]) {
@@ -371,7 +393,17 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     setShowAddForm(true);
   };
 
-  // Excel Export/Import
+  // Handle matrix cell click
+  const handleMatrixCellClick = (unit: OrgUnit, dayIndex: number, session: string) => {
+    const daySchedules = getSchedulesForUnitDaySession(unit, dayIndex, session);
+    if (daySchedules.length > 0) {
+      setDrillDown({ unit, dayIndex, session, schedules: daySchedules });
+    } else {
+      openAddForm(dayIndex, unit.id);
+    }
+  };
+
+  // Excel Template Download
   const downloadTemplate = useCallback(() => {
     const headers = [
       'Đối tượng (Lãnh đạo/Phòng ban/Cơ sở)',
@@ -379,6 +411,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
       'Chức vụ',
       'Ngày (YYYY-MM-DD)',
       'Thứ (0-6)',
+      'Buổi (Sáng/Chiều)',
       'Tên công việc',
       'Loại công việc',
       'Địa điểm',
@@ -393,6 +426,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
         'Cục trưởng',
         weekDates[0]?.toISOString().split('T')[0] || '',
         '0',
+        'Sáng',
         'Họp triển khai kế hoạch quý',
         'Họp',
         'Phòng họp A',
@@ -405,6 +439,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
         'Nhân viên',
         weekDates[1]?.toISOString().split('T')[0] || '',
         '1',
+        'Chiều',
         'Công tác kiểm tra cơ sở',
         'Công tác',
         'Thống kê cơ sở Phố Hiến',
@@ -420,6 +455,41 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     addToast('success', 'Thành công', 'Đã tải file mẫu về máy');
   }, [weekDates, addToast]);
 
+  // Download matrix template (like dulieu_test_lich_cong_tac.xlsx)
+  const downloadMatrixTemplate = useCallback(() => {
+    const leaderUnits = orgUnits.filter(u => u.type === 'leader');
+    const headers = [
+      'Ngày',
+      'Buổi',
+      ...leaderUnits.map(u => `${u.name}\n(${u.members[0]?.position || ''})`)
+    ];
+
+    const sampleData: string[][] = [];
+    weekDates.forEach((date, dayIndex) => {
+      SESSIONS.forEach((session, sessionIndex) => {
+        const row: string[] = [];
+        row.push(sessionIndex === 0 ? `Thứ ${dayIndex + 2} (${date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })})` : '');
+        row.push(session);
+        leaderUnits.forEach(() => {
+          row.push(sessionIndex === 0 ? 'Làm việc cơ quan' : '');
+        });
+        sampleData.push(row);
+      });
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 18 }, // Ngày
+      { wch: 8 },  // Buổi
+      ...leaderUnits.map(() => ({ wch: 35 }))
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Lịch Công Tác Lãnh Đạo');
+    XLSX.writeFile(wb, `Mau_Lich_Ma_Tran_Lanh_Dao_${new Date().toISOString().split('T')[0]}.xlsx`);
+    addToast('success', 'Thành công', 'Đã tải file mẫu ma trận về máy');
+  }, [orgUnits, weekDates, addToast]);
+
   const exportToExcel = useCallback(() => {
     if (schedules.length === 0) {
       addToast('warning', 'Cảnh báo', 'Không có dữ liệu để xuất');
@@ -432,6 +502,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
       'Chức vụ',
       'Ngày',
       'Thứ',
+      'Buổi',
       'Tên công việc',
       'Loại công việc',
       'Địa điểm',
@@ -441,14 +512,17 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
 
     const data = filteredOrgUnits.flatMap(unit => 
       weekDates.map((date, dayIndex) => {
-        const daySchedules = getSchedulesForUnitAndDay(unit, dayIndex);
-        if (daySchedules.length === 0) return null;
-        return daySchedules.map(s => [
+        const daySchedules = getSchedulesForUnitDaySession(unit, dayIndex, 'Sáng');
+        const afternoonSchedules = getSchedulesForUnitDaySession(unit, dayIndex, 'Chiều');
+        const allSchedules = [...daySchedules, ...afternoonSchedules];
+        if (allSchedules.length === 0) return null;
+        return allSchedules.map(s => [
           unit.name,
           s.userName,
           s.userPosition || '',
           s.date,
           DAY_LABELS[s.dayOfWeek],
+          s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng', // rough guess
           s.taskName,
           s.taskType,
           s.location || '',
@@ -463,7 +537,54 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     XLSX.utils.book_append_sheet(wb, ws, 'Lịch công tác tuần');
     XLSX.writeFile(wb, `Lich_Cong_Tac_Tuan_${weekStartDate.toISOString().split('T')[0]}.xlsx`);
     addToast('success', 'Thành công', `Đã xuất ${data.length} bản ghi ra Excel`);
-  }, [schedules, filteredOrgUnits, weekDates, getSchedulesForUnitAndDay, weekStartDate, addToast]);
+  }, [schedules, filteredOrgUnits, weekDates, getSchedulesForUnitDaySession, weekStartDate, addToast]);
+
+  // Parse matrix format (dulieu_test_lich_cong_tac.xlsx)
+  const parseMatrixFormat = useCallback((jsonData: string[][]) => {
+    if (jsonData.length < 2) return null;
+    
+    const headers = jsonData[0] as string[];
+    // Check if this is matrix format: first col = Ngày, second = Buổi, rest = leader names
+    if (!headers[0]?.toLowerCase().includes('ngày') || !headers[1]?.toLowerCase().includes('buổi')) {
+      return null;
+    }
+    
+    const leaderNames = headers.slice(2).map(h => h.split('\n')[0].split('(')[0].trim());
+    const rows = jsonData.slice(1);
+    
+    const result: MatrixCellData[] = [];
+    let currentDayIndex = -1;
+    
+    rows.forEach((row, rowIndex) => {
+      const dayCell = row[0]?.toString().trim();
+      const session = row[1]?.toString().trim() || '';
+      
+      if (dayCell) {
+        const dayMatch = dayCell.match(/Thứ\s*(\d+)/);
+        if (dayMatch) {
+          currentDayIndex = parseInt(dayMatch[1]) - 2;
+        }
+      }
+      
+      if (currentDayIndex >= 0 && currentDayIndex < 7 && SESSIONS.includes(session)) {
+        leaderNames.forEach((leaderName, leaderIdx) => {
+          const content = row[leaderIdx + 2]?.toString().trim() || '';
+          if (content && content !== '—' && content !== '') {
+            result.push({
+              dayIndex: currentDayIndex,
+              session,
+              leaderName,
+              content,
+              taskType: content.includes('Họp') ? 'Họp' : content.includes('Đào tạo') ? 'Đào tạo' : 'Công tác',
+              location: content.includes('📍') || content.includes('') ? content.split(/[📍]/).pop()?.trim() : ''
+            });
+          }
+        });
+      }
+    });
+    
+    return result.length > 0 ? result : null;
+  }, []);
 
   const handleFileImport = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -476,13 +597,62 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
 
-        if (jsonData.length < 2) {
-          addToast('error', 'Lỗi', 'File Excel không có dữ liệu');
+        // Try matrix format first
+        const matrixData = parseMatrixFormat(jsonData as string[][]);
+        
+        if (matrixData) {
+          // Import matrix format
+          const leaderUnits = orgUnits.filter(u => u.type === 'leader');
+          const newSchedules: WeeklySchedule[] = [];
+          let addedCount = 0;
+          
+          matrixData.forEach((cell) => {
+            const leaderUnit = leaderUnits.find(u => u.name === cell.leaderName);
+            if (!leaderUnit) return;
+            
+            const leader = leaderUnit.members[0];
+            const date = weekDates[cell.dayIndex]?.toISOString().split('T')[0];
+            if (!date) return;
+            
+            // Split content by semicolon or newlines for multiple tasks
+            const tasks = cell.content.split(/[;\n]/).map(t => t.trim()).filter(Boolean);
+            
+            tasks.forEach((taskContent, taskIdx) => {
+              newSchedules.push({
+                id: 'ws_' + Date.now() + '_' + addedCount++,
+                weekStartDate: weekStartDate.toISOString(),
+                weekEndDate: weekEndDate.toISOString(),
+                department: leader.department || '',
+                workUnit: leader.workUnit || '',
+                userName: leader.fullName,
+                userPosition: leader.position,
+                dayOfWeek: cell.dayIndex,
+                date,
+                taskName: taskContent,
+                taskType: cell.taskType as WeeklySchedule['taskType'],
+                location: cell.location,
+                notes: `Buổi: ${cell.session}`,
+                status: 'Chưa bắt đầu' as WeeklySchedule['status'],
+                createdAt: new Date().toISOString(),
+                createdBy: 'import_matrix',
+              });
+            });
+          });
+          
+          if (newSchedules.length === 0) {
+            addToast('warning', 'Cảnh báo', 'Không tìm thấy dữ liệu hợp lệ trong file ma trận');
+            return;
+          }
+          
+          newSchedules.forEach(s => onAddSchedule(s));
+          addToast('success', 'Nhập thành công (Ma trận)', `Đã nhập ${newSchedules.length} lịch công tác từ file ma trận`);
+          if (fileInputRef.current) fileInputRef.current.value = '';
           return;
         }
-
+        
+        // Fallback to flat format
         const headers = jsonData[0] as string[];
         const rows = jsonData.slice(1) as string[][];
 
@@ -494,6 +664,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
           else if (normalized.includes('chức vụ') || normalized.includes('chức danh') || normalized.includes('position')) colMap.userPosition = i;
           else if (normalized.includes('ngày') || normalized.includes('date')) colMap.date = i;
           else if (normalized.includes('thứ') || normalized.includes('dayofweek')) colMap.dayOfWeek = i;
+          else if (normalized.includes('buổi')) colMap.session = i;
           else if (normalized.includes('tên công việc') || normalized.includes('taskname') || normalized.includes('nội dung')) colMap.taskName = i;
           else if (normalized.includes('loại') || normalized.includes('tasktype')) colMap.taskType = i;
           else if (normalized.includes('địa điểm') || normalized.includes('location')) colMap.location = i;
@@ -501,7 +672,6 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
           else if (normalized.includes('trạng thái') || normalized.includes('status')) colMap.status = i;
         });
 
-        // Build lookup for org units
         const orgUnitLookup = new Map<string, OrgUnit>();
         orgUnits.forEach(u => {
           orgUnitLookup.set(u.name.toLowerCase(), u);
@@ -520,6 +690,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
           const userPosition = row[colMap.userPosition]?.toString().trim() || '';
           const date = row[colMap.date]?.toString().trim() || '';
           const dayOfWeek = parseInt(row[colMap.dayOfWeek]?.toString().trim() || '0', 10);
+          const session = row[colMap.session]?.toString().trim() || '';
           const taskName = row[colMap.taskName]?.toString().trim() || '';
           const taskType = row[colMap.taskType]?.toString().trim() || 'Công tác';
           const location = row[colMap.location]?.toString().trim() || '';
@@ -531,14 +702,12 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
             return;
           }
 
-          // Validate org unit exists in system
           const matchedUnit = orgUnitLookup.get(orgUnitName.toLowerCase());
           if (!matchedUnit) {
             mismatchCount++;
             return;
           }
 
-          // Validate user belongs to that unit
           const matchedUser = matchedUnit.members.find(m => m.fullName.toLowerCase() === userName.toLowerCase());
           if (!matchedUser) {
             mismatchCount++;
@@ -561,7 +730,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
             taskName,
             taskType: ['Công tác', 'Họp', 'Đào tạo', 'Khác', 'Làm việc tại cơ quan'].includes(taskType) ? taskType as any : 'Công tác',
             location,
-            notes,
+            notes: notes + (session ? ` | Buổi: ${session}` : ''),
             status: STATUSES.includes(status as any) ? status as any : 'Chưa bắt đầu',
             createdAt: new Date().toISOString(),
             createdBy: 'import_excel',
@@ -570,7 +739,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
 
         if (mismatchCount > 0) {
           addToast('error', 'Lỗi dữ liệu không khớp', 
-            `${mismatchCount} dòng bị bỏ qua: Tên đơn vị/nhân sự không tồn tại trong hệ thống. Vui lòng kiểm tra file Excel.`);
+            `${mismatchCount} dòng bị bỏ qua: Tên đơn vị/nhân sự không tồn tại trong hệ thống.`);
         }
 
         if (newSchedules.length === 0) {
@@ -579,7 +748,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
         }
 
         newSchedules.forEach(s => onAddSchedule(s));
-        addToast('success', 'Nhập thành công', `Đã nhập ${newSchedules.length} lịch công tác từ Excel${errorCount > 0 ? ` (bỏ qua ${errorCount} dòng lỗi)` : ''}`);
+        addToast('success', 'Nhập thành công', `Đã nhập ${newSchedules.length} lịch công tác${errorCount > 0 ? ` (bỏ qua ${errorCount} dòng lỗi)` : ''}`);
         
         if (fileInputRef.current) fileInputRef.current.value = '';
       } catch (err) {
@@ -588,13 +757,13 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
       }
     };
     reader.readAsArrayBuffer(file);
-  }, [orgUnits, weekStartDate, weekEndDate, onAddSchedule, addToast]);
+  }, [orgUnits, weekDates, weekStartDate, weekEndDate, onAddSchedule, addToast, parseMatrixFormat]);
 
   const triggerFileImport = () => {
     fileInputRef.current?.click();
   };
 
-  // Stats for footer dashboard
+  // Stats
   const weekStats = useMemo(() => {
     const weekSchedules = schedules.filter(s => {
       const scheduleDate = new Date(s.date);
@@ -609,7 +778,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     return { total, completed, inProgress, pending, cancelled, completionRate };
   }, [schedules, weekStartDate, weekEndDate]);
 
-  // Chart data for task type breakdown by base unit
+  // Chart data
   const BASE_UNITS = orgUnits.filter(u => u.type === 'baseUnit');
   
   const getTaskTypeChartData = useCallback((taskTypeFilter: string) => {
@@ -633,17 +802,12 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
   const businessTripChartData = useMemo(() => getTaskTypeChartData('Đào tạo'), [getTaskTypeChartData]);
   const otherChartData = useMemo(() => getTaskTypeChartData('Khác'), [getTaskTypeChartData]);
 
-  const HorizontalBarChart = ({ data, title, color }: { 
-    data: any[], 
-    title: string,
-    color: string
-  }) => {
+  const HorizontalBarChart = ({ data, title, color }: { data: any[], title: string, color: string }) => {
     if (data.length === 0) return (
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3 h-48 flex items-center justify-center">
         <span className="text-slate-400 text-sm">Chưa có dữ liệu</span>
       </div>
     );
-
     return (
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-3 h-48">
         <h4 className="font-medium text-slate-800 dark:text-slate-100 text-xs mb-2 truncate">{title}</h4>
@@ -652,229 +816,304 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
             <XAxis type="number" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
             <YAxis dataKey="name" type="category" width={70} tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-            <Tooltip 
-              formatter={(value: number) => [value, 'lịch']}
-              contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }}
-            />
-            <Bar 
-              dataKey="value" 
-              fill={color} 
-              name={title}
-              radius={[0, 4, 4, 0]}
-              maxBarSize={20}
-            />
+            <Tooltip formatter={(value: number) => [value, 'lịch']} contentStyle={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '8px' }} />
+            <Bar dataKey="value" fill={color} name={title} radius={[0, 4, 4, 0]} maxBarSize={20} />
           </BarChart>
         </ResponsiveContainer>
       </div>
     );
   };
 
-  // Drill-down Detail Modal
+  // Drill-down Modal
   if (drillDown) {
+    const { unit, dayIndex, session, schedules: drillSchedules } = drillDown;
+    const date = weekDates[dayIndex];
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 rounded-t-2xl">
             <div className="flex items-center gap-3">
               <button onClick={() => setDrillDown(null)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
               <div>
-                <h3 className="font-bold text-slate-800 dark:text-slate-100">{drillDown.name}</h3>
-                <p className="text-xs text-slate-500">{drillDown.schedules.length} lịch công tác trong tuần</p>
+                <h3 className="font-bold text-slate-800 dark:text-slate-100">{unit.name}</h3>
+                <p className="text-xs text-slate-500">{DAY_LABELS[dayIndex]}, {date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} - Buổi {session} ({drillSchedules.length} lịch)</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" onClick={() => setDrillDown(null)}>Đóng</button>
-            </div>
+            <button className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" onClick={() => setDrillDown(null)}>Đóng</button>
           </div>
-          
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {drillDown.schedules.length === 0 ? (
+            {drillSchedules.length === 0 ? (
               <div className="text-center py-12 text-slate-400">
                 <CalendarIcon className="w-12 h-12 mx-auto mb-2 opacity-30" />
                 <p className="text-sm">Không có lịch công tác</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {drillDown.schedules
-                  .sort((a, b) => {
-                    const dayA = parseInt(a.dayOfWeek?.toString() || '0');
-                    const dayB = parseInt(b.dayOfWeek?.toString() || '0');
-                    if (dayA !== dayB) return dayA - dayB;
-                    return a.taskName.localeCompare(b.taskName);
-                  })
-                  .map((schedule, idx) => (
-                    <div key={schedule.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-slate-50 dark:bg-slate-800/50 hover:shadow-sm transition-shadow">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
-                              {TASK_TYPE_COLORS[schedule.taskType as keyof typeof TASK_TYPE_COLORS] ? (
-                                <span style={{backgroundColor: TASK_TYPE_COLORS[schedule.taskType as keyof typeof TASK_TYPE_COLORS] + '20', color: TASK_TYPE_COLORS[schedule.taskType as keyof typeof TASK_TYPE_COLORS]}} className="px-1.5 py-0.5 rounded text-[10px] font-bold">
-                                  {schedule.taskType}
-                                </span>
-                              ) : (
-                                schedule.taskType
-                              )}
-                            </span>
-                            <span className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">{schedule.taskName}</span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${{
-                              'Đã hoàn thành': 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300',
-                              'Đang thực hiện': 'bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-300',
-                              'Chưa bắt đầu': 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300',
-                              'Hủy': 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-300',
-                            }[schedule.status] || 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border-slate-300'}`}>
-                              {STATUS_ICONS[schedule.status as keyof typeof STATUS_ICONS]} {schedule.status}
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap gap-3 text-xs text-slate-600 dark:text-slate-300">
-                            <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{schedule.date} ({DAY_LABELS[schedule.dayOfWeek]})</span>
-                            <span className="flex items-center gap-1"><Users className="w-3 h-3" />{schedule.userName}</span>
-                            {schedule.userPosition && <span>{schedule.userPosition}</span>}
-                            {schedule.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{schedule.location}</span>}
-                            {schedule.workUnit && <span className="flex items-center gap-1"><Building className="w-3 h-3" />{schedule.workUnit}</span>}
-                          </div>
-                          {schedule.notes && (
-                            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-700/50 p-2 rounded border border-slate-200/50 dark:border-slate-700">{schedule.notes}</p>
-                          )}
+                {drillSchedules.map((schedule, idx) => (
+                  <div key={schedule.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-slate-50 dark:bg-slate-800/50 hover:shadow-sm transition-shadow">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="px-2 py-0.5 rounded text-xs font-bold" style={{backgroundColor: TASK_TYPE_COLORS[schedule.taskType as keyof typeof TASK_TYPE_COLORS] + '20', color: TASK_TYPE_COLORS[schedule.taskType as keyof typeof TASK_TYPE_COLORS]}}>
+                            {schedule.taskType}
+                          </span>
+                          <span className="font-bold text-slate-900 dark:text-slate-100 text-sm truncate">{schedule.taskName}</span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${{
+                            'Đã hoàn thành': 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border-emerald-300',
+                            'Đang thực hiện': 'bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border-sky-300',
+                            'Chưa bắt đầu': 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300',
+                            'Hủy': 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300 border-rose-300',
+                          }[schedule.status] || 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300 border-slate-300'}`}>
+                            {STATUS_ICONS[schedule.status as keyof typeof STATUS_ICONS]} {schedule.status}
+                          </span>
                         </div>
-                        <div className="flex gap-1 shrink-0">
-                          <button onClick={() => { handleEditClick(schedule); setDrillDown(null); }} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title="Sửa">
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => {
-                            if (confirm('Bạn có chắc muốn xóa lịch công tác này?')) {
-                              onDeleteSchedule(schedule.id);
-                              addToast('success', 'Đã xóa', 'Lịch công tác đã được xóa thành công');
-                            }
-                          }} className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20" title="Xóa">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        <div className="flex flex-wrap gap-3 text-xs text-slate-600 dark:text-slate-300">
+                          <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{schedule.date} ({DAY_LABELS[schedule.dayOfWeek]})</span>
+                          <span className="flex items-center gap-1"><Users className="w-3 h-3" />{schedule.userName}</span>
+                          {schedule.userPosition && <span>{schedule.userPosition}</span>}
+                          {schedule.location && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{schedule.location}</span>}
+                          {schedule.workUnit && <span className="flex items-center gap-1"><Building className="w-3 h-3" />{schedule.workUnit}</span>}
                         </div>
+                        {schedule.notes && (
+                          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-700/50 p-2 rounded border border-slate-200/50 dark:border-slate-700">{schedule.notes}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => { handleEditClick(schedule); setDrillDown(null); }} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title="Sửa">
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => {
+                          if (confirm('Bạn có chắc muốn xóa lịch công tác này?')) {
+                            onDeleteSchedule(schedule.id);
+                            addToast('success', 'Đã xóa', 'Lịch công tác đã được xóa thành công');
+                          }
+                        }} className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20" title="Xóa">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-                  ))}
+                  </div>
+                ))}
               </div>
             )}
-</div>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Inline Edit Form Component
-  const InlineEditForm: React.FC<{
-    unit: OrgUnit;
-    dayIndex: number;
-    date: Date;
-    form: Partial<WeeklySchedule>;
-    onChange: (form: Partial<WeeklySchedule>) => void;
-    onSave: () => void;
-    onCancel: () => void;
-  }> = ({ unit, dayIndex, date, form, onChange, onSave, onCancel }) => {
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter') onSave();
-      if (e.key === 'Escape') onCancel();
-    };
-
+  // Leader Matrix View Component
+  const LeaderMatrixView = () => {
+    const leaderUnits = orgUnits.filter(u => u.type === 'leader');
+    
     return (
-      <div className="p-2 bg-white dark:bg-slate-800 rounded border-2 border-[#2d6e3e] shadow-lg animate-in slide-in-from-top-2" onKeyDown={handleKeyDown}>
-        <div className="flex items-center gap-1 mb-2 text-xs">
-          <span className="px-1.5 py-0.5 rounded bg-[#2d6e3e] text-white font-bold">
-            {DAY_LABELS_SHORT[dayIndex]} {date.getDate()}/{date.getMonth() + 1}
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <Table className="w-5 h-5 text-[#2d6e3e]" />
+            <span>Ma trận Lịch Lãnh đạo: {leaderUnits.length} người × 7 ngày × 2 buổi</span>
+          </h3>
+          <span className="text-xs text-slate-500 px-2 py-1 bg-white dark:bg-slate-700 rounded border">
+            Click ô để xem chi tiết / Thêm mới
           </span>
-          <span className="text-slate-500">{unit.name}</span>
         </div>
-        <div className="space-y-1.5">
-          <select
-            value={form.userName || ''}
-            onChange={e => onChange({ ...form, userName: e.target.value, 
-              userPosition: unit.members.find(m => m.fullName === e.target.value)?.position || '',
-              department: unit.members.find(m => m.fullName === e.target.value)?.department || '',
-              workUnit: unit.members.find(m => m.fullName === e.target.value)?.workUnit || ''
-            })}
-            className="w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-          >
-            <option value="">Chọn nhân sự...</option>
-            {unit.members.map(m => (
-              <option key={m.id} value={m.fullName}>{m.fullName} - {m.position}</option>
-            ))}
-          </select>
-          
-          <input
-            type="text"
-            value={form.taskName || ''}
-            onChange={e => onChange({ ...form, taskName: e.target.value })}
-            placeholder="Tên công việc *"
-            className="w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 font-medium"
-            autoFocus
-          />
-          
-          <select
-            value={form.taskType || 'Công tác'}
-            onChange={e => onChange({ ...form, taskType: e.target.value })}
-            className="w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-          >
-            <option value="Công tác">Công tác</option>
-            <option value="Họp">Họp</option>
-            <option value="Làm việc tại cơ quan">Làm việc tại cơ quan</option>
-            <option value="Đào tạo">Đào tạo</option>
-            <option value="Khác">Khác</option>
-          </select>
-          
-          <input
-            type="text"
-            value={form.location || ''}
-            onChange={e => onChange({ ...form, location: e.target.value })}
-            placeholder="Địa điểm"
-            className="w-full px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
-          />
-          
-          <div className="flex gap-1">
-            <button onClick={onSave} className="flex-1 px-2 py-1 text-xs text-white bg-[#2d6e3e] rounded hover:bg-[#235832] font-bold">
-              <Save className="w-3 h-3 inline mr-0.5" /> Lưu
-            </button>
-            <button onClick={onCancel} className="flex-1 px-2 py-1 text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded">
-              Hủy
-            </button>
-          </div>
+        
+        <div className="overflow-x-auto overflow-y-auto max-h-[600px] custom-scrollbar">
+          <table className="w-full min-w-max text-xs">
+            <thead>
+              <tr className="bg-[#006097] text-white sticky top-0 z-10">
+                <th className="px-3 py-2 text-left font-medium w-24 border-r border-[#004d7a] sticky left-0 z-20 bg-[#006097]">Ngày / Buổi</th>
+                {leaderUnits.map((unit, idx) => (
+                  <th key={unit.id} className={`px-2 py-2 text-center font-medium border-r border-[#004d7a] ${DAY_HEADER_COLORS[0]} sticky left-[96px] z-10`} style={{minWidth: '200px'}}>
+                    <div className="flex items-center justify-center gap-1 mb-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                      <span className="font-bold truncate max-w-[160px]">{unit.name}</span>
+                    </div>
+                    <div className="text-[10px] opacity-80">{unit.members[0]?.position || ''}</div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {weekDates.map((date, dayIndex) => (
+                <React.Fragment key={dayIndex}>
+                  {SESSIONS.map((session, sessionIdx) => (
+                    <tr key={session} className={`border-b border-slate-200 dark:border-slate-800 ${sessionIdx === 1 ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''}`}>
+                      <td className={`px-3 py-2 font-medium text-left border-r border-slate-200 dark:border-slate-800 sticky left-0 z-20 bg-white dark:bg-slate-900 ${sessionIdx === 1 ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''}`}>
+                        <div className="flex flex-col items-start">
+                          {sessionIdx === 0 && (
+                            <span className="text-[10px] text-slate-400">
+                              {date.toLocaleDateString('vi-VN', { month: '2-digit', day: '2-digit' })}
+                            </span>
+                          )}
+                          <span className="font-medium">{DAY_LABELS_SHORT[dayIndex]}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${session === 'Sáng' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'}`}>
+                            {session}
+                          </span>
+                        </div>
+                      </td>
+                      {leaderUnits.map((unit) => {
+                        const daySchedules = getSchedulesForUnitDaySession(unit, dayIndex, session);
+                        const count = daySchedules.length;
+                        const hasMeeting = daySchedules.some(s => s.taskType === 'Họp');
+                        const hasBusiness = daySchedules.some(s => s.taskType === 'Công tác');
+                        const hasTraining = daySchedules.some(s => s.taskType === 'Đào tạo');
+                        const hasOffice = daySchedules.some(s => s.taskType === 'Làm việc tại cơ quan');
+                        const isToday = date.toDateString() === new Date().toDateString();
+                        
+                        return (
+                          <td 
+                            key={unit.id} 
+                            className={`px-2 py-2 border-r border-slate-200 dark:border-slate-800 min-h-[80px] ${DAY_COLUMN_STRIPES[dayIndex]} ${isToday ? 'ring-2 ring-sky-400/50' : ''} ${count > 0 ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''} hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors relative cursor-pointer`}
+                            onClick={() => handleMatrixCellClick(unit, dayIndex, session)}
+                          >
+                            {count > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-1">
+                                {hasMeeting && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200">Họp</span>}
+                                {hasBusiness && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200">Công tác</span>}
+                                {hasTraining && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200">Đào tạo</span>}
+                                {hasOffice && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200">Cơ quan</span>}
+                              </div>
+                            )}
+                            <div className="text-[11px] text-slate-700 dark:text-slate-300 line-clamp-3 pr-2">
+                              {count > 0 ? daySchedules.map((s, i) => (
+                                <div key={i} className="mb-0.5 flex items-start gap-1">
+                                  <span className={`w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0 ${{
+                                    'Đã hoàn thành': 'bg-emerald-500',
+                                    'Đang thực hiện': 'bg-sky-500',
+                                    'Chưa bắt đầu': 'bg-amber-500',
+                                    'Hủy': 'bg-rose-500',
+                                  }[s.status] || 'bg-slate-400'}`} />
+                                  <span className="truncate">{s.taskName}</span>
+                                </div>
+                              )) : (
+                                <span className="text-slate-300 dark:text-slate-600 italic">—</span>
+                              )}
+                            </div>
+                            {count > 0 && (
+                              <div className="absolute bottom-1 right-1 flex gap-0.5">
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/90 dark:bg-slate-800/90 shadow-sm border border-slate-200 dark:border-slate-700">
+                                  {count}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     );
   };
 
-  // Handle inline save
-  const handleInlineSave = useCallback((unit: OrgUnit, dayIndex: number, date: Date) => {
-    if (!inlineEditForm.taskName?.trim() || !inlineEditForm.userName?.trim()) {
-      addToast('error', 'Lỗi', 'Vui lòng nhập tên công việc và chọn nhân sự');
-      return;
+  // Department/BaseUnit Card View
+  const DepartmentCardView = () => {
+    const deptUnits = filteredOrgUnits.filter(u => u.type !== 'leader');
+    
+    if (deptUnits.length === 0) {
+      return (
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-12 text-center">
+          <Building className="w-12 h-12 mx-auto text-slate-300 mb-4" />
+          <p className="text-slate-500">Chọn nhóm Phòng ban hoặc Cơ sở để xem lịch</p>
+        </div>
+      );
     }
     
-    const newSchedule: WeeklySchedule = {
-      id: 'ws_' + Date.now(),
-      weekStartDate: weekStartDate.toISOString(),
-      weekEndDate: weekEndDate.toISOString(),
-      department: inlineEditForm.department || '',
-      workUnit: inlineEditForm.workUnit || '',
-      userName: inlineEditForm.userName || '',
-      userPosition: inlineEditForm.userPosition || '',
-      dayOfWeek: dayIndex,
-      date: date.toISOString().split('T')[0],
-      taskName: inlineEditForm.taskName || '',
-      taskType: (inlineEditForm.taskType as WeeklySchedule['taskType']) || 'Công tác',
-      location: inlineEditForm.location || '',
-      notes: inlineEditForm.notes || '',
-      status: (inlineEditForm.status as WeeklySchedule['status']) || 'Chưa bắt đầu',
-      createdAt: new Date().toISOString(),
-      createdBy: 'inline_edit',
-    };
-    
-    onAddSchedule(newSchedule);
-    setInlineEditingCell(null);
-    setInlineEditForm({});
-    addToast('success', 'Thành công', 'Đã thêm lịch công tác mới');
-  }, [inlineEditForm, weekStartDate, weekEndDate, onAddSchedule, addToast]);
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {deptUnits.map((unit) => (
+          <div key={unit.id} className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-md transition-shadow">
+            <div className={`p-3 border-b ${unit.type === 'department' ? 'bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-900' : 'bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-900'}`}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${unit.type === 'department' ? 'bg-blue-600' : 'bg-teal-600'}`} />
+                  <span className={`font-semibold text-sm ${unit.type === 'department' ? 'text-blue-800 dark:text-blue-200' : 'text-teal-800 dark:text-teal-200'}`}>
+                    {unit.name}
+                  </span>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50">
+                  {unit.members.length} NV
+                </span>
+              </div>
+            </div>
+            
+            <div className="p-3 space-y-2 max-h-[300px] overflow-y-auto">
+              {weekDates.map((date, dayIndex) => {
+                const daySchedules = getSchedulesForUnitDaySession(unit, dayIndex, 'Sáng');
+                const afternoonSchedules = getSchedulesForUnitDaySession(unit, dayIndex, 'Chiều');
+                const allSchedules = [...daySchedules, ...afternoonSchedules];
+                const count = allSchedules.length;
+                const isToday = date.toDateString() === new Date().toDateString();
+                
+                if (count === 0 && !isToday) return null;
+                
+                return (
+                  <div 
+                    key={dayIndex}
+                    className={`p-2 rounded-lg border cursor-pointer transition-colors ${DAY_COLUMN_STRIPES[dayIndex]} ${isToday ? 'ring-2 ring-sky-400/50' : ''} ${count > 0 ? 'bg-amber-50/20 dark:bg-amber-950/10' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/30'}`}
+                    onClick={() => setDrillDown({ 
+                      unit, 
+                      dayIndex, 
+                      session: 'Sáng', 
+                      schedules: allSchedules 
+                    })}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-medium text-xs text-slate-700 dark:text-slate-300">
+                        {DAY_LABELS_SHORT[dayIndex]} {date.getDate()}/{date.getMonth() + 1}
+                      </span>
+                      {count > 0 && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/90 dark:bg-slate-800/90 shadow-sm border border-slate-200 dark:border-slate-700">
+                          {count}
+                        </span>
+                      )}
+                    </div>
+                    {count > 0 && (
+                      <div className="space-y-1">
+                        {allSchedules.slice(0, 3).map((s, i) => (
+                          <div key={i} className="flex items-start gap-1.5 text-[10px]">
+                            <span className={`w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0 ${{
+                              'Đã hoàn thành': 'bg-emerald-500',
+                              'Đang thực hiện': 'bg-sky-500',
+                              'Chưa bắt đầu': 'bg-amber-500',
+                              'Hủy': 'bg-rose-500',
+                            }[s.status] || 'bg-slate-400'}`} />
+                            <span className="truncate flex-1" title={s.taskName}>
+                              <span className="px-1 py-0.5 rounded text-[9px] font-medium" style={{backgroundColor: TASK_TYPE_COLORS[s.taskType as keyof typeof TASK_TYPE_COLORS] + '20', color: TASK_TYPE_COLORS[s.taskType as keyof typeof TASK_TYPE_COLORS]}}>
+                                {s.taskType}
+                              </span>
+                              {' '}{s.taskName}
+                            </span>
+                          </div>
+                        ))}
+                        {allSchedules.length > 3 && (
+                          <div className="text-[10px] text-slate-400 text-center py-1">
+                            +{allSchedules.length - 3} lịch nữa...
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {count === 0 && (
+                      <div className="text-center text-slate-300 dark:text-slate-600 py-2">
+                        <span className="text-[10px]">— Click để thêm</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-full mx-auto pb-12 space-y-5 px-4">
@@ -886,7 +1125,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
             <span>Lịch Công Tac Tuần - Bảng Tổng Hợp</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Xem lịch theo cấu trúc tổ chức: Lãnh đạo - Phòng ban - Cơ sở | 7 ngày trong tuần
+            Xem lịch theo cấu trúc: Lãnh đạo (Ma trận) - Phòng ban/Cơ sở (Thẻ) | 7 ngày × 2 buổi
           </p>
         </div>
       </div>
@@ -921,18 +1160,18 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={selectedGroupFilter}
-              onChange={e => { setSelectedGroupFilter(e.target.value); setSelectedWorkUnit('ALL'); setSelectedDay(null); setDrillDown(null); }}
+              onChange={e => { setSelectedGroupFilter(e.target.value); setSelectedWorkUnit('ALL'); setDrillDown(null); }}
               className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:ring-1 focus:ring-[#2d6e3e] min-w-[200px]"
             >
               <option value="ALL">Tất cả nhóm</option>
-              <option value="leader">🟢 Nhóm Lãnh đạo</option>
-              <option value="department">🔵 Nhóm Phòng ban</option>
-              <option value="baseUnit">🟦 Nhóm Thống kê cơ sở tất cả</option>
+              <option value="leader">🟢 Lãnh đạo (Ma trận)</option>
+              <option value="department">🔵 Phòng ban (Thẻ)</option>
+              <option value="baseUnit">🟦 Thống kê cơ sở (Thẻ)</option>
             </select>
 
             <select
               value={selectedWorkUnit}
-              onChange={e => { setSelectedWorkUnit(e.target.value); setSelectedDay(null); setDrillDown(null); }}
+              onChange={e => { setSelectedWorkUnit(e.target.value); setDrillDown(null); }}
               className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:ring-1 focus:ring-[#2d6e3e] min-w-[200px]"
             >
               <option value="ALL">Tất cả đơn vị</option>
@@ -963,9 +1202,32 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
               <option value="Khác">Khác</option>
             </select>
 
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+              <button 
+                onClick={() => setViewMode('matrix')}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${viewMode === 'matrix' ? 'bg-white dark:bg-slate-700 text-[#2d6e3e] shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100'}`}
+                title="Xem ma trận (Lãnh đạo)"
+              >
+                <Table className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => setViewMode('cards')}
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${viewMode === 'cards' ? 'bg-white dark:bg-slate-700 text-[#2d6e3e] shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100'}`}
+                title="Xem thẻ (Phòng ban/Cơ sở)"
+              >
+                <Grid className="w-4 h-4" />
+              </button>
+            </div>
+
             <button onClick={downloadTemplate} className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
               <FileSpreadsheet className="w-4 h-4" />
-              File Mẫu
+              File Mẫu (Dạng danh sách)
+            </button>
+
+            <button onClick={downloadMatrixTemplate} className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors">
+              <FileText className="w-4 h-4" />
+              File Mẫu (Ma trận Lãnh đạo)
             </button>
 
             <button onClick={exportToExcel} disabled={schedules.length === 0} className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -988,25 +1250,25 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
         </div>
       </div>
 
-      {/* Charts Dashboard: 6 Task Type Breakdown Horizontal Bar Charts */}
+      {/* Charts Dashboard */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
         <HorizontalBarChart data={totalChartData} title="Tổng lịch" color="#2d6e3e" />
-        <HorizontalBarChart data={meetingOnlineChartData} title="Lịch Họp trực tuyến" color="#3b82f6" />
-        <HorizontalBarChart data={meetingOfflineChartData} title="Lịch Họp trực tiếp" color="#10b981" />
-        <HorizontalBarChart data={workAtOfficeChartData} title="Lịch làm việc tại cơ sở" color="#f59e0b" />
-        <HorizontalBarChart data={businessTripChartData} title="Công tác ngoài tỉnh" color="#ef4444" />
-        <HorizontalBarChart data={otherChartData} title="Làm việc tại cơ quan" color="#8b5cf6" />
+        <HorizontalBarChart data={meetingOnlineChartData} title="Lịch Họp" color="#3b82f6" />
+        <HorizontalBarChart data={meetingOfflineChartData} title="Lịch Công tác" color="#10b981" />
+        <HorizontalBarChart data={workAtOfficeChartData} title="Làm việc cơ quan" color="#f59e0b" />
+        <HorizontalBarChart data={businessTripChartData} title="Đào tạo" color="#ef4444" />
+        <HorizontalBarChart data={otherChartData} title="Khác" color="#8b5cf6" />
       </div>
 
       {/* Main Layout with Sidebar */}
       <div className="flex gap-4">
-        {/* Sidebar Navigation - Collapsible Tree */}
+        {/* Sidebar Navigation */}
         {sidebarOpen && (
           <aside className="w-64 lg:w-72 flex-shrink-0 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
             <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm flex items-center gap-2">
                 <Layout className="w-4 h-4 text-[#2d6e3e]" />
-                <span>Cây đơn vị</span>
+                <span>Cây đơn vị ({orgUnits.length})</span>
               </h3>
               <button onClick={() => setSidebarOpen(false)} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded" title="Thu gọn">
                 <ChevronLeft className="w-4 h-4" />
@@ -1020,7 +1282,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
                   <Users className="w-3 h-3" />
                   <span>Lãnh đạo Cục</span>
                   <span className="ml-auto px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-900 text-emerald-700 dark:text-emerald-300">
-                    {orgUnits.filter(u => u.type === 'leader').reduce((sum, u) => sum + u.members.length, 0)} NV
+                    {orgUnits.filter(u => u.type === 'leader').length} người
                   </span>
                 </summary>
                 <div className="pl-6 space-y-1">
@@ -1030,12 +1292,13 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
                       onClick={() => {
                         setSelectedWorkUnit(unit.name);
                         setSelectedGroupFilter('leader');
+                        setViewMode('matrix');
                       }}
                       className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors flex items-center gap-2"
                     >
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                       <span className="truncate font-medium text-emerald-800 dark:text-emerald-200">{unit.name}</span>
-                      <span className="ml-auto text-[9px] text-slate-500">{unit.members.length} NV</span>
+                      <span className="ml-auto text-[9px] text-slate-500">{unit.members[0]?.position || ''}</span>
                     </button>
                   ))}
                 </div>
@@ -1058,6 +1321,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
                       onClick={() => {
                         setSelectedWorkUnit(unit.name);
                         setSelectedGroupFilter('department');
+                        setViewMode('cards');
                       }}
                       className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors flex items-center gap-2"
                     >
@@ -1086,6 +1350,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
                       onClick={() => {
                         setSelectedWorkUnit(unit.name);
                         setSelectedGroupFilter('baseUnit');
+                        setViewMode('cards');
                       }}
                       className="w-full text-left px-2 py-1.5 text-xs rounded hover:bg-teal-50 dark:hover:bg-teal-950/30 transition-colors flex items-center gap-2"
                     >
@@ -1098,190 +1363,67 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
               </details>
             </nav>
             <div className="p-2 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
-              <button
-                onClick={() => setSidebarOpen(false)}
-                className="w-full text-center text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 py-1"
-              >
+              <button onClick={() => setSidebarOpen(false)} className="w-full text-center text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 py-1">
                 <ChevronRight className="w-3 h-3 inline mr-1" /> Thu gọn sidebar
               </button>
             </div>
           </aside>
         )}
 
-        {/* Main Table Grid */}
+        {/* Main Content */}
         <div className="flex-1 min-w-0">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
-        {/* Table Header */}
-        <div className="grid grid-cols-[1fr_repeat(7,minmax(120px,1fr))] bg-[#006097] text-white border-b border-[#004d7a]">
-          <div className="px-3 py-3 font-bold text-sm text-center sticky left-0 z-10 bg-[#006097] border-r border-[#004d7a]">
-            ĐỐI TƯỢNG / NGÀY
-          </div>
-          {weekDates.map((date, idx) => (
-            <div key={idx} className={`px-2 py-3 text-center text-xs font-medium border-r border-[#004d7a] ${DAY_HEADER_COLORS[idx]} ${date.toDateString() === new Date().toDateString() ? 'ring-2 ring-yellow-300/50' : ''}`}>
-              <div className="text-[10px] opacity-80">{date.toLocaleDateString('vi-VN', { month: '2-digit', day: '2-digit' })}</div>
-              <div className="font-bold">{DAY_LABELS[idx]}</div>
-              <div className="text-[10px]">{date.getDate()}</div>
-            </div>
-          ))}
-        </div>
+          {selectedGroupFilter === 'leader' || (selectedGroupFilter === 'ALL' && orgUnits.some(u => u.type === 'leader')) ? (
+            <LeaderMatrixView />
+          ) : (
+            <DepartmentCardView />
+          )}
 
-        {/* Table Body */}
-        <div className="overflow-x-auto max-h-[600px] custom-scrollbar">
-          <div className="grid grid-cols-[1fr_repeat(7,minmax(120px,1fr))]">
-            {filteredOrgUnits.map((unit, unitIdx) => (
-              <React.Fragment key={unit.id}>
-                {/* Row Header */}
-                <div className={`px-3 py-2 border-b border-slate-200 dark:border-slate-800 border-r border-slate-200 dark:border-slate-800 sticky left-0 z-10 ${unit.type === 'leader' ? 'bg-emerald-50 dark:bg-emerald-950/30' : unit.type === 'department' ? 'bg-blue-50 dark:bg-blue-950/30' : 'bg-teal-50 dark:bg-teal-950/30'}`}>
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${unit.type === 'leader' ? 'bg-emerald-600' : unit.type === 'department' ? 'bg-blue-600' : 'bg-teal-600'}`} />
-                    <span className={`font-medium text-xs ${unit.type === 'leader' ? 'text-emerald-800 dark:text-emerald-200' : unit.type === 'department' ? 'text-blue-800 dark:text-blue-200' : 'text-teal-800 dark:text-teal-200'}`}>
-                      {unit.name}
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50">
-                      {unit.members.length} NV
-                    </span>
-                  </div>
+          {/* Footer Dashboard: Progress Bars + Time Filter */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4 space-y-4 mt-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <BarChart2 className="w-5 h-5 text-[#2d6e3e]" />
+                Tổng Hợp Tuần: {weekStartDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} - {weekEndDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              </h3>
+              <button onClick={() => setShowTimeFilterModal(true)} className="px-4 py-2 text-sm font-medium text-white bg-[#2d6e3e] hover:bg-[#235832] rounded-lg flex items-center gap-2 transition-colors">
+                <Calendar className="w-4 h-4" />
+                Xem Tháng/Quý/Năm
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="font-medium text-slate-700 dark:text-slate-300">Tổng tiến độ hoàn thành</span>
+                  <span className="font-bold text-emerald-600">{weekStats.completionRate}%</span>
                 </div>
+                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${weekStats.completionRate}%` }} />
+                </div>
+              </div>
 
-                {/* Cells for 7 days */}
-                {weekDates.map((date, dayIndex) => {
-                  const daySchedules = getSchedulesForUnitAndDay(unit, dayIndex);
-                  const isToday = date.toDateString() === new Date().toDateString();
-                  const isInlineEditing = inlineEditingCell?.unitId === unit.id && inlineEditingCell?.dayIndex === dayIndex;
-                  
-                  const handleCellClick = (e: React.MouseEvent) => {
-                    if (daySchedules.length === 0 && !isInlineEditing) {
-                      e.stopPropagation();
-                      setInlineEditingCell({ unitId: unit.id, dayIndex });
-                      const firstMember = unit.members[0];
-                      setInlineEditForm({
-                        date: date.toISOString().split('T')[0],
-                        dayOfWeek: dayIndex,
-                        taskType: 'Công tác',
-                        status: 'Chưa bắt đầu',
-                        userName: firstMember?.fullName || '',
-                        userPosition: firstMember?.position || '',
-                        department: firstMember?.department || '',
-                        workUnit: firstMember?.workUnit || '',
-                      });
-                    }
-                  };
-                  
-                  return (
-                    <div 
-                      key={dayIndex} 
-                      className={`px-2 py-2 border-b border-slate-200 dark:border-slate-800 border-r border-slate-200 dark:border-slate-800 min-h-[80px] ${DAY_COLUMN_STRIPES[dayIndex]} ${isToday ? 'ring-2 ring-sky-400/50' : ''} ${daySchedules.length > 0 ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''} hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors relative`}
-                      onClick={handleCellClick}
-                    >
-                      {isInlineEditing ? (
-                        <InlineEditForm
-                          unit={unit}
-                          dayIndex={dayIndex}
-                          date={date}
-                          form={inlineEditForm}
-                          onChange={setInlineEditForm}
-                          onSave={() => handleInlineSave(unit, dayIndex, date)}
-                          onCancel={() => setInlineEditingCell(null)}
-                        />
-                      ) : (
-                        <>
-{daySchedules.map((schedule, taskIdx) => (
-                            <div 
-                              key={schedule.id} 
-                              className="mb-1.5 p-1.5 bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 hover:shadow-sm transition-shadow cursor-pointer"
-                              onClick={(e) => { e.stopPropagation(); handleEditClick(schedule); }}
-                              title="Click để chỉnh sửa"
-                            >
-                              <div className="flex items-start gap-1.5">
-                                <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${{
-                                  'Đã hoàn thành': 'bg-emerald-100 text-emerald-700',
-                                  'Đang thực hiện': 'bg-sky-100 text-sky-700',
-                                  'Chưa bắt đầu': 'bg-amber-100 text-amber-700',
-                                  'Hủy': 'bg-rose-100 text-rose-700',
-                                }[schedule.status] || 'bg-slate-100 text-slate-700'}`}>
-                                  {STATUS_ICONS[schedule.status as keyof typeof STATUS_ICONS]}
-                                </span>
-                                <div className="flex-1 min-w-0">
-                                  <div className="text-[10px] font-medium text-slate-800 dark:text-slate-200 truncate">
-                                    {schedule.taskName}
-                                  </div>
-                                  <div className="flex items-center gap-1 text-[9px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                    <span>{schedule.userName}</span>
-                                    {schedule.location && <span className="truncate">· {schedule.location}</span>}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                          {daySchedules.length === 0 && !isInlineEditing && (
-                            <div className="text-center text-slate-300 dark:text-slate-600 py-4">
-                              <span className="text-[10px]">—</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </React.Fragment>
-            ))}
-          </div>
-        </div>
-      </div>
-      </div>
-      </div>
-
-      {/* Footer Dashboard: Progress Bars + Time Filter */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4 space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <BarChart2 className="w-5 h-5 text-[#2d6e3e]" />
-            Tổng Hợp Tuần: {weekStartDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} - {weekEndDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-          </h3>
-          <button 
-            onClick={() => setShowTimeFilterModal(true)} 
-            className="px-4 py-2 text-sm font-medium text-white bg-[#2d6e3e] hover:bg-[#235832] rounded-lg flex items-center gap-2 transition-colors"
-          >
-            <Calendar className="w-4 h-4" />
-            Xem Tháng/Quý/Năm
-          </button>
-        </div>
-
-        {/* Progress Bars */}
-        <div className="space-y-3">
-          <div>
-            <div className="flex justify-between text-xs mb-1">
-              <span className="font-medium text-slate-700 dark:text-slate-300">Tổng tiến độ hoàn thành</span>
-              <span className="font-bold text-emerald-600">{weekStats.completionRate}%</span>
-            </div>
-            <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-emerald-500 rounded-full transition-all duration-500" 
-                style={{ width: `${weekStats.completionRate}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg border border-emerald-200 dark:border-emerald-900">
-              <p className="text-xs text-emerald-700 dark:text-emerald-300">Đã hoàn thành</p>
-              <p className="text-2xl font-bold text-emerald-600">{weekStats.completed}</p>
-              <p className="text-[10px] text-emerald-500">{weekStats.total > 0 ? Math.round((weekStats.completed/weekStats.total)*100) : 0}%</p>
-            </div>
-            <div className="p-3 bg-sky-50 dark:bg-sky-950/30 rounded-lg border border-sky-200 dark:border-sky-900">
-              <p className="text-xs text-sky-700 dark:text-sky-300">Đang thực hiện</p>
-              <p className="text-2xl font-bold text-sky-600">{weekStats.inProgress}</p>
-              <p className="text-[10px] text-sky-500">{weekStats.total > 0 ? Math.round((weekStats.inProgress/weekStats.total)*100) : 0}%</p>
-            </div>
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-900">
-              <p className="text-xs text-amber-700 dark:text-amber-300">Chưa bắt đầu</p>
-              <p className="text-2xl font-bold text-amber-600">{weekStats.pending}</p>
-              <p className="text-[10px] text-amber-500">{weekStats.total > 0 ? Math.round((weekStats.pending/weekStats.total)*100) : 0}%</p>
-            </div>
-            <div className="p-3 bg-rose-50 dark:bg-rose-950/30 rounded-lg border border-rose-200 dark:border-rose-900">
-              <p className="text-xs text-rose-700 dark:text-rose-300">Đã hủy</p>
-              <p className="text-2xl font-bold text-rose-600">{weekStats.cancelled}</p>
-              <p className="text-[10px] text-rose-500">{weekStats.total > 0 ? Math.round((weekStats.cancelled/weekStats.total)*100) : 0}%</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg border border-emerald-200 dark:border-emerald-900">
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300">Đã hoàn thành</p>
+                  <p className="text-2xl font-bold text-emerald-600">{weekStats.completed}</p>
+                  <p className="text-[10px] text-emerald-500">{weekStats.total > 0 ? Math.round((weekStats.completed/weekStats.total)*100) : 0}%</p>
+                </div>
+                <div className="p-3 bg-sky-50 dark:bg-sky-950/30 rounded-lg border border-sky-200 dark:border-sky-900">
+                  <p className="text-xs text-sky-700 dark:text-sky-300">Đang thực hiện</p>
+                  <p className="text-2xl font-bold text-sky-600">{weekStats.inProgress}</p>
+                  <p className="text-[10px] text-sky-500">{weekStats.total > 0 ? Math.round((weekStats.inProgress/weekStats.total)*100) : 0}%</p>
+                </div>
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-900">
+                  <p className="text-xs text-amber-700 dark:text-amber-300">Chưa bắt đầu</p>
+                  <p className="text-2xl font-bold text-amber-600">{weekStats.pending}</p>
+                  <p className="text-[10px] text-amber-500">{weekStats.total > 0 ? Math.round((weekStats.pending/weekStats.total)*100) : 0}%</p>
+                </div>
+                <div className="p-3 bg-rose-50 dark:bg-rose-950/30 rounded-lg border border-rose-200 dark:border-rose-900">
+                  <p className="text-xs text-rose-700 dark:text-rose-300">Đã hủy</p>
+                  <p className="text-2xl font-bold text-rose-600">{weekStats.cancelled}</p>
+                  <p className="text-[10px] text-rose-500">{weekStats.total > 0 ? Math.round((weekStats.cancelled/weekStats.total)*100) : 0}%</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1301,7 +1443,6 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-            {/* Assignee Selection - Dropdown from actual org units */}
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Đối tượng thực hiện <span className="text-rose-500">*</span></label>
               <select 
