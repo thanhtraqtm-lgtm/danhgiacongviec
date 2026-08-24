@@ -120,6 +120,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     return new Date(now.setDate(diff));
   });
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('ALL');
   const [selectedWorkUnit, setSelectedWorkUnit] = useState<string>('ALL');
   const [filterTaskType, setFilterTaskType] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -179,13 +180,22 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
     return units;
   }, [users]);
 
-  // Filter org units by selected work unit
+  // Filter org units by selected group filter and work unit
   const filteredOrgUnits = useMemo(() => {
-    if (selectedWorkUnit === 'ALL') return orgUnits;
-    return orgUnits.filter(u => 
-      u.members.some(m => m.workUnit === selectedWorkUnit || m.department === selectedWorkUnit)
-    );
-  }, [orgUnits, selectedWorkUnit]);
+    let units = orgUnits;
+    
+    if (selectedGroupFilter !== 'ALL') {
+      units = units.filter(u => u.type === selectedGroupFilter);
+    }
+    
+    if (selectedWorkUnit !== 'ALL') {
+      units = units.filter(u => 
+        u.members.some(m => m.workUnit === selectedWorkUnit || m.department === selectedWorkUnit)
+      );
+    }
+    
+    return units;
+  }, [orgUnits, selectedGroupFilter, selectedWorkUnit]);
 
   const weekStartDate = useMemo(() => {
     const d = new Date(currentWeekStart);
@@ -763,12 +773,23 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
           {/* Filters & Actions */}
           <div className="flex flex-wrap items-center gap-2">
             <select
+              value={selectedGroupFilter}
+              onChange={e => { setSelectedGroupFilter(e.target.value); setSelectedWorkUnit('ALL'); setSelectedDay(null); setDrillDown(null); }}
+              className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:ring-1 focus:ring-[#2d6e3e] min-w-[200px]"
+            >
+              <option value="ALL">Tất cả nhóm</option>
+              <option value="leader">🟢 Nhóm Lãnh đạo</option>
+              <option value="department">🔵 Nhóm Phòng ban</option>
+              <option value="baseUnit">🟦 Nhóm Thống kê cơ sở tất cả</option>
+            </select>
+
+            <select
               value={selectedWorkUnit}
               onChange={e => { setSelectedWorkUnit(e.target.value); setSelectedDay(null); setDrillDown(null); }}
               className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-800 dark:text-slate-200 outline-none focus:ring-1 focus:ring-[#2d6e3e] min-w-[200px]"
             >
               <option value="ALL">Tất cả đơn vị</option>
-              {orgUnits.filter(u => u.type !== 'leader').map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
+              {orgUnits.filter(u => u.type !== 'leader' && (selectedGroupFilter === 'ALL' || u.type === selectedGroupFilter)).map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
             </select>
 
             <div className="relative">
