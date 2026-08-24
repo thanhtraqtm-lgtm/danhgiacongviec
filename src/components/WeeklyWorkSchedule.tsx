@@ -358,7 +358,7 @@ export const WeeklyWorkSchedule: React.FC<WeeklyWorkScheduleProps> = ({
       [
         'Phòng Thống kê Tổng hợp',
         'Bùi Văn Thắng',
-        'Trưởng phòng',
+        'Nhân viên',
         weekDates[1]?.toISOString().split('T')[0] || '',
         '1',
         'Công tác kiểm tra cơ sở',

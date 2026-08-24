@@ -74,12 +74,12 @@ export const INITIAL_USERS: User[] = [
   {
     id: 'usr_thang_bv',
     fullName: 'Bùi Văn Thắng',
-    position: 'Trưởng phòng',
+    position: 'Nhân viên',
     department: 'Phòng Thống kê Tổng hợp',
     workUnit: 'Thống kê tỉnh Hưng Yên',
     username: 'thang.bv',
     password: '123456',
-    role: 'DEPT_HEAD',
+    role: 'STAFF',
     email: 'thang.bv@hungyen.gso.gov.vn',
     createdAt: '2025-01-01T00:00:00.000Z'
   },
