@@ -216,6 +216,9 @@ export async function fsLoadTasks(): Promise<KpiTask[] | null> {
 }
 
 export async function fsSaveTasks(tasks: KpiTask[]): Promise<void> {
+  if (tasks.length === 0) {
+    console.warn('fsSaveTasks: Attempting to save empty tasks array - this may clear Firestore data');
+  }
   console.log(`fsSaveTasks: Saving ${tasks.length} tasks to Firestore`);
   try {
     await writeEnvelope(TASKS_DOC, tasks);

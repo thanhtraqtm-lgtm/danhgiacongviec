@@ -539,7 +539,8 @@ export default function App() {
       unsubTasks = fsWatchTasks((t) => {
         const localTasks = getStoredTasks();
         if (localTasks.length > 0) {
-          fsSaveTasks(localTasks);
+          // LOCAL-FIRST: Chỉ đọc từ Firestore khi local rỗng.
+          // KHÔNG ghi ngược lên Firestore để tránh loop vô tận.
           return;
         }
         if (t.length === 0) return; // both empty -> nothing to do
