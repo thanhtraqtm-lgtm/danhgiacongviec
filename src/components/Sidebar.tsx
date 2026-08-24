@@ -22,6 +22,7 @@ import {
   Calendar,
   CalendarDays,
   CalendarPlus,
+  CalendarRange,
   KeyRound,
   LogIn,
   LogOut,
@@ -151,6 +152,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       children: [
         { id: 'meeting_register', label: 'Đăng ký lịch họp', icon: <CalendarPlus className="w-3.5 h-3.5" />, tab: 'meeting_register' as ActiveTab },
         { id: 'meeting_calendar', label: 'Xem lịch tuần/tháng', icon: <CalendarDays className="w-3.5 h-3.5" />, tab: 'meeting_calendar' as ActiveTab },
+        { id: 'weekly_schedule', label: 'Lịch công tác tuần', icon: <CalendarRange className="w-3.5 h-3.5" />, tab: 'weekly_schedule' as ActiveTab },
       ]
     }
   ];
