@@ -816,7 +816,8 @@ export const WeeklyWorkSchedule: React.FC<{
     icon, 
     headerColor,
     units,
-    sectionKey
+    sectionKey,
+    compact = false
   }: { 
     title: string;
     subtitle: string;
@@ -824,6 +825,7 @@ export const WeeklyWorkSchedule: React.FC<{
     headerColor: string;
     units: Array<{id: string; name: string; position?: string; color: string; members: UserType[]; stats: any; allSchedules: WeeklySchedule[]}>;
     sectionKey: string;
+    compact?: boolean;
   }) => {
     const totalUnits = units.length;
     const totalTasks = units.reduce((sum, u) => sum + u.stats.total, 0);
@@ -836,13 +838,13 @@ export const WeeklyWorkSchedule: React.FC<{
           <span className="text-[10px] opacity-90 whitespace-nowrap">{totalUnits} đơn vị | {totalTasks} việc</span>
         </div>
 
-        {/* Stat Cards Grid */}
-        <div className="p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] min-h-[120px]" style={{ flexShrink: 0 }}>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+        {/* Stat Cards Grid - Compact: smaller cards */}
+        <div className={`p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] ${compact ? 'min-h-[80px]' : 'min-h-[120px]'}`} style={{ flexShrink: 0 }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1.5">
             {units.map((unit) => (
               <StatCard
                 key={unit.id}
-                label={unit.name + (unit.position ? ` (${unit.position})` : '')}
+                label={compact ? unit.name.replace('Cục trưởng', 'CT').replace('Phó Cục trưởng', 'PCT').replace('Trưởng phòng', 'TP').replace('Phòng Thống kê ', 'P.TK ') : unit.name + (unit.position ? ` (${unit.position})` : '')}
                 value={unit.stats.total}
                 color={unit.color}
               />
@@ -850,29 +852,31 @@ export const WeeklyWorkSchedule: React.FC<{
           </div>
         </div>
 
-        {/* Detail Tables */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
-          {units.map((unit) => (
-            <div key={unit.id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" style={{ borderLeft: `3px solid ${unit.color}` }}>
-              <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
-                  <span className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{unit.name}</span>
-                  {unit.position && <span className="text-xs text-slate-500 px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-700">{unit.position}</span>}
+        {/* Detail Tables - Only show when not compact */}
+        {!compact && (
+          <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
+            {units.map((unit) => (
+              <div key={unit.id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" style={{ borderLeft: `3px solid ${unit.color}` }}>
+                <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
+                    <span className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{unit.name}</span>
+                    {unit.position && <span className="text-xs text-slate-500 px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-700">{unit.position}</span>}
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                    {unit.stats.total} việc
+                  </span>
                 </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
-                  {unit.stats.total} việc
-                </span>
+                <DetailTable 
+                  schedules={unit.allSchedules} 
+                  unitName={unit.id}
+                  unitMembers={unit.members}
+                  unitColor={unit.color}
+                />
               </div>
-              <DetailTable 
-                schedules={unit.allSchedules} 
-                unitName={unit.id}
-                unitMembers={unit.members}
-                unitColor={unit.color}
-              />
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
@@ -904,9 +908,9 @@ export const WeeklyWorkSchedule: React.FC<{
           <span className="text-[10px] opacity-90 whitespace-nowrap">{totalUnits} đơn vị | {totalTasks} việc</span>
         </div>
 
-        {/* Stat Cards Grid - 7 units in 4+3 grid */}
+        {/* Stat Cards Grid - 7 units wrap naturally */}
         <div className="p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] min-h-[120px]" style={{ flexShrink: 0 }}>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1.5">
             {units.map((unit) => (
               <button
                 key={unit.id}
@@ -918,6 +922,78 @@ export const WeeklyWorkSchedule: React.FC<{
               </button>
             ))}
           </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ===== BASE UNIT GRID WITH DETAIL (for right column) =====
+  const BaseUnitGridWithDetail = ({ 
+    title, 
+    subtitle,
+    icon, 
+    headerColor,
+    units,
+    sectionKey
+  }: { 
+    title: string;
+    subtitle: string;
+    icon: React.ReactNode;
+    headerColor: string;
+    units: Array<{id: string; name: string; color: string; members: UserType[]; stats: any; allSchedules: WeeklySchedule[]}>;
+    sectionKey: string;
+  }) => {
+    const totalUnits = units.length;
+    const totalTasks = units.reduce((sum, u) => sum + u.stats.total, 0);
+
+    return (
+      <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden h-full" style={{ borderTop: `3px solid ${headerColor}` }}>
+        {/* Section Header - Fixed height for alignment */}
+        <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-2 uppercase tracking-wide flex items-center justify-between px-4 min-h-[40px]" style={{ flexShrink: 0 }}>
+          <span className="flex items-center gap-2 truncate">{icon} {title}</span>
+          <span className="text-[10px] opacity-90 whitespace-nowrap">{totalUnits} đơn vị | {totalTasks} việc</span>
+        </div>
+
+        {/* Stat Cards Grid - 7 units wrap naturally */}
+        <div className="p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] min-h-[120px]" style={{ flexShrink: 0 }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1.5">
+            {units.map((unit) => (
+              <button
+                key={unit.id}
+                onClick={() => setExpandedSections(prev => ({ ...prev, [unit.id]: !prev[unit.id] }))}
+                className="flex flex-col items-center justify-center p-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded-lg shadow-sm min-h-[50px]"
+                style={{ backgroundColor: unit.color }}
+              >
+                <span className="text-[9px] font-medium truncate text-center text-white/90 leading-tight max-w-full">{unit.name.replace('Thống kê cơ sở ', 'CS ')}</span>
+                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none text-white">{unit.stats.total}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Detail Tables - Expandable */}
+        <div className="p-3 space-y-2">
+          {units.map((unit) => (
+            <div key={unit.id} className={`border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden transition-all duration-200`} style={{ borderLeft: `3px solid ${unit.color}` }}>
+              <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
+                  <span className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{unit.name}</span>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                  {unit.stats.total} việc
+                </span>
+              </div>
+              {expandedSections[unit.id] && (
+                <DetailTable 
+                  schedules={unit.allSchedules} 
+                  unitName={unit.id}
+                  unitMembers={unit.members}
+                  unitColor={unit.color}
+                />
+              )}
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -1238,110 +1314,63 @@ export const WeeklyWorkSchedule: React.FC<{
           </div>
         </div>
 
-        {/* ===== MAIN LAYOUT ===== */}
-        {/* ROW 1: LÃNH ĐẠO | PHÒNG BAN (side by side) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <LeftSection
-            title="1. Lãnh đạo Cục (4 người)"
-            subtitle="4 lãnh đạo"
-            icon={<UsersIcon className="w-4 h-4" />}
-            headerColor="#2d6e3e"
-            units={leaderUnits}
-            sectionKey="leader"
-          />
-          <LeftSection
-            title="2. Khối Phòng ban (5 phòng)"
-            subtitle="5 phòng ban"
-            icon={<Building className="w-4 h-4" />}
-            headerColor="#3b82f6"
-            units={phongUnits}
-            sectionKey="phong"
-          />
-        </div>
+        {/* ===== MAIN LAYOUT: 2 COLUMNS ===== */}
+        {/* LEFT COLUMN: LÃNH ĐẠO (top) + PHÒNG BAN (bottom) - stacked */}
+        {/* RIGHT COLUMN: VÙNG 1 (top) + VÙNG 2 (bottom) - stacked */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+          
+          {/* LEFT COLUMN */}
+          <div className="space-y-3 min-w-0">
+            
+            {/* LÃNH ĐẠO - COMPACT */}
+            <LeftSection
+              title="1. Lãnh đạo Cục (4 người)"
+              subtitle="4 lãnh đạo"
+              icon={<UsersIcon className="w-4 h-4" />}
+              headerColor="#2d6e3e"
+              units={leaderUnits}
+              sectionKey="leader"
+              compact={true}
+            />
 
-        {/* ROW 2: VÙNG 1 GRID | VÙNG 2 GRID (side by side, wider) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
-          <BaseUnitGrid
-            title="3. Vùng 1 - Thống kê cơ sở (7 đơn vị)"
-            subtitle="7 cơ sở thống kê"
-            icon={<Building2 className="w-4 h-4" />}
-            headerColor="#0d9488"
-            units={vung1Units}
-            sectionKey="vung1"
-          />
-          <BaseUnitGrid
-            title="4. Vùng 2 - Thống kê cơ sở (7 đơn vị)"
-            subtitle="7 cơ sở thống kê"
-            icon={<Building2 className="w-4 h-4" />}
-            headerColor="#ec4899"
-            units={vung2Units}
-            sectionKey="vung2"
-          />
-        </div>
+            {/* PHÒNG BAN - COMPACT */}
+            <LeftSection
+              title="2. Khối Phòng ban (5 phòng)"
+              subtitle="5 phòng ban"
+              icon={<Building className="w-4 h-4" />}
+              headerColor="#3b82f6"
+              units={phongUnits}
+              sectionKey="phong"
+              compact={true}
+            />
 
-        {/* ROW 3: DETAIL TABLES - VÙNG 1 (top) stacked above VÙNG 2 (bottom) - FULL WIDTH */}
-        <div className="space-y-3 mt-3">
-          {/* VÙNG 1 DETAIL TABLES */}
-          <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs overflow-hidden" style={{ borderTop: '3px solid #0d9488' }}>
-            <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-2 uppercase tracking-wide flex items-center justify-between px-4 min-h-[40px]">
-              <span className="flex items-center gap-2 truncate"><Building2 className="w-4 h-4" /> 3. Vùng 1 - Chi tiết Thống kê cơ sở (7 đơn vị)</span>
-              <span className="text-[10px] opacity-90 whitespace-nowrap">
-                {vung1Units.reduce((sum, u) => sum + u.stats.total, 0)} việc
-              </span>
-            </div>
-            <div className="p-3 space-y-2 overflow-y-auto max-h-[400px]">
-              {vung1Units.map((unit) => (
-                <div key={unit.id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" style={{ borderLeft: `3px solid ${unit.color}` }}>
-                  <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
-                      <span className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{unit.name}</span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
-                      {unit.stats.total} việc
-                    </span>
-                  </div>
-                  <DetailTable 
-                    schedules={unit.allSchedules} 
-                    unitName={unit.id}
-                    unitMembers={unit.members}
-                    unitColor={unit.color}
-                  />
-                </div>
-              ))}
-            </div>
           </div>
 
-          {/* VÙNG 2 DETAIL TABLES */}
-          <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs overflow-hidden" style={{ borderTop: '3px solid #ec4899' }}>
-            <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-2 uppercase tracking-wide flex items-center justify-between px-4 min-h-[40px]">
-              <span className="flex items-center gap-2 truncate"><Building2 className="w-4 h-4" /> 4. Vùng 2 - Chi tiết Thống kê cơ sở (7 đơn vị)</span>
-              <span className="text-[10px] opacity-90 whitespace-nowrap">
-                {vung2Units.reduce((sum, u) => sum + u.stats.total, 0)} việc
-              </span>
-            </div>
-            <div className="p-3 space-y-2 overflow-y-auto max-h-[400px]">
-              {vung2Units.map((unit) => (
-                <div key={unit.id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" style={{ borderLeft: `3px solid ${unit.color}` }}>
-                  <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
-                      <span className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{unit.name}</span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
-                      {unit.stats.total} việc
-                    </span>
-                  </div>
-                  <DetailTable 
-                    schedules={unit.allSchedules} 
-                    unitName={unit.id}
-                    unitMembers={unit.members}
-                    unitColor={unit.color}
-                  />
-                </div>
-              ))}
-            </div>
+          {/* RIGHT COLUMN */}
+          <div className="space-y-3 min-w-0">
+            
+            {/* VÙNG 1 - GRID + DETAIL */}
+            <BaseUnitGridWithDetail
+              title="3. Vùng 1 - Thống kê cơ sở (7 đơn vị)"
+              subtitle="7 cơ sở thống kê"
+              icon={<Building2 className="w-4 h-4" />}
+              headerColor="#0d9488"
+              units={vung1Units}
+              sectionKey="vung1"
+            />
+
+            {/* VÙNG 2 - GRID + DETAIL */}
+            <BaseUnitGridWithDetail
+              title="4. Vùng 2 - Thống kê cơ sở (7 đơn vị)"
+              subtitle="7 cơ sở thống kê"
+              icon={<Building2 className="w-4 h-4" />}
+              headerColor="#ec4899"
+              units={vung2Units}
+              sectionKey="vung2"
+            />
+
           </div>
+
         </div>
 
         {/* ===== MATRIX VIEW AT BOTTOM ===== */}
