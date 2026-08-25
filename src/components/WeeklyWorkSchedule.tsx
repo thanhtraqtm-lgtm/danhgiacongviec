@@ -47,7 +47,7 @@ import {
   List,
   ClipboardList
 } from 'lucide-react';
-import { WeeklySchedule, DEPARTMENTS, User as UserType } from '../types';
+import { WeeklySchedule, User as UserType, DEPARTMENTS } from '../types';
 import * as XLSX from 'xlsx';
 
 const STATUSES = ['Đã hoàn thành', 'Đang thực hiện', 'Chưa bắt đầu', 'Hủy'] as const;
@@ -70,55 +70,16 @@ const TASK_TYPE_COLORS = {
   'Khác': '#8b5cf6',
 };
 
-const LEADER_COLORS = [
-  '#2d6e3e',
-  '#0d9488',
-  '#2563eb',
-  '#7c3aed',
-];
+const LEADER_COLORS = ['#2d6e3e', '#0d9488', '#2563eb', '#7c3aed'];
+const DEPT_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
+const VUNG1_COLORS = ['#0d9488', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6'];
+const VUNG2_COLORS = ['#ec4899', '#f43f5e', '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16'];
 
-const DEPT_COLORS = [
-  '#3b82f6',
-  '#8b5cf6',
-  '#ec4899',
-  '#f59e0b',
-  '#10b981',
-];
-
-const BASE_UNIT_COLORS_VUNG1 = [
-  '#0d9488',
-  '#14b8a6',
-  '#06b6d4',
-  '#0ea5e9',
-  '#3b82f6',
-  '#6366f1',
-  '#8b5cf6',
-];
-
-const BASE_UNIT_COLORS_VUNG2 = [
-  '#ec4899',
-  '#f43f5e',
-  '#ef4444',
-  '#f97316',
-  '#f59e0b',
-  '#eab308',
-  '#84cc16',
-];
-
-type ViewMode = 'matrix' | 'cards' | 'list';
 type TimeFilter = 'week' | 'month' | 'quarter' | 'year';
 
-interface OrgUnit {
-  id: string;
-  name: string;
-  type: 'leader' | 'department' | 'baseUnit';
-  members: UserType[];
-  color: string;
-  leaderIndex?: number;
-}
-
 interface DrillDownData {
-  unit: OrgUnit;
+  unitName: string;
+  unitMembers: UserType[];
   dayIndex: number;
   session: string;
   schedules: WeeklySchedule[];
@@ -131,14 +92,6 @@ interface MatrixCellData {
   content: string;
   taskType: string;
   location: string;
-}
-
-interface LeaderScheduleItem {
-  leaderName: string;
-  leaderPosition: string;
-  dayIndex: number;
-  session: string;
-  schedules: WeeklySchedule[];
 }
 
 const DEFAULT_LEADERS = [
@@ -176,6 +129,9 @@ const PHONG_UNITS = [
   'Phòng Thống kê NN&XH',
 ];
 
+const STAT_CARD_COLORS = ['#2d6e3e', '#e11d48', '#0d9488', '#2563eb', '#8b5cf6'];
+const STAT_CARD_LABELS = ['Tổng việc', 'Chưa HT', 'Chưa HT trễ hạn', 'Hoàn thành', 'HT trễ hạn'];
+
 export const WeeklyWorkSchedule: React.FC<{
   schedules: WeeklySchedule[];
   users: UserType[];
@@ -201,7 +157,6 @@ export const WeeklyWorkSchedule: React.FC<{
   const [filterTaskType, setFilterTaskType] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('week');
-  const [viewMode, setViewMode] = useState<ViewMode>('matrix');
   
   const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<WeeklySchedule>>({});
@@ -209,8 +164,6 @@ export const WeeklyWorkSchedule: React.FC<{
   const [addForm, setAddForm] = useState<Partial<WeeklySchedule>>({});
   const [isImporting, setIsImporting] = useState(false);
   const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
-  const [showTimeFilterModal, setShowTimeFilterModal] = useState(false);
-  const [showImportOptions, setShowImportOptions] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -218,6 +171,7 @@ export const WeeklyWorkSchedule: React.FC<{
     vung1: true,
     phong: true,
     vung2: true,
+    matrix: true
   });
 
   const weekStartDate = useMemo(() => {
@@ -243,27 +197,7 @@ export const WeeklyWorkSchedule: React.FC<{
     return dates;
   }, [weekStartDate]);
 
-  const getSchedulesForUnitDaySession = useCallback((unitName: string, dayIndex: number, session: string, unitMembers: UserType[]) => {
-    const targetDate = weekDates[dayIndex].toISOString().split('T')[0];
-    const memberNames = new Set(unitMembers.map(m => m.fullName));
-    
-    return schedules.filter(s => {
-      if (s.date !== targetDate) return false;
-      if (!memberNames.has(s.userName)) return false;
-      if (filterTaskType !== 'ALL' && s.taskType !== filterTaskType) return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchTask = s.taskName?.toLowerCase().includes(q);
-        const matchUser = s.userName?.toLowerCase().includes(q);
-        const matchNotes = s.notes?.toLowerCase().includes(q);
-        const matchLocation = s.location?.toLowerCase().includes(q);
-        if (!matchTask && !matchUser && !matchNotes && !matchLocation) return false;
-      }
-      return true;
-    }).sort((a, b) => a.taskName.localeCompare(b.taskName));
-  }, [schedules, weekDates, filterTaskType, searchQuery]);
-
-  const getAllSchedulesForUnit = useCallback((unitName: string, unitMembers: UserType[]) => {
+  const getSchedulesForUnit = useCallback((unitName: string, unitMembers: UserType[]) => {
     const memberNames = new Set(unitMembers.map(m => m.fullName));
     return schedules.filter(s => {
       const scheduleDate = new Date(s.date);
@@ -279,13 +213,25 @@ export const WeeklyWorkSchedule: React.FC<{
         if (!matchTask && !matchUser && !matchNotes && !matchLocation) return false;
       }
       return true;
+    }).sort((a, b) => {
+      const dayDiff = a.dayOfWeek - b.dayOfWeek;
+      if (dayDiff !== 0) return dayDiff;
+      const sessionOrder = { 'Sáng': 0, 'Chiều': 1 };
+      return (sessionOrder[a.notes?.includes('Chiều') ? 'Chiều' : 'Sáng'] || 0) - (sessionOrder[b.notes?.includes('Chiều') ? 'Chiều' : 'Sáng'] || 0);
     });
   }, [schedules, weekStartDate, weekEndDate, filterTaskType, searchQuery]);
 
-  const countNonOfficeTasks = useCallback((unitName: string, unitMembers: UserType[]) => {
-    const allSchedules = getAllSchedulesForUnit(unitName, unitMembers);
-    return allSchedules.filter(s => s.taskType !== 'Làm việc tại cơ quan').length;
-  }, [getAllSchedulesForUnit]);
+  const getStatsForUnit = useCallback((unitName: string, unitMembers: UserType[]) => {
+    const allSchedules = getSchedulesForUnit(unitName, unitMembers);
+    const nonOffice = allSchedules.filter(s => s.taskType !== 'Làm việc tại cơ quan');
+    return {
+      total: nonOffice.length,
+      unfinished: nonOffice.filter(s => s.status === 'Chưa bắt đầu').length,
+      late: nonOffice.filter(s => s.status === 'Chưa bắt đầu' && new Date(s.date) < new Date()).length,
+      completed: nonOffice.filter(s => s.status === 'Đã hoàn thành').length,
+      completedLate: nonOffice.filter(s => s.status === 'Đã hoàn thành' && new Date(s.date) < new Date()).length,
+    };
+  }, [getSchedulesForUnit]);
 
   const handlePrevWeek = () => {
     setCurrentWeekStart(new Date(weekStartDate.getTime() - 7 * 24 * 60 * 60 * 1000));
@@ -349,11 +295,6 @@ export const WeeklyWorkSchedule: React.FC<{
     addToast('success', 'Thành công', 'Đã thêm lịch công tác mới');
   };
 
-  const handleAddFormDateChange = (dayIndex: number) => {
-    const date = weekDates[dayIndex].toISOString().split('T')[0];
-    setAddForm(prev => ({ ...prev, date, dayOfWeek: dayIndex }));
-  };
-
   const openAddForm = (dayIndex?: number, unitName?: string) => {
     const initialForm: Partial<WeeklySchedule> = {
       date: dayIndex !== undefined ? weekDates[dayIndex].toISOString().split('T')[0] : weekDates[0]?.toISOString().split('T')[0],
@@ -366,7 +307,7 @@ export const WeeklyWorkSchedule: React.FC<{
     }
     if (unitName) {
       const unitUsers = users.filter(u => {
-        if (unitName === 'Lãnh đạo') return DEFAULT_LEADERS.some(l => l.name === u.fullName);
+        if (DEFAULT_LEADERS.some(l => l.name === unitName)) return u.fullName === unitName;
         return u.department === unitName || u.workUnit === unitName;
       });
       if (unitUsers[0]) {
@@ -381,17 +322,19 @@ export const WeeklyWorkSchedule: React.FC<{
   };
 
   const handleMatrixCellClick = (unitName: string, unitMembers: UserType[], dayIndex: number, session: string) => {
-    const daySchedules = getSchedulesForUnitDaySession(unitName, dayIndex, session, unitMembers);
+    const targetDate = weekDates[dayIndex].toISOString().split('T')[0];
+    const memberNames = new Set(unitMembers.map(m => m.fullName));
+    const daySchedules = schedules.filter(s => {
+      if (s.date !== targetDate) return false;
+      if (!memberNames.has(s.userName)) return false;
+      if (filterTaskType !== 'ALL' && s.taskType !== filterTaskType) return false;
+      const sessionMatch = s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng';
+      if (sessionMatch !== session) return false;
+      return true;
+    });
+    
     if (daySchedules.length > 0) {
-      const unit: OrgUnit = {
-        id: unitName,
-        name: unitName,
-        type: DEFAULT_LEADERS.some(l => l.name === unitName) ? 'leader' : 
-              VUNG1_UNITS.includes(unitName) || VUNG2_UNITS.includes(unitName) ? 'baseUnit' : 'department',
-        members: unitMembers,
-        color: '#3b82f6'
-      };
-      setDrillDown({ unit, dayIndex, session, schedules: daySchedules });
+      setDrillDown({ unitName, unitMembers, dayIndex, session, schedules: daySchedules });
     } else {
       openAddForm(dayIndex, unitName);
     }
@@ -500,21 +443,24 @@ export const WeeklyWorkSchedule: React.FC<{
       'Trạng thái'
     ];
 
-    const allUnits = [
-      ...DEFAULT_LEADERS.map(l => ({ name: l.name, members: users.filter(u => u.fullName === l.name) })),
-      ...PHONG_UNITS.map(name => ({ name, members: users.filter(u => u.department === name) })),
-      ...VUNG1_UNITS.map(name => ({ name, members: users.filter(u => u.department === name || u.workUnit === name) })),
-      ...VUNG2_UNITS.map(name => ({ name, members: users.filter(u => u.department === name || u.workUnit === name) })),
+    const allUnitConfigs = [
+      { name: 'Lãnh đạo', getMembers: (n: string) => users.filter(u => DEFAULT_LEADERS.some(l => l.name === n && l.name === u.fullName)) },
+      ...PHONG_UNITS.map(name => ({ name, getMembers: (n: string) => users.filter(u => u.department === n) })),
+      ...VUNG1_UNITS.map(name => ({ name, getMembers: (n: string) => users.filter(u => u.department === n || u.workUnit === n) })),
+      ...VUNG2_UNITS.map(name => ({ name, getMembers: (n: string) => users.filter(u => u.department === n || u.workUnit === n) })),
     ];
 
-    const data = allUnits.flatMap(unit => 
-      weekDates.map((date, dayIndex) => {
-        const daySchedules = getSchedulesForUnitDaySession(unit.name, dayIndex, 'Sáng', unit.members);
-        const afternoonSchedules = getSchedulesForUnitDaySession(unit.name, dayIndex, 'Chiều', unit.members);
-        const allSchedules = [...daySchedules, ...afternoonSchedules];
-        if (allSchedules.length === 0) return null;
-        return allSchedules.map(s => [
-          unit.name,
+    const data = allUnitConfigs.flatMap(({ name, getMembers }) => {
+      const members = getMembers(name);
+      return weekDates.flatMap((date, dayIndex) => {
+        const daySchedules = schedules.filter(s => {
+          if (s.date !== date.toISOString().split('T')[0]) return false;
+          if (!members.some(m => m.fullName === s.userName)) return false;
+          return true;
+        });
+        if (daySchedules.length === 0) return [];
+        return daySchedules.map(s => [
+          name,
           s.userName,
           s.userPosition || '',
           s.date,
@@ -526,39 +472,33 @@ export const WeeklyWorkSchedule: React.FC<{
           s.notes || '',
           s.status
         ]);
-      }).flat()
-    ).filter(Boolean);
+      });
+    });
 
     const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Lịch công tác tuần');
     XLSX.writeFile(wb, `Lich_Cong_Tac_Tuan_${weekStartDate.toISOString().split('T')[0]}.xlsx`);
     addToast('success', 'Thành công', `Đã xuất ${data.length} bản ghi ra Excel`);
-  }, [schedules, users, weekDates, getSchedulesForUnitDaySession, weekStartDate, addToast]);
+  }, [schedules, users, weekDates, weekStartDate, addToast]);
 
   const parseMatrixFormat = useCallback((jsonData: string[][]) => {
     if (jsonData.length < 2) return null;
-    
     const headers = jsonData[0] as string[];
-    if (!headers[0]?.toLowerCase().includes('ngày') || !headers[1]?.toLowerCase().includes('buổi')) {
-      return null;
-    }
+    if (!headers[0]?.toLowerCase().includes('ngày') || !headers[1]?.toLowerCase().includes('buổi')) return null;
     
     const leaderNames = headers.slice(2).map(h => h.split('\n')[0].split('(')[0].trim());
     const rows = jsonData.slice(1);
-    
     const result: MatrixCellData[] = [];
     let currentDayIndex = -1;
     
-    rows.forEach((row, rowIndex) => {
+    rows.forEach((row) => {
       const dayCell = row[0]?.toString().trim();
       const session = row[1]?.toString().trim() || '';
       
       if (dayCell) {
         const dayMatch = dayCell.match(/Thứ\s*(\d+)/);
-        if (dayMatch) {
-          currentDayIndex = parseInt(dayMatch[1]) - 2;
-        }
+        if (dayMatch) currentDayIndex = parseInt(dayMatch[1]) - 2;
       }
       
       if (currentDayIndex >= 0 && currentDayIndex < 7 && SESSIONS.includes(session)) {
@@ -603,13 +543,11 @@ export const WeeklyWorkSchedule: React.FC<{
           matrixData.forEach((cell) => {
             const leader = DEFAULT_LEADERS.find(l => l.name === cell.leaderName);
             if (!leader) return;
-            
             const matchedUser = users.find(u => u.fullName === leader.name);
             const date = weekDates[cell.dayIndex]?.toISOString().split('T')[0];
             if (!date) return;
             
             const tasks = cell.content.split(/[;\n]/).map(t => t.trim()).filter(Boolean);
-            
             tasks.forEach((taskContent) => {
               newSchedules.push({
                 id: 'ws_' + Date.now() + '_' + addedCount++,
@@ -711,8 +649,7 @@ export const WeeklyWorkSchedule: React.FC<{
         });
 
         if (mismatchCount > 0) {
-          addToast('error', 'Lỗi dữ liệu không khớp', 
-            `${mismatchCount} dòng bị bỏ qua: Tên nhân sự không tồn tại trong hệ thống.`);
+          addToast('error', 'Lỗi dữ liệu không khớp', `${mismatchCount} dòng bị bỏ qua: Tên nhân sự không tồn tại trong hệ thống.`);
         }
 
         if (newSchedules.length === 0) {
@@ -736,76 +673,360 @@ export const WeeklyWorkSchedule: React.FC<{
     fileInputRef.current?.click();
   };
 
-  const leaderMembers = useMemo(() => 
-    DEFAULT_LEADERS.map(l => users.find(u => u.fullName === l.name)).filter(Boolean) as UserType[]
-  , [users]);
-
+  // ===== UNIT CONFIGS =====
   const leaderUnits = useMemo(() => 
     DEFAULT_LEADERS.map((l, idx) => ({
       id: `leader_${l.name}`,
       name: l.name,
-      type: 'leader' as const,
-      members: users.filter(u => u.fullName === l.name),
+      position: l.position,
       color: LEADER_COLORS[idx],
-      leaderIndex: idx
+      members: users.filter(u => u.fullName === l.name),
+      stats: getStatsForUnit(l.name, users.filter(u => u.fullName === l.name)),
+      allSchedules: getSchedulesForUnit(l.name, users.filter(u => u.fullName === l.name))
     }))
-  , [users]);
+  , [users, getStatsForUnit, getSchedulesForUnit]);
 
   const phongUnits = useMemo(() => 
     PHONG_UNITS.map((name, idx) => ({
       id: `phong_${name}`,
       name,
-      type: 'department' as const,
+      color: DEPT_COLORS[idx % DEPT_COLORS.length],
       members: users.filter(u => u.department === name),
-      color: DEPT_COLORS[idx % DEPT_COLORS.length]
+      stats: getStatsForUnit(name, users.filter(u => u.department === name)),
+      allSchedules: getSchedulesForUnit(name, users.filter(u => u.department === name))
     }))
-  , [users]);
+  , [users, getStatsForUnit, getSchedulesForUnit]);
 
   const vung1Units = useMemo(() => 
     VUNG1_UNITS.map((name, idx) => ({
       id: `vung1_${name}`,
       name,
-      type: 'baseUnit' as const,
+      color: VUNG1_COLORS[idx % VUNG1_COLORS.length],
       members: users.filter(u => u.department === name || u.workUnit === name),
-      color: BASE_UNIT_COLORS_VUNG1[idx % BASE_UNIT_COLORS_VUNG1.length]
+      stats: getStatsForUnit(name, users.filter(u => u.department === name || u.workUnit === name)),
+      allSchedules: getSchedulesForUnit(name, users.filter(u => u.department === name || u.workUnit === name))
     }))
-  , [users]);
+  , [users, getStatsForUnit, getSchedulesForUnit]);
 
   const vung2Units = useMemo(() => 
     VUNG2_UNITS.map((name, idx) => ({
       id: `vung2_${name}`,
       name,
-      type: 'baseUnit' as const,
+      color: VUNG2_COLORS[idx % VUNG2_COLORS.length],
       members: users.filter(u => u.department === name || u.workUnit === name),
-      color: BASE_UNIT_COLORS_VUNG2[idx % BASE_UNIT_COLORS_VUNG2.length]
+      stats: getStatsForUnit(name, users.filter(u => u.department === name || u.workUnit === name)),
+      allSchedules: getSchedulesForUnit(name, users.filter(u => u.department === name || u.workUnit === name))
     }))
-  , [users]);
+  , [users, getStatsForUnit, getSchedulesForUnit]);
 
-  const allUnits = useMemo(() => [...leaderUnits, ...phongUnits, ...vung1Units, ...vung2Units], [leaderUnits, phongUnits, vung1Units, vung2Units]);
+  // ===== STAT CARD COMPONENT (like DashboardOverview) =====
+  const StatCard = ({ label, value, color, onClick, key }: { label: string; value: number; color: string; onClick?: () => void; key?: React.Key }) => (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center justify-center p-3 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded-lg shadow-sm min-w-[120px]"
+      style={{ backgroundColor: color }}
+    >
+      <span className="text-[10px] font-medium truncate text-center text-white/90 leading-tight">{label}</span>
+      <span className="text-xl font-bold tracking-normal mt-1 leading-none text-white">{value}</span>
+    </button>
+  );
 
-  const buildLeaderScheduleItems = useCallback((): LeaderScheduleItem[] => {
-    return leaderUnits.map(unit => {
-      const daySessions: LeaderScheduleItem[] = [];
-      weekDates.forEach((date, dayIndex) => {
-        SESSIONS.forEach(session => {
-          const daySchedules = getSchedulesForUnitDaySession(unit.name, dayIndex, session, unit.members);
-          daySessions.push({
-            leaderName: unit.name,
-            leaderPosition: unit.members[0]?.position || '',
-            dayIndex,
-            session,
-            schedules: daySchedules
-          });
-        });
-      });
-      return daySessions;
-    }).flat();
-  }, [leaderUnits, weekDates, getSchedulesForUnitDaySession]);
+  // ===== DETAIL TABLE COMPONENT =====
+  const DetailTable = ({ 
+    schedules, 
+    unitName, 
+    unitMembers,
+    unitColor 
+  }: { 
+    schedules: WeeklySchedule[];
+    unitName: string;
+    unitMembers: UserType[];
+    unitColor: string;
+  }) => {
+    if (!expandedSections[unitName]) return null;
 
-  const leaderMatrixData = useMemo(() => buildLeaderScheduleItems(), [buildLeaderScheduleItems]);
+    // Determine what to show in detail
+    const nonOfficeSchedules = schedules.filter(s => s.taskType !== 'Làm việc tại cơ quan');
+    const hasOnlyOfficeWork = schedules.length > 0 && nonOfficeSchedules.length === 0;
+    const displaySchedules = hasOnlyOfficeWork ? schedules : nonOfficeSchedules;
+
+    return (
+      <div className="mt-2 overflow-x-auto">
+        <table className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+          <thead>
+            <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+              <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 w-8">STT</th>
+              <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300">Họ và tên</th>
+              <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300">Chức vụ</th>
+              <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300">Nội dung</th>
+              <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300">Thời gian</th>
+              <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300">Địa điểm</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displaySchedules.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-2 py-4 text-center text-slate-400 text-xs italic">
+                  — Không có công việc nào trong tuần này —
+                </td>
+              </tr>
+            ) : (
+              displaySchedules.map((s, idx) => (
+                <tr key={s.id} className={`${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/50'} border-b border-slate-100 dark:border-slate-800 hover:bg-slate-100/50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer`}
+                    onClick={() => handleMatrixCellClick(unitName, unitMembers, s.dayOfWeek, s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng')}>
+                  <td className="px-2 py-1.5 text-slate-500 font-mono">{idx + 1}</td>
+                  <td className="px-2 py-1.5 font-medium text-slate-900 dark:text-slate-100">{s.userName}</td>
+                  <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">{s.userPosition || '—'}</td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold`} style={{backgroundColor: TASK_TYPE_COLORS[s.taskType as keyof typeof TASK_TYPE_COLORS] + '20', color: TASK_TYPE_COLORS[s.taskType as keyof typeof TASK_TYPE_COLORS]}}>
+                        {s.taskType}
+                      </span>
+                      <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[200px]">{s.taskName}</span>
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{s.date} ({DAY_LABELS_SHORT[s.dayOfWeek]})</span>
+                      <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng'}</span>
+                    </div>
+                  </td>
+                  <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">{s.location || '—'}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  // ===== SECTION COMPONENT =====
+  const Section = ({ 
+    title, 
+    subtitle,
+    icon, 
+    headerColor,
+    units,
+    sectionKey,
+    statCardBgColor
+  }: { 
+    title: string;
+    subtitle: string;
+    icon: React.ReactNode;
+    headerColor: string;
+    units: Array<{id: string; name: string; position?: string; color: string; members: UserType[]; stats: any; allSchedules: WeeklySchedule[]}>;
+    sectionKey: string;
+    statCardBgColor: string;
+  }) => {
+    const totalUnits = units.length;
+    const totalTasks = units.reduce((sum, u) => sum + u.stats.total, 0);
+
+    return (
+      <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden" style={{ borderTop: `3px solid ${headerColor}` }}>
+        {/* Section Header */}
+        <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide flex items-center justify-between px-4">
+          <span className="flex items-center gap-2">{icon} {title}</span>
+          <span className="text-[10px] opacity-90">{totalUnits} đơn vị | {totalTasks} việc</span>
+        </div>
+
+        {/* Stat Cards Row - Like DashboardOverview KPI Row */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]">
+          {units.map((unit, idx) => (
+            <StatCard
+              key={unit.id}
+              label={`${unit.name}${unit.position ? ` (${unit.position})` : ''}`}
+              value={unit.stats.total}
+              color={unit.color}
+            />
+          ))}
+        </div>
+
+        {/* Detail Tables */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+          {units.map((unit) => (
+            <div key={unit.id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" style={{ borderLeft: `3px solid ${unit.color}` }}>
+              <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: unit.color }} />
+                  <span className="font-semibold text-sm text-slate-800 dark:text-slate-200">{unit.name}</span>
+                  {unit.position && <span className="text-xs text-slate-500 px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-700">{unit.position}</span>}
+                </div>
+                <button 
+                  onClick={() => setExpandedSections(prev => ({ ...prev, [sectionKey]: !prev[sectionKey] }))}
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-400 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
+                  title={expandedSections[sectionKey] ? 'Thu gọn tất cả' : 'Mở rộng tất cả'}
+                >
+                  <ChevronDown className={`w-4 h-4 transition-transform ${expandedSections[sectionKey] ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+              <DetailTable 
+                schedules={unit.allSchedules} 
+                unitName={unit.id}
+                unitMembers={unit.members}
+                unitColor={unit.color}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // ===== LEADER MATRIX VIEW =====
+  const LeaderMatrixView = () => {
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
+          <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+            <Table className="w-5 h-5 text-[#2d6e3e]" />
+            <span>Ma trận Lịch Lãnh đạo: {leaderUnits.length} người × 7 ngày × 2 buổi</span>
+          </h3>
+          <div className="flex items-center gap-2">
+            <select
+              value={filterTaskType}
+              onChange={(e) => setFilterTaskType(e.target.value)}
+              className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded"
+            >
+              <option value="ALL">Tất cả loại</option>
+              <option value="Họp">Họp</option>
+              <option value="Công tác">Công tác</option>
+              <option value="Đào tạo">Đào tạo</option>
+              <option value="Khác">Khác</option>
+              <option value="Làm việc tại cơ quan">Làm việc tại cơ quan</option>
+            </select>
+            <input
+              type="text"
+              placeholder="Tìm kiếm..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded w-40 placeholder:text-slate-400"
+            />
+            <button onClick={exportToExcel} className="flex items-center gap-1 px-2 py-1 text-xs font-bold bg-[#2d6e3e] hover:bg-[#1e4d2b] text-white rounded border border-slate-300 transition-colors whitespace-nowrap">
+              <FileSpreadsheet className="w-3 h-3" />
+              Xuất Excel
+            </button>
+          </div>
+        </div>
+        
+        <div className="overflow-x-auto overflow-y-auto max-h-[500px] custom-scrollbar">
+          <table className="w-full min-w-max text-xs">
+            <thead>
+              <tr className="bg-[#006097] text-white sticky top-0 z-10">
+                <th className="px-3 py-2 text-left font-medium w-24 border-r border-[#004d7a] sticky left-0 z-20 bg-[#006097]">Ngày / Buổi</th>
+                {leaderUnits.map((unit) => (
+                  <th key={unit.id} className={`px-2 py-2 text-center font-medium border-r border-[#004d7a] sticky left-[96px] z-10`} style={{ minWidth: '200px', backgroundColor: unit.color + '20' }}>
+                    <div className="flex items-center justify-center gap-1 mb-1">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: unit.color }} />
+                      <span className="font-bold truncate max-w-[160px]">{unit.name}</span>
+                    </div>
+                    <div className="text-[10px] opacity-80">{unit.position}</div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {weekDates.map((date, dayIndex) => (
+                <React.Fragment key={dayIndex}>
+                  {SESSIONS.map((session, sessionIdx) => (
+                    <tr key={session} className={`border-b border-slate-200 dark:border-slate-800 ${sessionIdx === 1 ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''}`}>
+                      <td className={`px-3 py-2 font-medium text-left border-r border-slate-200 dark:border-slate-800 sticky left-0 z-20 bg-white dark:bg-slate-900 ${sessionIdx === 1 ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''}`}>
+                        <div className="flex flex-col items-start">
+                          {sessionIdx === 0 && (
+                            <span className="text-[10px] text-slate-400">
+                              {date.toLocaleDateString('vi-VN', { month: '2-digit', day: '2-digit' })}
+                            </span>
+                          )}
+                          <span className="font-medium">{DAY_LABELS_SHORT[dayIndex]}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${session === 'Sáng' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'}`}>
+                            {session}
+                          </span>
+                        </div>
+                      </td>
+                      {leaderUnits.map((unit) => {
+                        const targetDate = weekDates[dayIndex].toISOString().split('T')[0];
+                        const memberNames = new Set(unit.members.map(m => m.fullName));
+                        const daySchedules = schedules.filter(s => {
+                          if (s.date !== targetDate) return false;
+                          if (!memberNames.has(s.userName)) return false;
+                          if (filterTaskType !== 'ALL' && s.taskType !== filterTaskType) return false;
+                          const sessionMatch = s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng';
+                          if (sessionMatch !== session) return false;
+                          if (searchQuery.trim()) {
+                            const q = searchQuery.toLowerCase();
+                            const matchTask = s.taskName?.toLowerCase().includes(q);
+                            const matchUser = s.userName?.toLowerCase().includes(q);
+                            const matchNotes = s.notes?.toLowerCase().includes(q);
+                            const matchLocation = s.location?.toLowerCase().includes(q);
+                            if (!matchTask && !matchUser && !matchNotes && !matchLocation) return false;
+                          }
+                          return true;
+                        });
+                        const count = daySchedules.length;
+                        const hasMeeting = daySchedules.some(s => s.taskType === 'Họp');
+                        const hasBusiness = daySchedules.some(s => s.taskType === 'Công tác');
+                        const hasTraining = daySchedules.some(s => s.taskType === 'Đào tạo');
+                        const hasOffice = daySchedules.some(s => s.taskType === 'Làm việc tại cơ quan');
+                        const isToday = date.toDateString() === new Date().toDateString();
+                        
+                        return (
+                          <td 
+                            key={unit.id} 
+                            className={`px-2 py-2 border-r border-slate-200 dark:border-slate-800 min-h-[80px] ${sessionIdx === 1 ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''} ${isToday ? 'ring-2 ring-sky-400/50' : ''} ${count > 0 ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''} hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors relative cursor-pointer`}
+                            onClick={() => handleMatrixCellClick(unit.name, unit.members, dayIndex, session)}
+                          >
+                            {count > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-1">
+                                {hasMeeting && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200">Họp</span>}
+                                {hasBusiness && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200">Công tác</span>}
+                                {hasTraining && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200">Đào tạo</span>}
+                                {hasOffice && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200">Cơ quan</span>}
+                              </div>
+                            )}
+                            <div className="text-[11px] text-slate-700 dark:text-slate-300 line-clamp-3 pr-2">
+                              {count > 0 ? daySchedules.map((s, i) => (
+                                <div key={i} className="mb-0.5 flex items-start gap-1">
+                                  <span className={`w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0 ${{
+                                    'Đã hoàn thành': 'bg-emerald-500',
+                                    'Đang thực hiện': 'bg-sky-500',
+                                    'Chưa bắt đầu': 'bg-amber-500',
+                                    'Hủy': 'bg-rose-500',
+                                  }[s.status] || 'bg-slate-400'}`} />
+                                  <span className="truncate">{s.taskName}</span>
+                                </div>
+                              )) : (
+                                <span className="text-slate-300 dark:text-slate-600 italic">—</span>
+                              )}
+                            </div>
+                            {count > 0 && (
+                              <div className="absolute bottom-1 right-1 flex gap-0.5">
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/90 dark:bg-slate-800/90 shadow-sm border border-slate-200 dark:border-slate-700">
+                                  {count}
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  const formatWeekRange = (start: Date) => {
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    return `${start.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+  };
 
   if (drillDown) {
-    const { unit, dayIndex, session, schedules: drillSchedules } = drillDown;
+    const { unitName, unitMembers, dayIndex, session, schedules: drillSchedules } = drillDown;
     const date = weekDates[dayIndex];
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -816,7 +1037,7 @@ export const WeeklyWorkSchedule: React.FC<{
                 <X className="w-5 h-5" />
               </button>
               <div>
-                <h3 className="font-bold text-slate-800 dark:text-slate-100">{unit.name}</h3>
+                <h3 className="font-bold text-slate-800 dark:text-slate-100">{unitName}</h3>
                 <p className="text-xs text-slate-500">{DAY_LABELS[dayIndex]}, {date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} - Buổi {session} ({drillSchedules.length} lịch)</p>
               </div>
             </div>
@@ -882,255 +1103,6 @@ export const WeeklyWorkSchedule: React.FC<{
       </div>
     );
   }
-
-  const StatCard = ({ title, value, color, icon, onClick }: { title: string; value: number; color: string; icon: React.ReactNode; onClick?: () => void }) => (
-    <button 
-      onClick={onClick}
-      className="flex flex-col items-center justify-center p-3 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded-lg shadow-sm"
-      style={{ backgroundColor: color }}
-    >
-      <div className="flex items-center gap-1 mb-1">
-        {icon}
-        <span className="text-[10px] font-medium truncate text-white/90">{title}</span>
-      </div>
-      <span className="text-lg font-bold tracking-normal leading-none text-white">{value}</span>
-    </button>
-  );
-
-interface UnitBlockProps {
-  unit: typeof leaderUnits[0];
-  unitType: 'leader' | 'department' | 'baseUnit';
-  index: number;
-  totalTasks: number;
-  onClick?: () => void;
-  expanded: boolean;
-  onToggleExpand: () => void;
-  showDetail?: boolean;
-  key?: React.Key;
-}
-
-const UnitBlock = ({ 
-  unit, 
-  unitType, 
-  index, 
-  totalTasks, 
-  onClick,
-  expanded,
-  onToggleExpand,
-  showDetail = true 
-}: UnitBlockProps) => {
-    const unitSchedules = getAllSchedulesForUnit(unit.name, unit.members);
-    const nonOfficeSchedules = unitSchedules.filter(s => s.taskType !== 'Làm việc tại cơ quan');
-    const hasOnlyOfficeWork = unitSchedules.length > 0 && nonOfficeSchedules.length === 0;
-    
-    const detailSchedules = hasOnlyOfficeWork 
-      ? unitSchedules 
-      : nonOfficeSchedules;
-
-    return (
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden" style={{ borderLeft: `4px solid ${unit.color}` }}>
-        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-          <div className="flex items-center gap-2 flex-1 min-w-0" onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
-            <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
-            <span className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate flex-1">{unit.name}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-              {totalTasks} việc
-            </span>
-            {showDetail && (
-              <button onClick={onToggleExpand} className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-400 rounded hover:bg-slate-200 dark:hover:bg-slate-700" title={expanded ? 'Thu gọn' : 'Mở rộng'}>
-                <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-              </button>
-            )}
-          </div>
-        </div>
-        
-        {showDetail && expanded && (
-          <div className="p-3 space-y-2 max-h-[300px] overflow-y-auto">
-            {detailSchedules.length === 0 ? (
-              <div className="text-center text-slate-400 py-4">
-                <span className="text-xs italic">— Không có công việc khác ngoài làm việc tại cơ quan —</span>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {detailSchedules.slice(0, 10).map((s, i) => (
-                  <div key={i} className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100/50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer" onClick={() => handleMatrixCellClick(unit.name, unit.members, s.dayOfWeek, s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng')}>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold`} style={{backgroundColor: TASK_TYPE_COLORS[s.taskType as keyof typeof TASK_TYPE_COLORS] + '20', color: TASK_TYPE_COLORS[s.taskType as keyof typeof TASK_TYPE_COLORS]}}>
-                        {s.taskType}
-                      </span>
-                      <span className="font-medium text-xs text-slate-800 dark:text-slate-200 truncate flex-1">{s.taskName}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${{
-                        'Đã hoàn thành': 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300',
-                        'Đang thực hiện': 'bg-sky-100 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300',
-                        'Chưa bắt đầu': 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300',
-                        'Hủy': 'bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300',
-                      }[s.status] || 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-300'}`}>
-                        {STATUS_ICONS[s.status as keyof typeof STATUS_ICONS]}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-[10px] text-slate-500 dark:text-slate-400">
-                      <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{s.date} ({DAY_LABELS_SHORT[s.dayOfWeek]})</span>
-                      {s.userName && <span className="flex items-center gap-1"><User className="w-2.5 h-2.5" />{s.userName}</span>}
-                      {s.location && <span className="flex items-center gap-1"><MapPin className="w-2.5 h-2.5" />{s.location}</span>}
-                    </div>
-                  </div>
-                ))}
-                {detailSchedules.length > 10 && (
-                  <div className="text-center text-[10px] text-slate-400 py-2 border-t border-slate-200 dark:border-slate-700">
-                    +{detailSchedules.length - 10} công việc khác...
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const SectionHeader = ({ title, icon, color, expanded, onToggle, totalUnits, totalTasks }: { 
-    title: string; 
-    icon: React.ReactNode; 
-    color: string; 
-    expanded: boolean; 
-    onToggle: () => void; 
-    totalUnits: number;
-    totalTasks: number;
-  }) => (
-    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden mb-4">
-      <div className="p-3 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between" onClick={onToggle} style={{ cursor: 'pointer' }}>
-        <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-          <span className="font-bold text-sm text-slate-800 dark:text-slate-200">{title}</span>
-          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-            {totalUnits} đơn vị | {totalTasks} việc
-          </span>
-        </div>
-        <ChevronDown className={`w-5 h-5 text-slate-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-      </div>
-    </div>
-  );
-
-  const LeaderMatrixView = () => {
-    const leaderUnitsLocal = leaderUnits;
-    
-    return (
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
-          <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <Table className="w-5 h-5 text-[#2d6e3e]" />
-            <span>Ma trận Lịch Lãnh đạo: {leaderUnitsLocal.length} người × 7 ngày × 2 buổi</span>
-          </h3>
-          <span className="text-xs text-slate-500 px-2 py-1 bg-white dark:bg-slate-700 rounded border">
-            Click ô để xem chi tiết / Thêm mới
-          </span>
-        </div>
-        
-        <div className="overflow-x-auto overflow-y-auto max-h-[500px] custom-scrollbar">
-          <table className="w-full min-w-max text-xs">
-            <thead>
-              <tr className="bg-[#006097] text-white sticky top-0 z-10">
-                <th className="px-3 py-2 text-left font-medium w-24 border-r border-[#004d7a] sticky left-0 z-20 bg-[#006097]">Ngày / Buổi</th>
-                {leaderUnitsLocal.map((unit, idx) => (
-                  <th key={unit.id} className={`px-2 py-2 text-center font-medium border-r border-[#004d7a] sticky left-[96px] z-10`} style={{ minWidth: '200px', backgroundColor: unit.color + '20' }}>
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: unit.color }} />
-                      <span className="font-bold truncate max-w-[160px]">{unit.name}</span>
-                    </div>
-                    <div className="text-[10px] opacity-80">{unit.members[0]?.position || ''}</div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {weekDates.map((date, dayIndex) => (
-                <React.Fragment key={dayIndex}>
-                  {SESSIONS.map((session, sessionIdx) => (
-                    <tr key={session} className={`border-b border-slate-200 dark:border-slate-800 ${sessionIdx === 1 ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''}`}>
-                      <td className={`px-3 py-2 font-medium text-left border-r border-slate-200 dark:border-slate-800 sticky left-0 z-20 bg-white dark:bg-slate-900 ${sessionIdx === 1 ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''}`}>
-                        <div className="flex flex-col items-start">
-                          {sessionIdx === 0 && (
-                            <span className="text-[10px] text-slate-400">
-                              {date.toLocaleDateString('vi-VN', { month: '2-digit', day: '2-digit' })}
-                            </span>
-                          )}
-                          <span className="font-medium">{DAY_LABELS_SHORT[dayIndex]}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${session === 'Sáng' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'}`}>
-                            {session}
-                          </span>
-                        </div>
-                      </td>
-                      {leaderUnitsLocal.map((unit) => {
-                        const daySchedules = getSchedulesForUnitDaySession(unit.name, dayIndex, session, unit.members);
-                        const count = daySchedules.length;
-                        const hasMeeting = daySchedules.some(s => s.taskType === 'Họp');
-                        const hasBusiness = daySchedules.some(s => s.taskType === 'Công tác');
-                        const hasTraining = daySchedules.some(s => s.taskType === 'Đào tạo');
-                        const hasOffice = daySchedules.some(s => s.taskType === 'Làm việc tại cơ quan');
-                        const isToday = date.toDateString() === new Date().toDateString();
-                        
-                        return (
-                          <td 
-                            key={unit.id} 
-                            className={`px-2 py-2 border-r border-slate-200 dark:border-slate-800 min-h-[80px] ${sessionIdx === 1 ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''} ${isToday ? 'ring-2 ring-sky-400/50' : ''} ${count > 0 ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''} hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors relative cursor-pointer`}
-                            onClick={() => handleMatrixCellClick(unit.name, unit.members, dayIndex, session)}
-                          >
-                            {count > 0 && (
-                              <div className="flex flex-wrap gap-1 mb-1">
-                                {hasMeeting && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200">Họp</span>}
-                                {hasBusiness && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200">Công tác</span>}
-                                {hasTraining && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200">Đào tạo</span>}
-                                {hasOffice && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200">Cơ quan</span>}
-                              </div>
-                            )}
-                            <div className="text-[11px] text-slate-700 dark:text-slate-300 line-clamp-3 pr-2">
-                              {count > 0 ? daySchedules.map((s, i) => (
-                                <div key={i} className="mb-0.5 flex items-start gap-1">
-                                  <span className={`w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0 ${{
-                                    'Đã hoàn thành': 'bg-emerald-500',
-                                    'Đang thực hiện': 'bg-sky-500',
-                                    'Chưa bắt đầu': 'bg-amber-500',
-                                    'Hủy': 'bg-rose-500',
-                                  }[s.status] || 'bg-slate-400'}`} />
-                                  <span className="truncate">{s.taskName}</span>
-                                </div>
-                              )) : (
-                                <span className="text-slate-300 dark:text-slate-600 italic">—</span>
-                              )}
-                            </div>
-                            {count > 0 && (
-                              <div className="absolute bottom-1 right-1 flex gap-0.5">
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/90 dark:bg-slate-800/90 shadow-sm border border-slate-200 dark:border-slate-700">
-                                  {count}
-                                </span>
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
-
-  const formatWeekRange = (start: Date) => {
-    const end = new Date(start);
-    end.setDate(end.getDate() + 6);
-    return `${start.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
-  };
-
-  const leaderTotalTasks = leaderUnits.reduce((sum, u) => sum + countNonOfficeTasks(u.name, u.members), 0);
-  const phongTotalTasks = phongUnits.reduce((sum, u) => sum + countNonOfficeTasks(u.name, u.members), 0);
-  const vung1TotalTasks = vung1Units.reduce((sum, u) => sum + countNonOfficeTasks(u.name, u.members), 0);
-  const vung2TotalTasks = vung2Units.reduce((sum, u) => sum + countNonOfficeTasks(u.name, u.members), 0);
 
   return (
     <div className="min-h-screen bg-[#eef3ef] p-2 font-sans">
@@ -1219,168 +1191,63 @@ const UnitBlock = ({
         {/* ===== 4-QUADRANT LAYOUT ===== */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           
-          {/* ===== QUADRANT 1: LÃNH ĐẠO (4 người) ===== */}
-          <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden h-full">
-            <SectionHeader 
-              title="1. Lãnh đạo Cục (4 người)"
-              icon={<UsersIcon className="w-4 h-4" />}
-              color="#2d6e3e"
-              expanded={expandedSections.leader}
-              onToggle={() => setExpandedSections(prev => ({ ...prev, leader: !prev.leader }))}
-              totalUnits={leaderUnits.length}
-              totalTasks={leaderTotalTasks}
-            />
-            
-            {expandedSections.leader && (
-              <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {leaderUnits.map((unit, idx) => (
-                    <UnitBlock
-                      key={unit.id}
-                      unit={unit}
-                      unitType="leader"
-                      index={idx}
-                      totalTasks={countNonOfficeTasks(unit.name, unit.members)}
-                      expanded={expandedSections.leader}
-                      onToggleExpand={() => setExpandedSections(prev => ({ ...prev, leader: !prev.leader }))}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          {/* QUADRANT 1: LÃNH ĐẠO */}
+          <Section
+            title="1. Lãnh đạo Cục (4 người)"
+            subtitle="4 lãnh đạo"
+            icon={<UsersIcon className="w-4 h-4" />}
+            headerColor="#2d6e3e"
+            units={leaderUnits}
+            sectionKey="leader"
+            statCardBgColor="#2d6e3e"
+          />
 
-          {/* ===== QUADRANT 2: VÙNG 1 (7 cơ sở) ===== */}
-          <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden h-full">
-            <SectionHeader 
-              title="2. Vùng 1 - Thống kê cơ sở (7 đơn vị)"
-              icon={<Building2 className="w-4 h-4" />}
-              color="#0d9488"
-              expanded={expandedSections.vung1}
-              onToggle={() => setExpandedSections(prev => ({ ...prev, vung1: !prev.vung1 }))}
-              totalUnits={vung1Units.length}
-              totalTasks={vung1TotalTasks}
-            />
-            
-            {expandedSections.vung1 && (
-              <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {vung1Units.map((unit, idx) => (
-                    <UnitBlock
-                      key={unit.id}
-                      unit={unit}
-                      unitType="baseUnit"
-                      index={idx}
-                      totalTasks={countNonOfficeTasks(unit.name, unit.members)}
-                      expanded={expandedSections.vung1}
-                      onToggleExpand={() => setExpandedSections(prev => ({ ...prev, vung1: !prev.vung1 }))}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          {/* QUADRANT 2: VÙNG 1 */}
+          <Section
+            title="2. Vùng 1 - Thống kê cơ sở (7 đơn vị)"
+            subtitle="7 cơ sở thống kê"
+            icon={<Building2 className="w-4 h-4" />}
+            headerColor="#0d9488"
+            units={vung1Units}
+            sectionKey="vung1"
+            statCardBgColor="#0d9488"
+          />
 
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           
-          {/* ===== QUADRANT 3: PHÒNG BAN (5 phòng) ===== */}
-          <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden h-full">
-            <SectionHeader 
-              title="3. Khối Phòng ban (5 phòng)"
-              icon={<Building className="w-4 h-4" />}
-              color="#3b82f6"
-              expanded={expandedSections.phong}
-              onToggle={() => setExpandedSections(prev => ({ ...prev, phong: !prev.phong }))}
-              totalUnits={phongUnits.length}
-              totalTasks={phongTotalTasks}
-            />
-            
-            {expandedSections.phong && (
-              <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {phongUnits.map((unit, idx) => (
-                    <UnitBlock
-                      key={unit.id}
-                      unit={unit}
-                      unitType="department"
-                      index={idx}
-                      totalTasks={countNonOfficeTasks(unit.name, unit.members)}
-                      expanded={expandedSections.phong}
-                      onToggleExpand={() => setExpandedSections(prev => ({ ...prev, phong: !prev.phong }))}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          {/* QUADRANT 3: PHÒNG BAN */}
+          <Section
+            title="3. Khối Phòng ban (5 phòng)"
+            subtitle="5 phòng ban"
+            icon={<Building className="w-4 h-4" />}
+            headerColor="#3b82f6"
+            units={phongUnits}
+            sectionKey="phong"
+            statCardBgColor="#3b82f6"
+          />
 
-          {/* ===== QUADRANT 4: VÙNG 2 (7 cơ sở) ===== */}
-          <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden h-full">
-            <SectionHeader 
-              title="4. Vùng 2 - Thống kê cơ sở (7 đơn vị)"
-              icon={<Building2 className="w-4 h-4" />}
-              color="#ec4899"
-              expanded={expandedSections.vung2}
-              onToggle={() => setExpandedSections(prev => ({ ...prev, vung2: !prev.vung2 }))}
-              totalUnits={vung2Units.length}
-              totalTasks={vung2TotalTasks}
-            />
-            
-            {expandedSections.vung2 && (
-              <div className="flex-1 overflow-y-auto p-3 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                  {vung2Units.map((unit, idx) => (
-                    <UnitBlock
-                      key={unit.id}
-                      unit={unit}
-                      unitType="baseUnit"
-                      index={idx}
-                      totalTasks={countNonOfficeTasks(unit.name, unit.members)}
-                      expanded={expandedSections.vung2}
-                      onToggleExpand={() => setExpandedSections(prev => ({ ...prev, vung2: !prev.vung2 }))}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          {/* QUADRANT 4: VÙNG 2 */}
+          <Section
+            title="4. Vùng 2 - Thống kê cơ sở (7 đơn vị)"
+            subtitle="7 cơ sở thống kê"
+            icon={<Building2 className="w-4 h-4" />}
+            headerColor="#ec4899"
+            units={vung2Units}
+            sectionKey="vung2"
+            statCardBgColor="#ec4899"
+          />
 
         </div>
 
         {/* ===== MATRIX VIEW AT BOTTOM ===== */}
-        <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden">
+        <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden" style={{ borderTop: '3px solid #2d6e3e' }}>
           <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide flex items-center justify-between px-4">
             <span className="flex items-center gap-2">
               <Table className="w-4 h-4" />
               Ma trận lịch công tác Lãnh đạo (4 người)
             </span>
-            <div className="flex items-center gap-2">
-              <select
-                value={filterTaskType}
-                onChange={(e) => setFilterTaskType(e.target.value)}
-                className="px-2 py-1 text-xs border border-white/30 bg-white/20 text-white rounded"
-              >
-                <option value="ALL">Tất cả loại</option>
-                <option value="Họp">Họp</option>
-                <option value="Công tác">Công tác</option>
-                <option value="Đào tạo">Đào tạo</option>
-                <option value="Khác">Khác</option>
-                <option value="Làm việc tại cơ quan">Làm việc tại cơ quan</option>
-              </select>
-              <input
-                type="text"
-                placeholder="Tìm kiếm..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="px-2 py-1 text-xs border border-white/30 bg-white/20 text-white rounded w-40 placeholder:text-white/70"
-              />
-              <button onClick={exportToExcel} className="flex items-center gap-1 px-2 py-1 text-xs font-bold bg-white/20 hover:bg-white/30 text-white rounded border border-white/30 transition-colors whitespace-nowrap">
-                <FileSpreadsheet className="w-3 h-3" />
-                Xuất Excel
-              </button>
-            </div>
           </div>
           <LeaderMatrixView />
         </div>
