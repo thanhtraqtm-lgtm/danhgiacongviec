@@ -1314,13 +1314,14 @@ export const WeeklyWorkSchedule: React.FC<{
           </div>
         </div>
 
-        {/* ===== MAIN LAYOUT: 2 COLUMNS ===== */}
-        {/* LEFT COLUMN: LÃNH ĐẠO (top) + PHÒNG BAN (bottom) - stacked */}
-        {/* RIGHT COLUMN: VÙNG 1 (top) + VÙNG 2 (bottom) - stacked */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+        {/* ===== MAIN LAYOUT: 3 COLUMNS ===== */}
+        {/* COL 1: LÃNH ĐẠO (top) + PHÒNG BAN (bottom) - stacked */}
+        {/* COL 2: VÙNG 1 - full height with grid + expandable detail */}
+        {/* COL 3: VÙNG 2 - full height with grid + expandable detail */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           
-          {/* LEFT COLUMN */}
-          <div className="space-y-3 min-w-0">
+          {/* COL 1: LEFT STACKED */}
+          <div className="space-y-3 min-w-0 lg:col-span-1">
             
             {/* LÃNH ĐẠO - COMPACT */}
             <LeftSection
@@ -1346,17 +1347,14 @@ export const WeeklyWorkSchedule: React.FC<{
 
           </div>
 
-          {/* RIGHT COLUMN */}
-          <div className="space-y-3 min-w-0">
-            
-            {/* VÙNG 1 - GRID + DETAIL */}
-            <BaseUnitGridWithDetail
-              title="3. Vùng 1 - Thống kê cơ sở (7 đơn vị)"
-              subtitle="7 cơ sở thống kê"
-              icon={<Building2 className="w-4 h-4" />}
-              headerColor="#0d9488"
-              units={vung1Units}
-              sectionKey="vung1"
+          {/* COL 2: VÙNG 1 - GRID + DETAIL */}
+          <BaseUnitGridWithDetail
+            title="3. Vùng 1 - Thống kê cơ sở (7 đơn vị)"
+            subtitle="7 cơ sở thống kê"
+            icon={<Building2 className="w-4 h-4" />}
+            headerColor="#0d9488"
+            units={vung1Units}
+            sectionKey="vung1"
             />
 
             {/* VÙNG 2 - GRID + DETAIL */}
@@ -1368,8 +1366,6 @@ export const WeeklyWorkSchedule: React.FC<{
               units={vung2Units}
               sectionKey="vung2"
             />
-
-          </div>
 
         </div>
 
