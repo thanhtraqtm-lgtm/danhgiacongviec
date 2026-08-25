@@ -1188,56 +1188,64 @@ export const WeeklyWorkSchedule: React.FC<{
           </div>
         </div>
 
-        {/* ===== 4-QUADRANT LAYOUT ===== */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* ===== NEW LAYOUT: LEFT NARROW (LEADERS + DEPTS) | RIGHT WIDE (VUNG1 + VUNG2) ===== */}
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-3">
           
-          {/* QUADRANT 1: LÃNH ĐẠO */}
-          <Section
-            title="1. Lãnh đạo Cục (4 người)"
-            subtitle="4 lãnh đạo"
-            icon={<UsersIcon className="w-4 h-4" />}
-            headerColor="#2d6e3e"
-            units={leaderUnits}
-            sectionKey="leader"
-            statCardBgColor="#2d6e3e"
-          />
+          {/* LEFT COLUMN: LÃNH ĐẠO + PHÒNG BAN (2/5 width) */}
+          <div className="xl:col-span-2 space-y-3 min-w-0">
+            
+            {/* LÃNH ĐẠO */}
+            <Section
+              title="1. Lãnh đạo Cục (4 người)"
+              subtitle="4 lãnh đạo"
+              icon={<UsersIcon className="w-4 h-4" />}
+              headerColor="#2d6e3e"
+              units={leaderUnits}
+              sectionKey="leader"
+              statCardBgColor="#2d6e3e"
+            />
 
-          {/* QUADRANT 2: VÙNG 1 */}
-          <Section
-            title="2. Vùng 1 - Thống kê cơ sở (7 đơn vị)"
-            subtitle="7 cơ sở thống kê"
-            icon={<Building2 className="w-4 h-4" />}
-            headerColor="#0d9488"
-            units={vung1Units}
-            sectionKey="vung1"
-            statCardBgColor="#0d9488"
-          />
+            {/* PHÒNG BAN */}
+            <Section
+              title="2. Khối Phòng ban (5 phòng)"
+              subtitle="5 phòng ban"
+              icon={<Building className="w-4 h-4" />}
+              headerColor="#3b82f6"
+              units={phongUnits}
+              sectionKey="phong"
+              statCardBgColor="#3b82f6"
+            />
 
-        </div>
+          </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          
-          {/* QUADRANT 3: PHÒNG BAN */}
-          <Section
-            title="3. Khối Phòng ban (5 phòng)"
-            subtitle="5 phòng ban"
-            icon={<Building className="w-4 h-4" />}
-            headerColor="#3b82f6"
-            units={phongUnits}
-            sectionKey="phong"
-            statCardBgColor="#3b82f6"
-          />
+          {/* RIGHT COLUMN: VÙNG 1 + VÙNG 2 side by side (3/5 width) */}
+          <div className="xl:col-span-3 space-y-3 min-w-0">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              
+              {/* VÙNG 1 */}
+              <Section
+                title="3. Vùng 1 - Thống kê cơ sở (7 đơn vị)"
+                subtitle="7 cơ sở thống kê"
+                icon={<Building2 className="w-4 h-4" />}
+                headerColor="#0d9488"
+                units={vung1Units}
+                sectionKey="vung1"
+                statCardBgColor="#0d9488"
+              />
 
-          {/* QUADRANT 4: VÙNG 2 */}
-          <Section
-            title="4. Vùng 2 - Thống kê cơ sở (7 đơn vị)"
-            subtitle="7 cơ sở thống kê"
-            icon={<Building2 className="w-4 h-4" />}
-            headerColor="#ec4899"
-            units={vung2Units}
-            sectionKey="vung2"
-            statCardBgColor="#ec4899"
-          />
+              {/* VÙNG 2 */}
+              <Section
+                title="4. Vùng 2 - Thống kê cơ sở (7 đơn vị)"
+                subtitle="7 cơ sở thống kê"
+                icon={<Building2 className="w-4 h-4" />}
+                headerColor="#ec4899"
+                units={vung2Units}
+                sectionKey="vung2"
+                statCardBgColor="#ec4899"
+              />
+
+            </div>
+          </div>
 
         </div>
 
