@@ -129,9 +129,6 @@ const PHONG_UNITS = [
   'Phòng Thống kê NN&XH',
 ];
 
-const STAT_CARD_COLORS = ['#2d6e3e', '#e11d48', '#0d9488', '#2563eb', '#8b5cf6'];
-const STAT_CARD_LABELS = ['Tổng việc', 'Chưa HT', 'Chưa HT trễ hạn', 'Hoàn thành', 'HT trễ hạn'];
-
 export const WeeklyWorkSchedule: React.FC<{
   schedules: WeeklySchedule[];
   users: UserType[];
@@ -171,7 +168,13 @@ export const WeeklyWorkSchedule: React.FC<{
     vung1: true,
     phong: true,
     vung2: true,
-    matrix: true
+    matrix: true,
+    ...Object.fromEntries([
+      ...DEFAULT_LEADERS.map(l => [`leader_${l.name}`, true]),
+      ...PHONG_UNITS.map(u => [`phong_${u}`, true]),
+      ...VUNG1_UNITS.map(u => [`vung1_${u}`, true]),
+      ...VUNG2_UNITS.map(u => [`vung2_${u}`, true]),
+    ])
   });
 
   const weekStartDate = useMemo(() => {
@@ -330,6 +333,14 @@ export const WeeklyWorkSchedule: React.FC<{
       if (filterTaskType !== 'ALL' && s.taskType !== filterTaskType) return false;
       const sessionMatch = s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng';
       if (sessionMatch !== session) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTask = s.taskName?.toLowerCase().includes(q);
+        const matchUser = s.userName?.toLowerCase().includes(q);
+        const matchNotes = s.notes?.toLowerCase().includes(q);
+        const matchLocation = s.location?.toLowerCase().includes(q);
+        if (!matchTask && !matchUser && !matchNotes && !matchLocation) return false;
+      }
       return true;
     });
     
@@ -723,11 +734,11 @@ export const WeeklyWorkSchedule: React.FC<{
   const StatCard = ({ label, value, color, onClick, key }: { label: string; value: number; color: string; onClick?: () => void; key?: React.Key }) => (
     <button
       onClick={onClick}
-      className="flex flex-col items-center justify-center p-3 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded-lg shadow-sm min-w-[120px]"
+      className="flex flex-col items-center justify-center p-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded-lg shadow-sm min-h-[50px]"
       style={{ backgroundColor: color }}
     >
-      <span className="text-[10px] font-medium truncate text-center text-white/90 leading-tight">{label}</span>
-      <span className="text-xl font-bold tracking-normal mt-1 leading-none text-white">{value}</span>
+      <span className="text-[9px] font-medium truncate text-center text-white/90 leading-tight max-w-full">{label}</span>
+      <span className="text-lg font-bold tracking-normal mt-0.5 leading-none text-white">{value}</span>
     </button>
   );
 
@@ -743,15 +754,20 @@ export const WeeklyWorkSchedule: React.FC<{
     unitMembers: UserType[];
     unitColor: string;
   }) => {
-    if (!expandedSections[unitName]) return null;
-
-    // Determine what to show in detail
     const nonOfficeSchedules = schedules.filter(s => s.taskType !== 'Làm việc tại cơ quan');
     const hasOnlyOfficeWork = schedules.length > 0 && nonOfficeSchedules.length === 0;
     const displaySchedules = hasOnlyOfficeWork ? schedules : nonOfficeSchedules;
 
+    if (displaySchedules.length === 0) {
+      return (
+        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 text-center">
+          <span className="text-xs italic text-slate-400">— Không có công việc nào trong tuần này —</span>
+        </div>
+      );
+    }
+
     return (
-      <div className="mt-2 overflow-x-auto">
+      <div className="overflow-x-auto">
         <table className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
           <thead>
             <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
@@ -764,52 +780,43 @@ export const WeeklyWorkSchedule: React.FC<{
             </tr>
           </thead>
           <tbody>
-            {displaySchedules.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-2 py-4 text-center text-slate-400 text-xs italic">
-                  — Không có công việc nào trong tuần này —
+            {displaySchedules.map((s, idx) => (
+              <tr key={s.id} className={`${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/50'} border-b border-slate-100 dark:border-slate-800 hover:bg-slate-100/50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer`}
+                  onClick={() => handleMatrixCellClick(unitName, unitMembers, s.dayOfWeek, s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng')}>
+                <td className="px-2 py-1.5 text-slate-500 font-mono">{idx + 1}</td>
+                <td className="px-2 py-1.5 font-medium text-slate-900 dark:text-slate-100">{s.userName}</td>
+                <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">{s.userPosition || '—'}</td>
+                <td className="px-2 py-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold`} style={{backgroundColor: TASK_TYPE_COLORS[s.taskType as keyof typeof TASK_TYPE_COLORS] + '20', color: TASK_TYPE_COLORS[s.taskType as keyof typeof TASK_TYPE_COLORS]}}>
+                      {s.taskType}
+                    </span>
+                    <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[200px]">{s.taskName}</span>
+                  </div>
                 </td>
+                <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{s.date} ({DAY_LABELS_SHORT[s.dayOfWeek]})</span>
+                    <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng'}</span>
+                  </div>
+                </td>
+                <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">{s.location || '—'}</td>
               </tr>
-            ) : (
-              displaySchedules.map((s, idx) => (
-                <tr key={s.id} className={`${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/50'} border-b border-slate-100 dark:border-slate-800 hover:bg-slate-100/50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer`}
-                    onClick={() => handleMatrixCellClick(unitName, unitMembers, s.dayOfWeek, s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng')}>
-                  <td className="px-2 py-1.5 text-slate-500 font-mono">{idx + 1}</td>
-                  <td className="px-2 py-1.5 font-medium text-slate-900 dark:text-slate-100">{s.userName}</td>
-                  <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">{s.userPosition || '—'}</td>
-                  <td className="px-2 py-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold`} style={{backgroundColor: TASK_TYPE_COLORS[s.taskType as keyof typeof TASK_TYPE_COLORS] + '20', color: TASK_TYPE_COLORS[s.taskType as keyof typeof TASK_TYPE_COLORS]}}>
-                        {s.taskType}
-                      </span>
-                      <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[200px]">{s.taskName}</span>
-                    </div>
-                  </td>
-                  <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{s.date} ({DAY_LABELS_SHORT[s.dayOfWeek]})</span>
-                      <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng'}</span>
-                    </div>
-                  </td>
-                  <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">{s.location || '—'}</td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
       </div>
     );
   };
 
-  // ===== SECTION COMPONENT =====
-  const Section = ({ 
+  // ===== LEFT SECTION: LEADERS & DEPTS (with stat cards + detail tables) =====
+  const LeftSection = ({ 
     title, 
     subtitle,
     icon, 
     headerColor,
     units,
-    sectionKey,
-    statCardBgColor
+    sectionKey
   }: { 
     title: string;
     subtitle: string;
@@ -817,48 +824,45 @@ export const WeeklyWorkSchedule: React.FC<{
     headerColor: string;
     units: Array<{id: string; name: string; position?: string; color: string; members: UserType[]; stats: any; allSchedules: WeeklySchedule[]}>;
     sectionKey: string;
-    statCardBgColor: string;
   }) => {
     const totalUnits = units.length;
     const totalTasks = units.reduce((sum, u) => sum + u.stats.total, 0);
 
     return (
-      <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden" style={{ borderTop: `3px solid ${headerColor}` }}>
-        {/* Section Header */}
-        <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide flex items-center justify-between px-4">
-          <span className="flex items-center gap-2">{icon} {title}</span>
-          <span className="text-[10px] opacity-90">{totalUnits} đơn vị | {totalTasks} việc</span>
+      <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden h-full" style={{ borderTop: `3px solid ${headerColor}` }}>
+        {/* Section Header - Fixed height for alignment */}
+        <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-2 uppercase tracking-wide flex items-center justify-between px-4 min-h-[40px]" style={{ flexShrink: 0 }}>
+          <span className="flex items-center gap-2 truncate">{icon} {title}</span>
+          <span className="text-[10px] opacity-90 whitespace-nowrap">{totalUnits} đơn vị | {totalTasks} việc</span>
         </div>
 
-        {/* Stat Cards Row - Like DashboardOverview KPI Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]">
-          {units.map((unit, idx) => (
-            <StatCard
-              key={unit.id}
-              label={`${unit.name}${unit.position ? ` (${unit.position})` : ''}`}
-              value={unit.stats.total}
-              color={unit.color}
-            />
-          ))}
+        {/* Stat Cards Grid */}
+        <div className="p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] min-h-[120px]" style={{ flexShrink: 0 }}>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            {units.map((unit) => (
+              <StatCard
+                key={unit.id}
+                label={unit.name + (unit.position ? ` (${unit.position})` : '')}
+                value={unit.stats.total}
+                color={unit.color}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Detail Tables */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
           {units.map((unit) => (
             <div key={unit.id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" style={{ borderLeft: `3px solid ${unit.color}` }}>
               <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: unit.color }} />
-                  <span className="font-semibold text-sm text-slate-800 dark:text-slate-200">{unit.name}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
+                  <span className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{unit.name}</span>
                   {unit.position && <span className="text-xs text-slate-500 px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-700">{unit.position}</span>}
                 </div>
-                <button 
-                  onClick={() => setExpandedSections(prev => ({ ...prev, [sectionKey]: !prev[sectionKey] }))}
-                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-400 rounded hover:bg-slate-200 dark:hover:bg-slate-700"
-                  title={expandedSections[sectionKey] ? 'Thu gọn tất cả' : 'Mở rộng tất cả'}
-                >
-                  <ChevronDown className={`w-4 h-4 transition-transform ${expandedSections[sectionKey] ? 'rotate-180' : ''}`} />
-                </button>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                  {unit.stats.total} việc
+                </span>
               </div>
               <DetailTable 
                 schedules={unit.allSchedules} 
@@ -866,6 +870,78 @@ export const WeeklyWorkSchedule: React.FC<{
                 unitMembers={unit.members}
                 unitColor={unit.color}
               />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // ===== RIGHT SECTION: BASE UNITS GRID (VUNG1 & VUNG2) =====
+  const BaseUnitGrid = ({ 
+    title, 
+    subtitle,
+    icon, 
+    headerColor,
+    units,
+    sectionKey
+  }: { 
+    title: string;
+    subtitle: string;
+    icon: React.ReactNode;
+    headerColor: string;
+    units: Array<{id: string; name: string; color: string; members: UserType[]; stats: any; allSchedules: WeeklySchedule[]}>;
+    sectionKey: string;
+  }) => {
+    const totalUnits = units.length;
+    const totalTasks = units.reduce((sum, u) => sum + u.stats.total, 0);
+
+    return (
+      <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden h-full" style={{ borderTop: `3px solid ${headerColor}` }}>
+        {/* Section Header - Fixed height for alignment */}
+        <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-2 uppercase tracking-wide flex items-center justify-between px-4 min-h-[40px]" style={{ flexShrink: 0 }}>
+          <span className="flex items-center gap-2 truncate">{icon} {title}</span>
+          <span className="text-[10px] opacity-90 whitespace-nowrap">{totalUnits} đơn vị | {totalTasks} việc</span>
+        </div>
+
+        {/* Stat Cards Grid - 7 units in 4+3 grid */}
+        <div className="p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] min-h-[120px]" style={{ flexShrink: 0 }}>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            {units.map((unit) => (
+              <button
+                key={unit.id}
+                onClick={() => setExpandedSections(prev => ({ ...prev, [unit.id]: !prev[unit.id] }))}
+                className="flex flex-col items-center justify-center p-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded-lg shadow-sm min-h-[50px]"
+                style={{ backgroundColor: unit.color }}
+              >
+                <span className="text-[9px] font-medium truncate text-center text-white/90 leading-tight max-w-full">{unit.name.replace('Thống kê cơ sở ', 'CS ')}</span>
+                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none text-white">{unit.stats.total}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Detail Tables - Expandable */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
+          {units.map((unit) => (
+            <div key={unit.id} className={`border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden transition-all duration-200`} style={{ borderLeft: `3px solid ${unit.color}` }}>
+              <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
+                  <span className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{unit.name}</span>
+                </div>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                  {unit.stats.total} việc
+                </span>
+              </div>
+              {expandedSections[unit.id] && (
+                <DetailTable 
+                  schedules={unit.allSchedules} 
+                  unitName={unit.id}
+                  unitMembers={unit.members}
+                  unitColor={unit.color}
+                />
+              )}
             </div>
           ))}
         </div>
@@ -1188,60 +1264,56 @@ export const WeeklyWorkSchedule: React.FC<{
           </div>
         </div>
 
-        {/* ===== NEW LAYOUT: LEFT NARROW (LEADERS + DEPTS) | RIGHT WIDE (VUNG1 + VUNG2) ===== */}
+        {/* ===== MAIN LAYOUT ===== */}
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-3">
           
           {/* LEFT COLUMN: LÃNH ĐẠO + PHÒNG BAN (2/5 width) */}
           <div className="xl:col-span-2 space-y-3 min-w-0">
             
             {/* LÃNH ĐẠO */}
-            <Section
+            <LeftSection
               title="1. Lãnh đạo Cục (4 người)"
               subtitle="4 lãnh đạo"
               icon={<UsersIcon className="w-4 h-4" />}
               headerColor="#2d6e3e"
               units={leaderUnits}
               sectionKey="leader"
-              statCardBgColor="#2d6e3e"
             />
 
             {/* PHÒNG BAN */}
-            <Section
+            <LeftSection
               title="2. Khối Phòng ban (5 phòng)"
               subtitle="5 phòng ban"
               icon={<Building className="w-4 h-4" />}
               headerColor="#3b82f6"
               units={phongUnits}
               sectionKey="phong"
-              statCardBgColor="#3b82f6"
             />
 
           </div>
 
           {/* RIGHT COLUMN: VÙNG 1 + VÙNG 2 side by side (3/5 width) */}
           <div className="xl:col-span-3 space-y-3 min-w-0">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 h-full">
               
               {/* VÙNG 1 */}
-              <Section
+              <BaseUnitGrid
                 title="3. Vùng 1 - Thống kê cơ sở (7 đơn vị)"
                 subtitle="7 cơ sở thống kê"
                 icon={<Building2 className="w-4 h-4" />}
                 headerColor="#0d9488"
                 units={vung1Units}
                 sectionKey="vung1"
-                statCardBgColor="#0d9488"
               />
 
               {/* VÙNG 2 */}
-              <Section
+              <BaseUnitGrid
                 title="4. Vùng 2 - Thống kê cơ sở (7 đơn vị)"
                 subtitle="7 cơ sở thống kê"
                 icon={<Building2 className="w-4 h-4" />}
                 headerColor="#ec4899"
                 units={vung2Units}
                 sectionKey="vung2"
-                statCardBgColor="#ec4899"
               />
 
             </div>
