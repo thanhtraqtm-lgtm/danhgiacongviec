@@ -1147,7 +1147,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
                             className={`px-2 py-2 border-r border-slate-200 dark:border-slate-800 min-h-[80px] ${sessionIdx === 1 ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''} ${isToday ? 'ring-2 ring-sky-400/50' : ''} ${count > 0 ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''} hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors relative cursor-pointer`}
                             onClick={() => handleMatrixCellClick(unit.name, unit.members, dayIndex, session)}
                           >
-                            {count > 0 && (
+{count > 0 && (
                               <div className="flex flex-wrap gap-1 mb-1">
                                 {hasMeeting && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200">Họp</span>}
                                 {hasBusiness && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200">Công tác</span>}
