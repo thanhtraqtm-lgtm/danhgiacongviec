@@ -204,6 +204,23 @@ export interface WeeklySchedule {
   createdBy: string;
 }
 
+export interface WeeklyScheduleItem {
+  id?: string;
+  weekStartDate: string; // YYYY-MM-DD of Monday
+  dayOfWeek: number;      // 1=Mon, 2=Tue, ..., 6=Sat, 0=Sun
+  session: 'MORNING' | 'AFTERNOON';
+  personName: string;
+  personRole?: string;
+  unitName?: string;
+  title: string;
+  location?: string;
+  participants?: string;
+  workType?: 'OFFICE' | 'OUTSIDE' | 'MEETING' | 'OFF';
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type ActiveTab = 
   | 'dashboard'
   | 'users_list'
