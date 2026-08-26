@@ -181,19 +181,9 @@ const SectionBlock = ({
     }).sort((a, b) => a.dayOfWeek - b.dayOfWeek);
   };
 
-  const renderDetailTable = (unit: any) => {
+const renderDetailTable = (unit: any) => {
     const unitSchedules = getScheduleForUnit(unit.fullName || unit.name, unit.members);
     
-    if (unitSchedules.length === 0) {
-      return (
-        <div className="bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 p-4 text-center">
-          <p className="text-slate-500 dark:text-slate-400 text-sm">
-            — Cả tuần làm việc tại cơ quan —
-          </p>
-        </div>
-      );
-    }
-
     // Group schedules by day of week
     const schedulesByDay: Record<number, any[]> = {};
     unitSchedules.forEach(s => {
@@ -201,12 +191,22 @@ const SectionBlock = ({
       schedulesByDay[s.dayOfWeek].push(s);
     });
 
+    const dayColors = [
+      'bg-emerald-50 dark:bg-emerald-950/20',
+      'bg-blue-50 dark:bg-blue-950/20',
+      'bg-amber-50 dark:bg-amber-950/20',
+      'bg-purple-50 dark:bg-purple-950/20',
+      'bg-rose-50 dark:bg-rose-950/20',
+      'bg-indigo-50 dark:bg-indigo-950/20',
+      'bg-orange-50 dark:bg-orange-950/20',
+    ];
+
     return (
       <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+              <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300 w-24">Thời gian</th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300">Họ tên / Chức vụ</th>
                 <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300">Nội dung công việc</th>
@@ -217,11 +217,11 @@ const SectionBlock = ({
             <tbody>
               {DAY_LABELS.map((dayLabel, dayIndex) => {
                 const daySchedules = schedulesByDay[dayIndex] || [];
-                const dayOfWeekNum = dayIndex === 6 ? 0 : dayIndex + 1;
+                const dayColor = dayColors[dayIndex % dayColors.length];
                 
                 if (daySchedules.length === 0) {
                   return (
-                    <tr key={dayIndex} className="border-b border-slate-100 dark:border-slate-800">
+                    <tr key={dayIndex} className={`border-b border-slate-100 dark:border-slate-800 ${dayColor}`}>
                       <td className="px-3 py-2 text-slate-500 font-medium">{dayLabel}</td>
                       <td colSpan={4} className="px-3 py-2 text-slate-400 text-center text-sm">
                         — Không có lịch —
@@ -231,7 +231,7 @@ const SectionBlock = ({
                 }
 
                 return daySchedules.map((s, idx) => (
-                  <tr key={`${dayIndex}-${idx}`} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                  <tr key={`${dayIndex}-${idx}`} className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${dayColors[dayIndex % dayColors.length]}`}>
                     <td className="px-3 py-2">
                       <div className="flex flex-col gap-1">
                         <span className="font-medium text-slate-800 dark:text-slate-200">{dayLabel}</span>
@@ -286,12 +286,11 @@ const SectionBlock = ({
 
       {/* Cards Row - Single Row */}
       <div className="p-3 bg-[#f5f9f6] border-b border-[#c6d8c8] flex items-center gap-2 overflow-x-auto">
-        {units.map((unit) => (
+        {units.map((unit, index) => (
           <button
             key={unit.id}
             onClick={() => handleToggleExpand(unit.id)}
-            className="flex flex-col items-center justify-center px-4 py-3 min-w-[140px] max-w-[180px] flex-shrink-0 rounded-lg shadow-sm cursor-pointer hover:opacity-90 transition-all"
-            style={{ backgroundColor: unit.color }}
+            className={`flex flex-col items-center justify-center px-4 py-3 min-w-[140px] max-w-[180px] flex-shrink-0 rounded-lg shadow-sm cursor-pointer hover:opacity-90 transition-all ${cardColors[index % cardColors.length]}`}
           >
             <span className="font-medium text-white/90 leading-tight text-center text-sm truncate">
               {unit.name + (unit.position ? ` (${unit.position})` : '')}
@@ -318,6 +317,7 @@ const SectionBlock = ({
       )}
 
       {/* Empty state when no card expanded */}
+      {/* Empty state when no card expanded */}
       {!expandedUnitId && (
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="bg-white border border-slate-200 dark:border-slate-700 rounded-lg p-8 text-center">
@@ -343,6 +343,17 @@ const SectionBlock = ({
     </div>
   );
 };
+
+// Alternating colors for cards
+const cardColors = [
+  'bg-emerald-600',
+  'bg-blue-600',
+  'bg-amber-600',
+  'bg-purple-600',
+  'bg-rose-600',
+  'bg-indigo-600',
+  'bg-orange-600',
+];
 
 // ===== MAIN COMPONENT =====
 export const WeeklyWorkSchedule: React.FC<{
