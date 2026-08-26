@@ -237,6 +237,29 @@ export const WeeklyWorkSchedule: React.FC<{
     };
   }, [getSchedulesForUnit]);
 
+  // Filter schedules for matrix cells (exclude "Làm việc tại cơ quan")
+  const getFilteredSchedulesForCell = useCallback((unitName: string, unitMembers: UserType[], dayIndex: number, session: string) => {
+    const targetDate = weekDates[dayIndex].toISOString().split('T')[0];
+    const memberNames = new Set(unitMembers.map(m => m.fullName));
+    return schedules.filter(s => {
+      if (s.date !== targetDate) return false;
+      if (!memberNames.has(s.userName)) return false;
+      if (filterTaskType !== 'ALL' && s.taskType !== filterTaskType) return false;
+      if (s.taskType === 'Làm việc tại cơ quan') return false; // Exclude office work
+      const sessionMatch = s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng';
+      if (sessionMatch !== session) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchTask = s.taskName?.toLowerCase().includes(q);
+        const matchUser = s.userName?.toLowerCase().includes(q);
+        const matchNotes = s.notes?.toLowerCase().includes(q);
+        const matchLocation = s.location?.toLowerCase().includes(q);
+        if (!matchTask && !matchUser && !matchNotes && !matchLocation) return false;
+      }
+      return true;
+    });
+  }, [schedules, weekDates, filterTaskType, searchQuery]);
+
   const handlePrevWeek = () => {
     setCurrentWeekStart(new Date(weekStartDate.getTime() - 7 * 24 * 60 * 60 * 1000));
     setDrillDown(null);
@@ -432,7 +455,7 @@ export const WeeklyWorkSchedule: React.FC<{
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Lịch Công Tác Lãnh Đạo');
     XLSX.writeFile(wb, `Mau_Lich_Ma_Tran_Lanh_Dao_${new Date().toISOString().split('T')[0]}.xlsx`);
-    addToast('success', 'Thành công', 'Đã tải file mẫu ma trận về máy');
+    addToast('success', 'Thành công', 'Đã tải file lịch về máy');
   }, [weekDates, addToast]);
 
   const exportToExcel = useCallback(() => {
@@ -607,12 +630,12 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
           });
           
           if (newSchedules.length === 0) {
-            addToast('warning', 'Cảnh báo', 'Không tìm thấy dữ liệu hợp lệ trong file ma trận');
+            addToast('warning', 'Cảnh báo', 'Không tìm thấy dữ liệu hợp lệ trong file');
             return;
           }
           
           newSchedules.forEach(s => onAddSchedule(s));
-          addToast('success', 'Nhập thành công (Ma trận)', `Đã nhập ${newSchedules.length} lịch công tác từ file ma trận`);
+          addToast('success', 'Nhập thành công', `Đã nhập ${newSchedules.length} lịch công tác từ file mẫu`);
           if (fileInputRef.current) fileInputRef.current.value = '';
           return;
         }
@@ -794,7 +817,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
     return (
       <div className="overflow-x-auto">
         <table className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-          <thead>
+          <thead className="sticky top-0 z-10">
             <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
               <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 w-8">STT</th>
               <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300">Họ và tên</th>
@@ -933,17 +956,17 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
           <span className="text-[10px] opacity-90 whitespace-nowrap">{totalUnits} đơn vị | {totalTasks} việc</span>
         </div>
 
-        {/* Stat Cards Grid - 7 units wrap naturally */}
-        <div className="p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] min-h-[120px]" style={{ flexShrink: 0 }}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1.5">
+        {/* Stat Cards Grid - 7 units - COMPACT */}
+        <div className="p-1.5 bg-[#f5f9f6] border-b border-[#c6d8c8] min-h-[80px]" style={{ flexShrink: 0 }}>
+          <div className="grid grid-cols-4 gap-1">
             {units.map((unit) => (
               <button
                 key={unit.id}
-                className="flex flex-col items-center justify-center p-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded-lg shadow-sm min-h-[50px]"
+                className="flex flex-col items-center justify-center p-1.5 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded shadow-sm min-h-[40px]"
                 style={{ backgroundColor: unit.color }}
               >
-                <span className="text-[9px] font-medium truncate text-center text-white/90 leading-tight max-w-full">{unit.name.replace('Thống kê cơ sở ', 'CS ')}</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none text-white">{unit.stats.total}</span>
+                <span className="text-[8px] font-medium truncate text-center text-white/90 leading-tight max-w-full">{unit.name.replace('Thống kê cơ sở ', 'CS ')}</span>
+                <span className="text-base font-bold tracking-normal mt-0 leading-none text-white">{unit.stats.total}</span>
               </button>
             ))}
           </div>
@@ -979,44 +1002,42 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
           <span className="text-[10px] opacity-90 whitespace-nowrap">{totalUnits} đơn vị | {totalTasks} việc</span>
         </div>
 
-        {/* Stat Cards Grid - 7 units wrap naturally */}
-        <div className="p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] min-h-[120px]" style={{ flexShrink: 0 }}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1.5">
+        {/* Stat Cards Grid - 7 units - COMPACT */}
+        <div className="p-1.5 bg-[#f5f9f6] border-b border-[#c6d8c8] min-h-[80px]" style={{ flexShrink: 0 }}>
+          <div className="grid grid-cols-4 gap-1">
             {units.map((unit) => (
               <button
                 key={unit.id}
                 onClick={() => setExpandedSections(prev => ({ ...prev, [unit.id]: !prev[unit.id] }))}
-                className="flex flex-col items-center justify-center p-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded-lg shadow-sm min-h-[50px]"
+                className="flex flex-col items-center justify-center p-1.5 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded shadow-sm min-h-[40px]"
                 style={{ backgroundColor: unit.color }}
               >
-                <span className="text-[9px] font-medium truncate text-center text-white/90 leading-tight max-w-full">{unit.name.replace('Thống kê cơ sở ', 'CS ')}</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none text-white">{unit.stats.total}</span>
+                <span className="text-[8px] font-medium truncate text-center text-white/90 leading-tight max-w-full">{unit.name.replace('Thống kê cơ sở ', 'CS ')}</span>
+                <span className="text-base font-bold tracking-normal mt-0 leading-none text-white">{unit.stats.total}</span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* Detail Tables - Expandable */}
-        <div className="p-3 space-y-2">
+        {/* Detail Tables - Expanded by default, full height */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-1.5" style={{ minHeight: 0 }}>
           {units.map((unit) => (
             <div key={unit.id} className={`border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden transition-all duration-200`} style={{ borderLeft: `3px solid ${unit.color}` }}>
-              <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
-                  <span className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{unit.name}</span>
+              <div className="p-1.5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
+                  <span className="font-medium text-xs text-slate-800 dark:text-slate-200 truncate">{unit.name}</span>
                 </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
                   {unit.stats.total} việc
                 </span>
               </div>
-              {expandedSections[unit.id] && (
-                <DetailTable 
-                  schedules={unit.allSchedules} 
-                  unitName={unit.id}
-                  unitMembers={unit.members}
-                  unitColor={unit.color}
-                />
-              )}
+              <DetailTable 
+                schedules={unit.allSchedules} 
+                unitName={unit.id}
+                unitMembers={unit.members}
+                unitColor={unit.color}
+              />
             </div>
           ))}
         </div>
@@ -1031,7 +1052,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
           <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <Table className="w-5 h-5 text-[#2d6e3e]" />
-            <span>Ma trận Lịch Lãnh đạo: {leaderUnits.length} người × 7 ngày × 2 buổi</span>
+            <span>Lịch Lãnh đạo: {leaderUnits.length} người × 7 ngày × 2 buổi</span>
           </h3>
           <div className="flex items-center gap-2">
             <select
@@ -1095,29 +1116,11 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
                         </div>
                       </td>
                       {leaderUnits.map((unit) => {
-                        const targetDate = weekDates[dayIndex].toISOString().split('T')[0];
-                        const memberNames = new Set(unit.members.map(m => m.fullName));
-                        const daySchedules = schedules.filter(s => {
-                          if (s.date !== targetDate) return false;
-                          if (!memberNames.has(s.userName)) return false;
-                          if (filterTaskType !== 'ALL' && s.taskType !== filterTaskType) return false;
-                          const sessionMatch = s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng';
-                          if (sessionMatch !== session) return false;
-                          if (searchQuery.trim()) {
-                            const q = searchQuery.toLowerCase();
-                            const matchTask = s.taskName?.toLowerCase().includes(q);
-                            const matchUser = s.userName?.toLowerCase().includes(q);
-                            const matchNotes = s.notes?.toLowerCase().includes(q);
-                            const matchLocation = s.location?.toLowerCase().includes(q);
-                            if (!matchTask && !matchUser && !matchNotes && !matchLocation) return false;
-                          }
-                          return true;
-                        });
+                        const daySchedules = getFilteredSchedulesForCell(unit.name, unit.members, dayIndex, session);
                         const count = daySchedules.length;
                         const hasMeeting = daySchedules.some(s => s.taskType === 'Họp');
                         const hasBusiness = daySchedules.some(s => s.taskType === 'Công tác');
                         const hasTraining = daySchedules.some(s => s.taskType === 'Đào tạo');
-                        const hasOffice = daySchedules.some(s => s.taskType === 'Làm việc tại cơ quan');
                         const isToday = date.toDateString() === new Date().toDateString();
                         
                         return (
@@ -1131,7 +1134,6 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
                                 {hasMeeting && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200">Họp</span>}
                                 {hasBusiness && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200">Công tác</span>}
                                 {hasTraining && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200">Đào tạo</span>}
-                                {hasOffice && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200">Cơ quan</span>}
                               </div>
                             )}
                             <div className="text-[11px] text-slate-700 dark:text-slate-300 line-clamp-3 pr-2">
@@ -1144,7 +1146,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
                                     'Hủy': 'bg-rose-500',
                                   }[s.status] || 'bg-slate-400'}`} />
                                   <span className="truncate flex-1">{s.taskName}</span>
-                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute right-0 top-0 flex gap-0.5">
+                                  <div className="flex gap-0.5">
                                     <button 
                                       onClick={(e) => { e.stopPropagation(); handleEditClick(s); }}
                                       className="p-1 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/20" 
@@ -1337,7 +1339,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
                 {VUNG2_UNITS.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
               
-              <button onClick={downloadMatrixTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors whitespace-nowrap" title="Tải mẫu ma trận (theo file dulieu_test)">
+              <button onClick={downloadMatrixTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors whitespace-nowrap" title="Tải mẫu lịch (theo file dulieu_test)">
                 <DownloadIcon className="w-3.5 h-3.5" />
                 <span>Mẫu lịch tuần</span>
               </button>
@@ -1421,7 +1423,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
           <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide flex items-center justify-between px-4">
             <span className="flex items-center gap-2">
               <Table className="w-4 h-4" />
-              Ma trận lịch công tác Lãnh đạo (4 người)
+                Lịch công tác Lãnh đạo
             </span>
           </div>
           <LeaderMatrixView />
