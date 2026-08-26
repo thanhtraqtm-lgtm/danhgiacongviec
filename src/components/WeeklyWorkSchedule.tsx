@@ -737,7 +737,7 @@ export const WeeklyWorkSchedule: React.FC<{
       className="flex flex-col items-center justify-center p-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded-lg shadow-sm min-h-[50px]"
       style={{ backgroundColor: color }}
     >
-      <span className="text-[9px] font-medium truncate text-center text-white/90 leading-tight max-w-full">{label}</span>
+      <span className="text-[11px] font-medium truncate text-center text-white/90 leading-tight max-w-full">{label}</span>
       <span className="text-lg font-bold tracking-normal mt-0.5 leading-none text-white">{value}</span>
     </button>
   );
@@ -796,8 +796,8 @@ export const WeeklyWorkSchedule: React.FC<{
                 </td>
                 <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">
                   <div className="flex flex-col gap-0.5">
-                    <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{s.date} ({DAY_LABELS_SHORT[s.dayOfWeek]})</span>
-                    <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" />{s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng'}</span>
+                    <span className="flex items-center gap-1 text-xs"><Clock className="w-2.5 h-2.5" />{s.date} ({DAY_LABELS_SHORT[s.dayOfWeek]})</span>
+                    <span className="flex items-center gap-1 text-xs font-medium"><Clock className="w-2.5 h-2.5" />{s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng'}</span>
                   </div>
                 </td>
                 <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">{s.location || '—'}</td>
@@ -844,7 +844,7 @@ export const WeeklyWorkSchedule: React.FC<{
             {units.map((unit) => (
               <StatCard
                 key={unit.id}
-                label={compact ? unit.name.replace('Cục trưởng', 'CT').replace('Phó Cục trưởng', 'PCT').replace('Trưởng phòng', 'TP').replace('Phòng Thống kê ', 'P.TK ') : unit.name + (unit.position ? ` (${unit.position})` : '')}
+                label={compact ? unit.name : unit.name + (unit.position ? ` (${unit.position})` : '')}
                 value={unit.stats.total}
                 color={unit.color}
               />
@@ -1064,7 +1064,7 @@ export const WeeklyWorkSchedule: React.FC<{
                             </span>
                           )}
                           <span className="font-medium">{DAY_LABELS_SHORT[dayIndex]}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${session === 'Sáng' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'}`}>
+                          <span className={`text-[11px] px-1.5 py-0.5 rounded ${session === 'Sáng' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'}`}>
                             {session}
                           </span>
                         </div>
