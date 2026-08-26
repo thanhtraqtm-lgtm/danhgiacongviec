@@ -19,11 +19,15 @@ import {
   Briefcase,
   CalendarDays,
   ChevronDown,
+  Building,
+  User,
+  MoreHorizontal,
 } from 'lucide-react';
-import { Meeting } from '../types';
+import { Meeting, User as UserType } from '../types';
 
 interface MeetingCalendarProps {
   meetings: Meeting[];
+  users: UserType[];
   onUpdateMeeting: (meeting: Meeting) => void;
   onDeleteMeeting: (meetingId: string) => void;
   addToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, desc?: string) => void;
@@ -95,28 +99,35 @@ const BLOCKS_CONFIG = {
   block1: {
     id: 'block1',
     title: 'LỊCH HỌP TUẦN',
-    subtitle: '4 KHỐI CHÍNH',
+    subtitle: '4 HÌNH THỨC HỘP',
     icon: Users,
     color: '#2d6e3e',
-    count: 4,
+    cardsPerRow: 4,
   },
   block2: {
     id: 'block2',
-    title: 'LỊCH CÔNG TÁC CHI TIẾT',
-    subtitle: 'THEO DÕI NGÀY',
+    title: 'LỊCH CÔNG TÁC THEO NGÀY',
+    subtitle: '7 NGÀY TUẦN',
     icon: CalendarDays,
     color: '#3b82f6',
-    count: 7,
+    cardsPerRow: 4,
   },
   block3: {
     id: 'block3',
     title: 'PHÂN LOẠI HÌNH THỨC',
-    subtitle: '5 LOẠI HỘP',
+    subtitle: '5 BỘ LỌC',
     icon: Building2,
     color: '#ec4899',
-    count: 5,
+    cardsPerRow: 3,
   },
 };
+
+const DEFAULT_LEADERS = [
+  { name: 'Đào Trọng Truyền', position: 'Trưởng Thống kê', unitName: 'Ban Lãnh đạo', color: '#2d6e3e' },
+  { name: 'Đào Thị Hiếu', position: 'Phó Trưởng Thống kê', unitName: 'Ban Lãnh đạo', color: '#10b981' },
+  { name: 'Vũ Tuấn Hùng', position: 'Phó Trưởng Thống kê', unitName: 'Ban Lãnh đạo', color: '#3b82f6' },
+  { name: 'Phạm Văn Tự', position: 'Phó Trưởng Thống kê', unitName: 'Ban Lãnh đạo', color: '#f59e0b' },
+];
 
 interface StatCardProps {
   title: string;
@@ -126,45 +137,51 @@ interface StatCardProps {
   color: string;
   icon: React.ReactNode;
   onClick: () => void;
-  children?: React.ReactNode;
+  cardsPerRow: number;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, label, index, color, icon, onClick, children }) => {
+const StatCard: React.FC<StatCardProps> = ({ title, value, label, index, color, icon, onClick, cardsPerRow }) => {
   const gradient = CARD_GRADIENTS[index % CARD_GRADIENTS.length];
   const bgLight = CARD_BG_LIGHT[index % CARD_BG_LIGHT.length];
   const borderLight = CARD_BORDER_LIGHT[index % CARD_BORDER_LIGHT.length];
   const textColor = CARD_TEXT_COLOR[index % CARD_TEXT_COLOR.length];
 
+  const cardWidth = `calc(${100 / cardsPerRow}% - ${(cardsPerRow - 1) * 8 / cardsPerRow}px)`;
+
   return (
     <button
       onClick={onClick}
-      className={`relative group w-full min-h-[120px] flex flex-col ${bgLight} ${borderLight} border rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden`}
-      style={{ borderTop: `3px solid ${color}` }}
+      className={`relative group flex flex-col ${bgLight} ${borderLight} border rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden min-h-[120px]`}
+      style={{ 
+        borderTop: `3px solid ${color}`,
+        flex: `1 1 ${cardWidth}`,
+        minWidth: cardWidth,
+        maxWidth: cardWidth,
+      }}
     >
       <div className={`absolute inset-0 ${gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
       <div className="relative p-4 flex flex-col h-full">
         <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2.5">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-lg`} style={{ background: `linear-gradient(135deg, ${color}, ${color}dd)` }}>
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-lg flex-shrink-0`} style={{ background: `linear-gradient(135deg, ${color}, ${color}dd)` }}>
               {icon}
             </div>
-            <div className="min-w-0">
-              <h4 className={`font-bold text-sm truncate ${textColor}`}>{title}</h4>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{label}</p>
+            <div className="min-w-0 flex-1">
+              <h4 className={`font-bold text-sm ${textColor} truncate`} style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{title}</h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{label}</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${textColor}`} style={{ backgroundColor: color + '20' }}>
+          <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${textColor} whitespace-nowrap`} style={{ backgroundColor: color + '20' }}>
               {value}
             </span>
-            <ChevronRight className={`w-4 h-4 ${textColor}`} />
+            <ChevronRight className={`w-4 h-4 ${textColor} flex-shrink-0`} />
           </div>
         </div>
-        <div className="flex-1 flex flex-col justify-end">
-          {children}
+        <div className="flex-1 flex flex-col justify-end min-h-0">
           <div className="pt-3 border-t border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between text-xs">
-            <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <CalendarDays className="w-3 h-3" />
+            <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1 truncate">
+              <CalendarDays className="w-3 h-3 flex-shrink-0" />
               Chi tiết
             </span>
           </div>
@@ -176,11 +193,11 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, label, index, color, 
 
 interface BlockSectionProps {
   config: typeof BLOCKS_CONFIG.block1;
-  cards: Array<{ title: string; value: number; label: string; icon: React.ReactNode; onClick: () => void }>;
-  onAddClick?: () => void;
+  cards: Array<{ title: string; value: number; label: string; icon: React.ReactNode; onClick: () => void; department?: string }>;
+  onCardClick?: (department: string) => void;
 }
 
-const BlockSection: React.FC<BlockSectionProps> = ({ config, cards, onAddClick }) => {
+const BlockSection: React.FC<BlockSectionProps> = ({ config, cards, onCardClick }) => {
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden" style={{ borderTop: `3px solid ${config.color}` }}>
       <div className={`px-4 py-3 flex items-center justify-between bg-gradient-to-r from-${config.color.replace('#', '')} to-${config.color.replace('#', '')}dd text-white`}>
@@ -193,16 +210,18 @@ const BlockSection: React.FC<BlockSectionProps> = ({ config, cards, onAddClick }
             <p className="text-[10px] opacity-90">{config.subtitle}</p>
           </div>
         </div>
-        {onAddClick && (
-          <button onClick={onAddClick} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors" title="Thêm">
-            <Plus className="w-4 h-4" />
-          </button>
-        )}
       </div>
-      <div className="p-3 space-y-2">
-        <div className="grid gap-2" style={{ 
-          gridTemplateColumns: cards.length <= 2 ? 'repeat(2, 1fr)' : 'repeat(2, 1fr)' 
-        }}>
+      <div className="p-3">
+        <div 
+          className="flex flex-wrap width-full"
+          style={{ 
+            display: 'flex', 
+            flexWrap: 'wrap', 
+            width: '100%', 
+            gap: '8px',
+            alignItems: 'stretch',
+          }}
+        >
           {cards.map((card, index) => (
             <StatCard
               key={card.title}
@@ -212,7 +231,8 @@ const BlockSection: React.FC<BlockSectionProps> = ({ config, cards, onAddClick }
               index={index}
               color={config.color}
               icon={card.icon}
-              onClick={card.onClick}
+              onClick={() => { card.onClick(); if (card.department && onCardClick) onCardClick(card.department); }}
+              cardsPerRow={config.cardsPerRow}
             />
           ))}
         </div>
@@ -221,8 +241,296 @@ const BlockSection: React.FC<BlockSectionProps> = ({ config, cards, onAddClick }
   );
 };
 
+interface WeeklyScheduleMatrixProps {
+  users: UserType[];
+  meetings: Meeting[];
+  selectedDepartment: string | null;
+  onUpdateMeeting: (meeting: Meeting) => void;
+  onDeleteMeeting: (meetingId: string) => void;
+  addToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, desc?: string) => void;
+}
+
+const WeeklyScheduleMatrix: React.FC<WeeklyScheduleMatrixProps> = ({ 
+  users, 
+  meetings, 
+  selectedDepartment, 
+  onUpdateMeeting, 
+  onDeleteMeeting, 
+  addToast 
+}) => {
+  const [editingMeeting, setEditingMeeting] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<Meeting>>({});
+
+  const today = new Date();
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1));
+  weekStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+
+  const weekStartStr = weekStart.toISOString().split('T')[0];
+  const weekEndStr = weekEnd.toISOString().split('T')[0];
+
+  const dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+  const dayLabelsFull = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'];
+  const sessions = ['MORNING', 'AFTERNOON'];
+  const sessionLabels = { MORNING: 'Sáng', AFTERNOON: 'Chiều' };
+
+  const getUsersForDepartment = (dept: string) => {
+    if (dept === 'Ban Lãnh đạo') {
+      return DEFAULT_LEADERS.map(l => users.find(u => u.fullName === l.name)).filter(Boolean) as UserType[];
+    }
+    return users.filter(u => u.department === dept || u.workUnit === dept);
+  };
+
+  const allDepartments = useMemo(() => {
+    const depts = new Set<string>();
+    DEFAULT_LEADERS.forEach(l => depts.add(l.unitName));
+    users.forEach(u => { if (u.department) depts.add(u.department); if (u.workUnit) depts.add(u.workUnit); });
+    return Array.from(depts).sort();
+  }, [users]);
+
+  const getMeetingsForUser = (userName: string) => {
+    return meetings.filter(m => {
+      if (!m.startDate) return false;
+      const d = new Date(m.startDate);
+      return d >= weekStart && d <= weekEnd && (m.organizer === userName || m.title.includes(userName));
+    }).sort((a, b) => new Date(a.startDate!).getTime() - new Date(b.startDate!).getTime());
+  };
+
+  const getMeetingsForDepartment = (dept: string) => {
+    const deptUsers = getUsersForDepartment(dept);
+    const userNames = deptUsers.map(u => u.fullName);
+    return meetings.filter(m => {
+      if (!m.startDate) return false;
+      const d = new Date(m.startDate);
+      return d >= weekStart && d <= weekEnd && userNames.some(name => m.organizer === name || m.title.includes(name));
+    }).sort((a, b) => new Date(a.startDate!).getTime() - new Date(b.startDate!).getTime());
+  };
+
+  const handleEditClick = (meeting: Meeting) => { setEditingMeeting(meeting.id); setEditForm(meeting); };
+  const handleSaveEdit = (meetingId: string) => {
+    if (!editForm.title?.trim() || !editForm.startDate || !editForm.endDate) { addToast('error', 'Lỗi', 'Vui lòng nhập đầy đủ thông tin bắt buộc'); return; }
+    if (new Date(editForm.startDate) >= new Date(editForm.endDate)) { addToast('error', 'Lỗi', 'Thời gian kết thúc phải sau thời gian bắt đầu'); return; }
+    onUpdateMeeting({ ...(meetings.find(m => m.id === meetingId) as Meeting), ...editForm });
+    setEditingMeeting(null);
+    addToast('success', 'Thành công', 'Đã cập nhật lịch');
+  };
+
+  if (!selectedDepartment) {
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-12">
+        <div className="text-center py-8">
+          <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
+            <CalendarDays className="w-10 h-10 text-slate-400" />
+          </div>
+          <p className="font-bold text-slate-800 dark:text-slate-200 text-lg mb-2">Chọn một khối thống kê bên trên</p>
+          <p className="text-slate-600 dark:text-slate-400 text-sm">Nhấn vào thẻ để xem ma trận lịch tuần chi tiết của phòng/đơn vị đó</p>
+        </div>
+      </div>
+    );
+  }
+
+  const deptUsers = getUsersForDepartment(selectedDepartment);
+  const deptMeetings = getMeetingsForDepartment(selectedDepartment);
+
+  const meetingsByDayAndSession = useMemo(() => {
+    const map: Record<number, Record<string, Meeting[]>> = {};
+    dayLabels.forEach((_, dayIdx) => {
+      map[dayIdx] = { MORNING: [], AFTERNOON: [] };
+    });
+    deptMeetings.forEach(m => {
+      if (!m.startDate) return;
+      const d = new Date(m.startDate);
+      const dayIdx = d.getDay() === 0 ? 6 : d.getDay() - 1;
+      const hour = d.getHours();
+      const session = hour < 12 ? 'MORNING' : 'AFTERNOON';
+      if (map[dayIdx] && map[dayIdx][session]) {
+        map[dayIdx][session].push(m);
+      }
+    });
+    return map;
+  }, [deptMeetings]);
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-[#2d6e3e] flex items-center justify-center">
+            <Building2 className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
+              Ma Trận Lịch Tuần: {selectedDepartment}
+            </h3>
+            <p className="text-xs text-slate-500">
+              {deptUsers.length} nhân sự • {deptMeetings.length} lịch • Tuần {weekStart.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} - {weekEnd.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-bold text-slate-700 dark:text-slate-300">
+            {deptMeetings.length} mục
+          </span>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto overflow-y-auto max-h-[600px] p-4">
+        <table className="w-full text-sm min-w-[1200px]">
+          <thead>
+            <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-10">
+              <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300 w-36 whitespace-nowrap border-r border-slate-200 dark:border-slate-700">
+                Nhân sự / Chức vụ
+              </th>
+              {dayLabels.map((day, dayIdx) => (
+                <th key={day} className="px-2 py-2 text-center font-semibold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700" style={{ minWidth: '180px' }}>
+                  <div className="font-medium">{day}</div>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400">
+                    {new Date(weekStart.getTime() + dayIdx * 86400000).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {deptUsers.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="px-4 py-12 text-center">
+                  <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">Không có nhân sự nào trong đơn vị này</p>
+                </td>
+              </tr>
+            ) : (
+              deptUsers.map((user, userIdx) => {
+                const userMeetings = getMeetingsForUser(user.fullName);
+                const userMeetingsByDay = useMemo(() => {
+                  const map: Record<number, Record<string, Meeting[]>> = {};
+                  dayLabels.forEach((_, dayIdx) => {
+                    map[dayIdx] = { MORNING: [], AFTERNOON: [] };
+                  });
+                  userMeetings.forEach(m => {
+                    if (!m.startDate) return;
+                    const d = new Date(m.startDate);
+                    const dayIdx = d.getDay() === 0 ? 6 : d.getDay() - 1;
+                    const hour = d.getHours();
+                    const session = hour < 12 ? 'MORNING' : 'AFTERNOON';
+                    if (map[dayIdx] && map[dayIdx][session]) {
+                      map[dayIdx][session].push(m);
+                    }
+                  });
+                  return map;
+                }, [userMeetings]);
+
+                return (
+                  <tr key={user.fullName} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-100 whitespace-nowrap border-r border-slate-200 dark:border-slate-700 sticky left-0 bg-white dark:bg-slate-900 z-10 w-36">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-semibold text-sm">{user.fullName}</span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">{user.position || user.role || '—'}</span>
+                      </div>
+                    </td>
+                    {dayLabels.map((_, dayIdx) => (
+                      <td key={dayIdx} className="px-1 py-1.5 border-r border-slate-200 dark:border-slate-700 align-top" style={{ minWidth: '180px', maxWidth: '180px' }}>
+                        <div className="space-y-1">
+                          {sessions.map(session => {
+                            const dayMeetings = userMeetingsByDay[dayIdx]?.[session] || [];
+                            if (dayMeetings.length === 0) {
+                              return (
+                                <div key={session} className="h-10 min-h-[40px] border border-dashed border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center">
+                                  <span className="text-[10px] text-slate-300 dark:text-slate-600">
+                                    {sessionLabels[session]}: —
+                                  </span>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={session} className="space-y-1">
+                                {dayMeetings.map((m, mIdx) => {
+                                  const startT = new Date(m.startDate!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                  const endT = m.endDate ? new Date(m.endDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                                  const cfg = MEETING_TYPE_CONFIG[m.meetingType as keyof typeof MEETING_TYPE_CONFIG] || MEETING_TYPE_CONFIG.offline;
+                                  return (
+                                    <div 
+                                      key={m.id} 
+                                      className={`${cfg.bg} ${cfg.text} ${cfg.border} text-[10px] rounded-lg p-2 border shadow-sm`}
+                                      style={{ fontSize: '10px' }}
+                                    >
+                                      <div className="flex items-center gap-1 mb-1">
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/50 dark:bg-slate-800/50">
+                                          {sessionLabels[session]}
+                                        </span>
+                                        <span className="font-bold">{startT}{endT && ` - ${endT}`}</span>
+                                      </div>
+                                      <p className="font-medium truncate max-w-full" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{m.title}</p>
+                                      {m.location && <p className="text-[9px] opacity-80 flex items-center gap-0.5 truncate"><MapPin className="w-2.5 h-2.5" />{m.location}</p>}
+                                      {editingMeeting === m.id ? (
+                                        <div className="space-y-1.5 mt-1 pt-1 border-t border-white/50 dark:border-slate-800/50">
+                                          <input 
+                                            type="text" 
+                                            value={editForm.title} 
+                                            onChange={e => setEditForm({...editForm, title: e.target.value})}
+                                            className="w-full px-2 py-1 border border-slate-300 dark:border-slate-600 rounded text-[10px] bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100"
+                                          />
+                                          <div className="grid grid-cols-2 gap-1">
+                                            <input 
+                                              type="datetime-local" 
+                                              value={editForm.startDate ? new Date(editForm.startDate).toISOString().slice(0,16) : ''} 
+                                              onChange={e => setEditForm({...editForm, startDate: new Date(e.target.value).toISOString()})}
+                                              className="w-full px-1.5 py-1 border border-slate-300 rounded text-[9px]"
+                                            />
+                                            <input 
+                                              type="datetime-local" 
+                                              value={editForm.endDate ? new Date(editForm.endDate).toISOString().slice(0,16) : ''} 
+                                              onChange={e => setEditForm({...editForm, endDate: new Date(e.target.value).toISOString()})}
+                                              className="w-full px-1.5 py-1 border border-slate-300 rounded text-[9px]"
+                                            />
+                                          </div>
+                                          <select 
+                                            value={editForm.meetingType}
+                                            onChange={e => setEditForm({...editForm, meetingType: e.target.value as any})}
+                                            className="w-full px-2 py-1 border border-slate-300 rounded text-[10px]"
+                                          >
+                                            <option value="offline">Trực tiếp</option>
+                                            <option value="google_meet">Google Meet</option>
+                                            <option value="polycom">Polycom</option>
+                                            <option value="hybrid">Hybrid</option>
+                                          </select>
+                                          <div className="flex gap-1 justify-end">
+                                            <button onClick={() => setEditingMeeting(null)} className="px-2 py-1 text-[10px] text-slate-600 bg-white border border-slate-300 rounded">Hủy</button>
+                                            <button onClick={() => handleSaveEdit(m.id)} className="px-2 py-1 text-[10px] text-white bg-[#2d6e3e] rounded flex items-center gap-1 font-bold">
+                                              <Save className="w-3 h-3" /> Lưu
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center justify-end gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <button onClick={() => handleEditClick(m)} className="p-1 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/20" title="Sửa"><Edit2 className="w-3.5 h-3.5" /></button>
+                                          <button onClick={() => { if (confirm('Xóa lịch này?')) { onDeleteMeeting(m.id); addToast('success', 'Đã xóa', 'Đã xóa thành công'); } }} className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20" title="Xóa"><Trash2 className="w-3.5 h-3.5" /></button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 export const MeetingCalendar: React.FC<MeetingCalendarProps> = ({
   meetings,
+  users,
   onUpdateMeeting,
   onDeleteMeeting,
   addToast
@@ -231,10 +539,8 @@ export const MeetingCalendar: React.FC<MeetingCalendarProps> = ({
   const [selectedDay, setSelectedDay] = useState<Date | null>(new Date());
   const [filterType, setFilterType] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [expandedBlock, setExpandedBlock] = useState<string | null>(null);
-  const [editingMeeting, setEditingMeeting] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<Meeting>>({});
   const [showAllMeetings, setShowAllMeetings] = useState(false);
+  const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -322,28 +628,19 @@ export const MeetingCalendar: React.FC<MeetingCalendarProps> = ({
     return [...workItems];
   }, [meetings]);
 
-  const handleEditClick = (meeting: Meeting) => { setEditingMeeting(meeting.id); setEditForm(meeting); };
-  const handleSaveEdit = (meetingId: string) => {
-    if (!editForm.title?.trim() || !editForm.startDate || !editForm.endDate) { addToast('error', 'Lỗi', 'Vui lòng nhập đầy đủ thông tin bắt buộc'); return; }
-    if (new Date(editForm.startDate) >= new Date(editForm.endDate)) { addToast('error', 'Lỗi', 'Thời gian kết thúc phải sau thời gian bắt đầu'); return; }
-    onUpdateMeeting({ ...(meetings.find(m => m.id === meetingId) as Meeting), ...editForm });
-    setEditingMeeting(null);
-    addToast('success', 'Thành công', 'Đã cập nhật lịch họp');
-  };
-
   const getBlock1Cards = () => [
-    { title: 'Họp Trực Tiếp', value: filteredMeetings.filter(m => m.meetingType === 'offline').length, label: 'cuộc họp', icon: <MapPin className="w-4.5 h-4.5" />, onClick: () => setFilterType('offline') },
-    { title: 'Google Meet', value: filteredMeetings.filter(m => m.meetingType === 'google_meet').length, label: 'cuộc họp', icon: <Video className="w-4.5 h-4.5" />, onClick: () => setFilterType('google_meet') },
-    { title: 'Polycom', value: filteredMeetings.filter(m => m.meetingType === 'polycom').length, label: 'cuộc họp', icon: <Video className="w-4.5 h-4.5" />, onClick: () => setFilterType('polycom') },
-    { title: 'Hybrid', value: filteredMeetings.filter(m => m.meetingType === 'hybrid').length, label: 'cuộc họp', icon: <Video className="w-4.5 h-4.5" />, onClick: () => setFilterType('hybrid') },
+    { title: 'Họp Trực Tiếp', value: filteredMeetings.filter(m => m.meetingType === 'offline').length, label: 'cuộc họp', icon: <MapPin className="w-4.5 h-4.5" />, onClick: () => setFilterType('offline'), department: undefined },
+    { title: 'Google Meet', value: filteredMeetings.filter(m => m.meetingType === 'google_meet').length, label: 'cuộc họp', icon: <Video className="w-4.5 h-4.5" />, onClick: () => setFilterType('google_meet'), department: undefined },
+    { title: 'Polycom', value: filteredMeetings.filter(m => m.meetingType === 'polycom').length, label: 'cuộc họp', icon: <Video className="w-4.5 h-4.5" />, onClick: () => setFilterType('polycom'), department: undefined },
+    { title: 'Hybrid', value: filteredMeetings.filter(m => m.meetingType === 'hybrid').length, label: 'cuộc họp', icon: <Video className="w-4.5 h-4.5" />, onClick: () => setFilterType('hybrid'), department: undefined },
   ];
 
   const getBlock3Cards = () => [
-    { title: 'Tất Cả', value: filteredMeetings.length, label: 'cuộc họp', icon: <CalendarDays className="w-4.5 h-4.5" />, onClick: () => setFilterType('ALL') },
-    { title: 'Trong Tuần Này', value: filteredMeetings.filter(m => m.startDate && new Date(m.startDate) >= new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + 1)) && new Date(m.startDate) <= new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + 7))).length, label: 'cuộc họp', icon: <CalendarDays className="w-4.5 h-4.5" />, onClick: () => {} },
-    { title: 'Tháng Nay', value: filteredMeetings.filter(m => m.startDate && new Date(m.startDate).getMonth() === month && new Date(m.startDate).getFullYear() === year).length, label: 'cuộc họp', icon: <CalendarIcon className="w-4.5 h-4.5" />, onClick: () => {} },
-    { title: 'Có Link Online', value: filteredMeetings.filter(m => m.googleMeetLink).length, label: 'cuộc họp', icon: <ExternalLink className="w-4.5 h-4.5" />, onClick: () => {} },
-    { title: 'Đã Xảy Ra', value: filteredMeetings.filter(m => m.startDate && new Date(m.startDate) < new Date()).length, label: 'cuộc họp', icon: <Clock className="w-4.5 h-4.5" />, onClick: () => {} },
+    { title: 'Tất Cả', value: filteredMeetings.length, label: 'cuộc họp', icon: <CalendarDays className="w-4.5 h-4.5" />, onClick: () => setFilterType('ALL'), department: undefined },
+    { title: 'Trong Tuần Này', value: filteredMeetings.filter(m => m.startDate && new Date(m.startDate) >= new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + 1)) && new Date(m.startDate) <= new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + 7))).length, label: 'cuộc họp', icon: <CalendarDays className="w-4.5 h-4.5" />, onClick: () => {}, department: undefined },
+    { title: 'Tháng Nay', value: filteredMeetings.filter(m => m.startDate && new Date(m.startDate).getMonth() === month && new Date(m.startDate).getFullYear() === year).length, label: 'cuộc họp', icon: <CalendarIcon className="w-4.5 h-4.5" />, onClick: () => {}, department: undefined },
+    { title: 'Có Link Online', value: filteredMeetings.filter(m => m.googleMeetLink).length, label: 'cuộc họp', icon: <ExternalLink className="w-4.5 h-4.5" />, onClick: () => {}, department: undefined },
+    { title: 'Đã Xảy Ra', value: filteredMeetings.filter(m => m.startDate && new Date(m.startDate) < new Date()).length, label: 'cuộc họp', icon: <Clock className="w-4.5 h-4.5" />, onClick: () => {}, department: undefined },
   ];
 
   const getBlock2Cards = () => {
@@ -355,7 +652,28 @@ export const MeetingCalendar: React.FC<MeetingCalendarProps> = ({
         value: dayMeetings.length,
         label: 'cuộc họp',
         icon: <CalendarDays className="w-4.5 h-4.5" />,
-        onClick: () => {}
+        onClick: () => {},
+        department: undefined,
+      };
+    });
+  };
+
+  const getDepartmentCards = () => {
+    const depts = ['Ban Lãnh đạo', 'Phòng Thống kê Tổng hợp', 'Phòng TCHC', 'Phòng Thống kê TMDV & Giá', 'Phòng Thống kê CNXD', 'Phòng Thống kê NN&XH'];
+    return depts.map((dept, idx) => {
+      const deptUsers = users.filter(u => u.department === dept || u.workUnit === dept);
+      const deptMeetings = meetings.filter(m => {
+        if (!m.startDate) return false;
+        const d = new Date(m.startDate);
+        return d.getMonth() === month && d.getFullYear() === year && deptUsers.some(u => m.organizer === u.fullName || m.title.includes(u.fullName));
+      });
+      return {
+        title: dept.replace('Phòng Thống kê ', 'P. ').replace('Thống kê cơ sở ', 'CS '),
+        value: deptMeetings.length,
+        label: `${deptUsers.length} người`,
+        icon: <Building className="w-4.5 h-4.5" />,
+        onClick: () => {},
+        department: dept,
       };
     });
   };
@@ -390,156 +708,73 @@ export const MeetingCalendar: React.FC<MeetingCalendarProps> = ({
         </div>
       </div>
 
-      {/* Main Grid: 2 Columns - Left narrower (1/3), Right wider (2/3) */}
-      <div className="flex flex-col lg:flex-row gap-5">
-        {/* LEFT COLUMN - 1/3 width - Two stacked blocks */}
-        <div className="lg:w-1/3 flex flex-col gap-4">
-          {/* Block 1: 4 cards */}
-          <BlockSection config={BLOCKS_CONFIG.block1} cards={getBlock1Cards()} />
+      {/* Main Grid: 2 Columns - Left 40%, Right 60% */}
+      <div className="flex flex-col lg:flex-row gap-5" style={{ display: 'flex', flexWrap: 'nowrap' }}>
+        {/* LEFT COLUMN - 40% width - Two stacked blocks */}
+        <div className="flex flex-col gap-4" style={{ flex: '0 0 40%', maxWidth: '40%', minWidth: '320px' }}>
+          {/* Block 1: 4 cards - 4 per row */}
+          <BlockSection config={BLOCKS_CONFIG.block1} cards={getBlock1Cards()} onCardClick={setSelectedDepartment} />
           
-          {/* Block 3: 5 cards */}
-          <BlockSection config={BLOCKS_CONFIG.block3} cards={getBlock3Cards()} />
+          {/* Block 3: 5 cards - 3 per row */}
+          <BlockSection config={BLOCKS_CONFIG.block3} cards={getBlock3Cards()} onCardClick={setSelectedDepartment} />
         </div>
 
-        {/* RIGHT COLUMN - 2/3 width - Block 2 */}
-        <div className="lg:w-2/3">
+        {/* RIGHT COLUMN - 60% width - Block 2 */}
+        <div className="flex-1 min-w-0" style={{ flex: '0 0 60%' }}>
           <BlockSection config={BLOCKS_CONFIG.block2} cards={getBlock2Cards()} />
         </div>
       </div>
 
-      {/* BOTTOM: Full-width Detail List */}
+      {/* BOTTOM: Department Cards Row - Click to show matrix */}
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#2d6e3e] flex items-center justify-center">
-              <CalendarDays className="w-5 h-5 text-white" />
+            <div className="w-9 h-9 rounded-xl bg-[#ec4899] flex items-center justify-center">
+              <Building className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
-                {showAllMeetings 
-                  ? `Tất Cả Lịch Hộip & Công Tác (${allMeetingsWithWork.length})` 
-                  : selectedDay 
-                    ? `Lịch Họp Ngày ${selectedDay.toLocaleDateString('vi-VN')} (${selectedDayMeetings.length})`
-                    : 'Chọn ngày trên lịch hoặc bấm "Xem tất cả"'
-                }
-              </h3>
-              <p className="text-xs text-slate-500">
-                {showAllMeetings ? 'Bao gồm cả "Làm việc tại cơ quan" và các loại công tác khác' : 'Nhấn vào ngày trên lịch tháng để xem chi tiết'}
-              </p>
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Ma Trận Lịch Tuần Theo Phòng/Ban</h3>
+              <p className="text-xs text-slate-500">Nhấn vào thẻ phòng/ban bên dưới để xem chi tiết lịch của toàn bộ nhân sự đơn vị đó</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full text-xs font-bold text-slate-700 dark:text-slate-300">
-              {showAllMeetings ? allMeetingsWithWork.length : selectedDayMeetings.length} mục
-            </span>
+        </div>
+        <div className="p-4">
+          <div 
+            className="flex flex-wrap width-full"
+            style={{ 
+              display: 'flex', 
+              flexWrap: 'wrap', 
+              width: '100%', 
+              gap: '8px',
+              alignItems: 'stretch',
+            }}
+          >
+            {getDepartmentCards().map((card, index) => (
+              <StatCard
+                key={card.title}
+                title={card.title}
+                value={card.value}
+                label={card.label}
+                index={index}
+                color={BLOCKS_CONFIG.block3.color}
+                icon={card.icon}
+                onClick={() => setSelectedDepartment(card.department!)}
+                cardsPerRow={4}
+              />
+            ))}
           </div>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-                <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300 w-10">STT</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300 w-32">Ngày</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300 w-24">Buổi</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Tiêu đề / Nội dung</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300 w-36">Loại</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300 w-40">Hình thức</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Địa điểm</th>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300 w-20">Người tạo</th>
-                <th className="px-4 py-3 text-center font-semibold text-slate-700 dark:text-slate-300 w-24">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(showAllMeetings ? allMeetingsWithWork : selectedDayMeetings).map((item, idx) => {
-                const isMeeting = 'meetingType' in item && item.meetingType;
-                const startT = item.startDate ? new Date(item.startDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                const endT = item.endDate ? new Date(item.endDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-                const dateStr = item.startDate ? new Date(item.startDate).toLocaleDateString('vi-VN') : '';
-                const dayOfWeek = item.startDate ? ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][new Date(item.startDate).getDay()] : '';
-                
-                let typeConfig, typeLabel, typeIcon;
-                if (isMeeting) {
-                  typeConfig = MEETING_TYPE_CONFIG[item.meetingType as keyof typeof MEETING_TYPE_CONFIG] || MEETING_TYPE_CONFIG.offline;
-                  typeLabel = typeConfig.label;
-                  typeIcon = <typeConfig.icon className="w-3.5 h-3.5" />;
-                } else {
-                  typeConfig = WORK_TYPE_CONFIG[item.workType as keyof typeof WORK_TYPE_CONFIG] || WORK_TYPE_CONFIG.OFFICE;
-                  typeLabel = typeConfig.label;
-                  typeIcon = <typeConfig.icon className="w-3.5 h-3.5" />;
-                }
-
-                const sessionLabel = item.session === 'MORNING' ? 'Sáng' : 'Chiều';
-                const sessionColor = item.session === 'MORNING' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300';
-
-                return (
-                  <tr key={item.id} className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-4 py-3 text-slate-500 font-medium">{idx + 1}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-medium text-slate-800 dark:text-slate-200">{dateStr}</span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">{dayOfWeek}</span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${sessionColor}`}>{sessionLabel}</span>
-                      {startT && <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-0.5">{startT} - {endT}</span>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-slate-800 dark:text-slate-100 truncate max-w-[300px]">{item.title}</p>
-                      {item.description && <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[300px] mt-0.5">{item.description}</p>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-medium" style={{backgroundColor: typeConfig.color + '20', color: typeConfig.color}}>
-                        {typeIcon}
-                        <span>{typeLabel}</span>
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {isMeeting ? (
-                        <span className={`px-2.5 py-1 rounded text-[10px] font-medium ${typeConfig.bg} ${typeConfig.text} ${typeConfig.border}`}>
-                          <typeConfig.icon className="w-3 h-3 inline-block mr-1" />
-                          {typeConfig.label}
-                        </span>
-                      ) : (
-                        <span className="text-slate-500 dark:text-slate-400 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                      <MapPin className="w-3.5 h-3.5 opacity-50" />
-                      <span className="truncate max-w-[150px]">{item.location || '—'}</span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400 text-xs">{item.personName || '—'}</td>
-                    <td className="px-4 py-3 text-center">
-                      {isMeeting && !showAllMeetings && (
-                        <div className="flex items-center justify-center gap-1">
-                          <button onClick={() => handleEditClick(item as Meeting)} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors" title="Sửa"><Edit2 className="w-4 h-4" /></button>
-                          <button onClick={() => { if (confirm('Bạn có chắc muốn xóa?')) { onDeleteMeeting(item.id); addToast('success', 'Đã xóa', 'Đã xóa thành công'); } }} className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-colors" title="Xóa"><Trash2 className="w-4 h-4" /></button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {(showAllMeetings ? allMeetingsWithWork : selectedDayMeetings).length === 0 && (
-                <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center">
-                    <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3">
-                      <CalendarIcon className="w-8 h-8 text-slate-400" />
-                    </div>
-                    <p className="font-medium text-slate-700 dark:text-slate-300 mb-1">
-                      {showAllMeetings ? 'Chưa có lịch họp/công tác nào' : selectedDay ? 'Không có lịch họp trong ngày này' : 'Chưa chọn ngày'}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {showAllMeetings ? 'Nhấn "Thêm" để tạo mới' : 'Nhấn vào ngày trên lịch tháng hoặc bấm "Xem tất cả"'}
-                    </p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
       </div>
+
+      {/* BOTTOM: Full-width Matrix Detail List */}
+      <WeeklyScheduleMatrix
+        users={users}
+        meetings={meetings}
+        selectedDepartment={selectedDepartment}
+        onUpdateMeeting={onUpdateMeeting}
+        onDeleteMeeting={onDeleteMeeting}
+        addToast={addToast}
+      />
     </div>
   );
 };
