@@ -1314,16 +1314,16 @@ export const WeeklyWorkSchedule: React.FC<{
           </div>
         </div>
 
-        {/* ===== MAIN LAYOUT: 3 COLUMNS ===== */}
+{/* ===== MAIN LAYOUT: 3 COLUMNS ===== */}
         {/* COL 1: LÃNH ĐẠO (top) + PHÒNG BAN (bottom) - stacked */}
         {/* COL 2: VÙNG 1 - full height with grid + expandable detail */}
         {/* COL 3: VÙNG 2 - full height with grid + expandable detail */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 min-h-[700px]">
           
           {/* COL 1: LEFT STACKED */}
-          <div className="space-y-3 min-w-0 lg:col-span-1">
+          <div className="lg:col-span-1 flex flex-col space-y-3 min-w-0">
             
-            {/* LÃNH ĐẠO - COMPACT */}
+            {/* LÃNH ĐẠO - COMPACT (only stat cards) */}
             <LeftSection
               title="1. Lãnh đạo Cục (4 người)"
               subtitle="4 lãnh đạo"
@@ -1334,7 +1334,7 @@ export const WeeklyWorkSchedule: React.FC<{
               compact={true}
             />
 
-            {/* PHÒNG BAN - COMPACT */}
+            {/* PHÒNG BAN - FULL (stat cards + detail tables) */}
             <LeftSection
               title="2. Khối Phòng ban (5 phòng)"
               subtitle="5 phòng ban"
@@ -1342,7 +1342,7 @@ export const WeeklyWorkSchedule: React.FC<{
               headerColor="#3b82f6"
               units={phongUnits}
               sectionKey="phong"
-              compact={true}
+              compact={false}
             />
 
           </div>
@@ -1357,14 +1357,14 @@ export const WeeklyWorkSchedule: React.FC<{
             sectionKey="vung1"
             />
 
-            {/* VÙNG 2 - GRID + DETAIL */}
-            <BaseUnitGridWithDetail
-              title="4. Vùng 2 - Thống kê cơ sở (7 đơn vị)"
-              subtitle="7 cơ sở thống kê"
-              icon={<Building2 className="w-4 h-4" />}
-              headerColor="#ec4899"
-              units={vung2Units}
-              sectionKey="vung2"
+          {/* COL 3: VÙNG 2 - GRID + DETAIL */}
+          <BaseUnitGridWithDetail
+            title="4. Vùng 2 - Thống kê cơ sở (7 đơn vị)"
+            subtitle="7 cơ sở thống kê"
+            icon={<Building2 className="w-4 h-4" />}
+            headerColor="#ec4899"
+            units={vung2Units}
+            sectionKey="vung2"
             />
 
         </div>
