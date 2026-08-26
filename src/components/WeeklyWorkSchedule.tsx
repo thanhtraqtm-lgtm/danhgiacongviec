@@ -45,7 +45,11 @@ import {
   User,
   Users as UsersIcon,
   List,
-  ClipboardList
+  ClipboardList,
+  Menu,
+  X as XIcon,
+  Filter as FilterIcon,
+  BarChart3
 } from 'lucide-react';
 import { WeeklySchedule, User as UserType, DEPARTMENTS } from '../types';
 import * as XLSX from 'xlsx';
@@ -70,10 +74,10 @@ const TASK_TYPE_COLORS = {
   'Khác': '#8b5cf6',
 };
 
-const LEADER_COLORS = ['#2d6e3e', '#0d9488', '#2563eb', '#7c3aed'];
-const DEPT_COLORS = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
-const VUNG1_COLORS = ['#0d9488', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6'];
-const VUNG2_COLORS = ['#ec4899', '#f43f5e', '#ef4444', '#f97316', '#f59e0b', '#eab308', '#84cc16'];
+const LEADER_COLOR = '#2d6e3e';
+const PHONG_COLOR = '#3b82f6';
+const VUNG1_COLOR = '#0d9488';
+const VUNG2_COLOR = '#ec4899';
 
 type TimeFilter = 'week' | 'month' | 'quarter' | 'year';
 
@@ -92,7 +96,7 @@ interface MatrixCellData {
   content: string;
   taskType: string;
   location: string;
-  dateStr?: string; // Actual date from Excel file (dd/MM or dd/MM/yyyy)
+  dateStr?: string;
 }
 
 const DEFAULT_LEADERS = [
@@ -151,32 +155,15 @@ export const WeeklyWorkSchedule: React.FC<{
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
     return new Date(now.setDate(diff));
   });
-  const [selectedWorkUnit, setSelectedWorkUnit] = useState<string>('ALL');
   const [filterTaskType, setFilterTaskType] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('week');
-  
-  const [editingSchedule, setEditingSchedule] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<WeeklySchedule>>({});
+  const [selectedLeader, setSelectedLeader] = useState<string | null>(null);
+  const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState<Partial<WeeklySchedule>>({});
-  const [isImporting, setIsImporting] = useState(false);
-  const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    leader: true,
-    vung1: true,
-    phong: true,
-    vung2: true,
-    matrix: true,
-    ...Object.fromEntries([
-      ...DEFAULT_LEADERS.map(l => [`leader_${l.name}`, true]),
-      ...PHONG_UNITS.map(u => [`phong_${u}`, true]),
-      ...VUNG1_UNITS.map(u => [`vung1_${u}`, true]),
-      ...VUNG2_UNITS.map(u => [`vung2_${u}`, true]),
-    ])
-  });
 
   const weekStartDate = useMemo(() => {
     const d = new Date(currentWeekStart);
@@ -217,12 +204,7 @@ export const WeeklyWorkSchedule: React.FC<{
         if (!matchTask && !matchUser && !matchNotes && !matchLocation) return false;
       }
       return true;
-    }).sort((a, b) => {
-      const dayDiff = a.dayOfWeek - b.dayOfWeek;
-      if (dayDiff !== 0) return dayDiff;
-      const sessionOrder = { 'Sáng': 0, 'Chiều': 1 };
-      return (sessionOrder[a.notes?.includes('Chiều') ? 'Chiều' : 'Sáng'] || 0) - (sessionOrder[b.notes?.includes('Chiều') ? 'Chiều' : 'Sáng'] || 0);
-    });
+    }).sort((a, b) => a.dayOfWeek - b.dayOfWeek);
   }, [schedules, weekStartDate, weekEndDate, filterTaskType, searchQuery]);
 
   const getStatsForUnit = useCallback((unitName: string, unitMembers: UserType[]) => {
@@ -231,34 +213,9 @@ export const WeeklyWorkSchedule: React.FC<{
     return {
       total: nonOffice.length,
       unfinished: nonOffice.filter(s => s.status === 'Chưa bắt đầu').length,
-      late: nonOffice.filter(s => s.status === 'Chưa bắt đầu' && new Date(s.date) < new Date()).length,
       completed: nonOffice.filter(s => s.status === 'Đã hoàn thành').length,
-      completedLate: nonOffice.filter(s => s.status === 'Đã hoàn thành' && new Date(s.date) < new Date()).length,
     };
   }, [getSchedulesForUnit]);
-
-  // Filter schedules for matrix cells (exclude "Làm việc tại cơ quan")
-  const getFilteredSchedulesForCell = useCallback((unitName: string, unitMembers: UserType[], dayIndex: number, session: string) => {
-    const targetDate = weekDates[dayIndex].toISOString().split('T')[0];
-    const memberNames = new Set(unitMembers.map(m => m.fullName));
-    return schedules.filter(s => {
-      if (s.date !== targetDate) return false;
-      if (!memberNames.has(s.userName)) return false;
-      if (filterTaskType !== 'ALL' && s.taskType !== filterTaskType) return false;
-      if (s.taskType === 'Làm việc tại cơ quan') return false; // Exclude office work
-      const sessionMatch = s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng';
-      if (sessionMatch !== session) return false;
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchTask = s.taskName?.toLowerCase().includes(q);
-        const matchUser = s.userName?.toLowerCase().includes(q);
-        const matchNotes = s.notes?.toLowerCase().includes(q);
-        const matchLocation = s.location?.toLowerCase().includes(q);
-        if (!matchTask && !matchUser && !matchNotes && !matchLocation) return false;
-      }
-      return true;
-    });
-  }, [schedules, weekDates, filterTaskType, searchQuery]);
 
   const handlePrevWeek = () => {
     setCurrentWeekStart(new Date(weekStartDate.getTime() - 7 * 24 * 60 * 60 * 1000));
@@ -279,17 +236,19 @@ export const WeeklyWorkSchedule: React.FC<{
   };
 
   const handleEditClick = (schedule: WeeklySchedule) => {
-    setEditingSchedule(schedule.id);
-    setEditForm(schedule);
+    setSelectedUnit(schedule.userName);
+    setShowAddForm(true);
+    setAddForm(schedule);
   };
 
   const handleSaveEdit = (scheduleId: string) => {
-    if (!editForm.taskName?.trim() || !editForm.userName?.trim() || !editForm.date) {
+    if (!addForm.taskName?.trim() || !addForm.userName?.trim() || !addForm.date) {
       addToast('error', 'Lỗi', 'Vui lòng nhập đầy đủ thông tin bắt buộc');
       return;
     }
-    onUpdateSchedule({ ...(schedules.find(s => s.id === scheduleId) as WeeklySchedule), ...editForm });
-    setEditingSchedule(null);
+    onUpdateSchedule({ ...(schedules.find(s => s.id === scheduleId) as WeeklySchedule), ...addForm });
+    setShowAddForm(false);
+    setAddForm({});
     addToast('success', 'Thành công', 'Đã cập nhật lịch công tác');
   };
 
@@ -303,7 +262,7 @@ export const WeeklyWorkSchedule: React.FC<{
       weekStartDate: weekStartDate.toISOString(),
       weekEndDate: weekEndDate.toISOString(),
       department: addForm.department || '',
-      workUnit: addForm.workUnit || (selectedWorkUnit !== 'ALL' ? selectedWorkUnit : ''),
+      workUnit: addForm.workUnit || '',
       userName: addForm.userName || '',
       userPosition: addForm.userPosition || '',
       dayOfWeek: addForm.dayOfWeek ?? 0,
@@ -329,9 +288,6 @@ export const WeeklyWorkSchedule: React.FC<{
       taskType: 'Công tác',
       status: 'Chưa bắt đầu',
     };
-    if (selectedWorkUnit !== 'ALL') {
-      initialForm.workUnit = selectedWorkUnit;
-    }
     if (unitName) {
       const unitUsers = users.filter(u => {
         if (DEFAULT_LEADERS.some(l => l.name === unitName)) return u.fullName === unitName;
@@ -394,7 +350,7 @@ export const WeeklyWorkSchedule: React.FC<{
       [
         'Lãnh đạo Cục',
         'Đào Trọng Truyền',
-        'Cục trưởng',
+        'Trưởng Thống kê',
         weekDates[0]?.toISOString().split('T')[0] || '',
         '0',
         'Sáng',
@@ -455,7 +411,7 @@ export const WeeklyWorkSchedule: React.FC<{
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Lịch Công Tác Lãnh Đạo');
     XLSX.writeFile(wb, `Mau_Lich_Ma_Tran_Lanh_Dao_${new Date().toISOString().split('T')[0]}.xlsx`);
-    addToast('success', 'Thành công', 'Đã tải file lịch về máy');
+    addToast('success', 'Thành công', 'Đã tải file mẫu ma trận về máy');
   }, [weekDates, addToast]);
 
   const exportToExcel = useCallback(() => {
@@ -517,7 +473,7 @@ export const WeeklyWorkSchedule: React.FC<{
     addToast('success', 'Thành công', `Đã xuất ${data.length} bản ghi ra Excel`);
   }, [schedules, users, weekDates, weekStartDate, addToast]);
 
-const parseMatrixFormat = useCallback((jsonData: string[][]) => {
+  const parseMatrixFormat = useCallback((jsonData: string[][]) => {
     if (jsonData.length < 2) return null;
     const headers = jsonData[0] as string[];
     if (!headers[0]?.toLowerCase().includes('ngày') || !headers[1]?.toLowerCase().includes('buổi')) return null;
@@ -526,7 +482,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
     const rows = jsonData.slice(1);
     const result: MatrixCellData[] = [];
     let currentDayIndex = -1;
-    let currentDateStr = ''; // Store the actual date from Excel
+    let currentDateStr = '';
     
     rows.forEach((row) => {
       const dayCell = row[0]?.toString().trim();
@@ -537,7 +493,6 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
         if (dayMatch) {
           currentDayIndex = parseInt(dayMatch[1]) - 2;
         }
-        // Extract date from format "Thứ 2 (03/08)" or "Thứ 2 (03/08/2025)"
         const dateMatch = dayCell.match(/\((\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\)/);
         if (dateMatch) {
           currentDateStr = dateMatch[1];
@@ -555,7 +510,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
               content,
               taskType: content.includes('Họp') ? 'Họp' : content.includes('Đào tạo') ? 'Đào tạo' : 'Công tác',
               location: content.includes('📍') || content.includes('') ? content.split(/[📍]/).pop()?.trim() : '',
-              dateStr: currentDateStr // Pass the actual date from Excel
+              dateStr: currentDateStr
             });
           }
         });
@@ -589,7 +544,6 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
             if (!leader) return;
             const matchedUser = users.find(u => u.fullName === leader.name);
             
-            // Parse date from Excel (dateStr format: "dd/MM" or "dd/MM/yyyy")
             let date: string;
             if (cell.dateStr) {
               const parts = cell.dateStr.split('/');
@@ -630,12 +584,12 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
           });
           
           if (newSchedules.length === 0) {
-            addToast('warning', 'Cảnh báo', 'Không tìm thấy dữ liệu hợp lệ trong file');
+            addToast('warning', 'Cảnh báo', 'Không tìm thấy dữ liệu hợp lệ trong file ma trận');
             return;
           }
           
           newSchedules.forEach(s => onAddSchedule(s));
-          addToast('success', 'Nhập thành công', `Đã nhập ${newSchedules.length} lịch công tác từ file mẫu`);
+          addToast('success', 'Nhập thành công (Ma trận)', `Đã nhập ${newSchedules.length} lịch công tác từ file ma trận`);
           if (fileInputRef.current) fileInputRef.current.value = '';
           return;
         }
@@ -734,11 +688,11 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
 
   // ===== UNIT CONFIGS =====
   const leaderUnits = useMemo(() => 
-    DEFAULT_LEADERS.map((l, idx) => ({
+    DEFAULT_LEADERS.map((l) => ({
       id: `leader_${l.name}`,
       name: l.name,
       position: l.position,
-      color: LEADER_COLORS[0], // All leaders use same color as first leader (Đào Trọng Truyền)
+      color: LEADER_COLOR,
       members: users.filter(u => u.fullName === l.name),
       stats: getStatsForUnit(l.name, users.filter(u => u.fullName === l.name)),
       allSchedules: getSchedulesForUnit(l.name, users.filter(u => u.fullName === l.name))
@@ -746,10 +700,10 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
   , [users, getStatsForUnit, getSchedulesForUnit]);
 
   const phongUnits = useMemo(() => 
-    PHONG_UNITS.map((name, idx) => ({
+    PHONG_UNITS.map((name) => ({
       id: `phong_${name}`,
       name,
-      color: DEPT_COLORS[0], // All Phong use same color as first (Phòng Thống kê Tổng hợp)
+      color: PHONG_COLOR,
       members: users.filter(u => u.department === name),
       stats: getStatsForUnit(name, users.filter(u => u.department === name)),
       allSchedules: getSchedulesForUnit(name, users.filter(u => u.department === name))
@@ -757,10 +711,10 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
   , [users, getStatsForUnit, getSchedulesForUnit]);
 
   const vung1Units = useMemo(() => 
-    VUNG1_UNITS.map((name, idx) => ({
+    VUNG1_UNITS.map((name) => ({
       id: `vung1_${name}`,
       name,
-      color: VUNG1_COLORS[0], // All Vung1 use same color as first (CS Phố Hiến)
+      color: VUNG1_COLOR,
       members: users.filter(u => u.department === name || u.workUnit === name),
       stats: getStatsForUnit(name, users.filter(u => u.department === name || u.workUnit === name)),
       allSchedules: getSchedulesForUnit(name, users.filter(u => u.department === name || u.workUnit === name))
@@ -768,29 +722,70 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
   , [users, getStatsForUnit, getSchedulesForUnit]);
 
   const vung2Units = useMemo(() => 
-    VUNG2_UNITS.map((name, idx) => ({
+    VUNG2_UNITS.map((name) => ({
       id: `vung2_${name}`,
       name,
-      color: VUNG2_COLORS[0], // All Vung2 use same color as first (CS Quỳnh Phụ)
+      color: VUNG2_COLOR,
       members: users.filter(u => u.department === name || u.workUnit === name),
       stats: getStatsForUnit(name, users.filter(u => u.department === name || u.workUnit === name)),
       allSchedules: getSchedulesForUnit(name, users.filter(u => u.department === name || u.workUnit === name))
     }))
   , [users, getStatsForUnit, getSchedulesForUnit]);
 
-  // ===== STAT CARD COMPONENT (like DashboardOverview) =====
-  const StatCard = ({ label, value, color, onClick, key }: { label: string; value: number; color: string; onClick?: () => void; key?: React.Key }) => (
-    <button
-      onClick={onClick}
-      className="flex flex-col items-center justify-center p-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded-lg shadow-sm min-h-[50px]"
-      style={{ backgroundColor: color }}
-    >
+  // ===== SIDEBAR ITEM =====
+  const SidebarItem = ({ 
+    unit, 
+    isActive, 
+    onClick,
+    type = 'leader',
+    key
+  }: { 
+    unit: typeof leaderUnits[0]; 
+    isActive: boolean;
+    onClick: () => void;
+    type?: 'leader' | 'phong' | 'vung1' | 'vung2';
+    key?: React.Key;
+  }) => {
+    const iconMap = {
+      leader: UsersIcon,
+      phong: Building,
+      vung1: Building2,
+      vung2: Building2
+    };
+    const Icon = iconMap[type];
+
+    return (
+      <button
+        onClick={onClick}
+        className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all text-left ${
+          isActive 
+            ? `bg-${type === 'leader' ? 'green' : type === 'phong' ? 'blue' : type === 'vung1' ? 'teal' : 'pink'}-600 text-white shadow-lg`
+            : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
+        }`}
+        style={{ borderLeft: `4px solid ${unit.color}` }}
+      >
+        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : unit.color }}>
+          <Icon className="w-4 h-4" style={{ color: isActive ? 'white' : unit.color }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-sm truncate">{unit.name}</p>
+          {unit.position && <p className="text-[11px] truncate opacity-75">{unit.position}</p>}
+          <p className="text-[11px] font-bold mt-1">{unit.stats.total} việc</p>
+        </div>
+        {isActive && <ChevronRight className="w-4 h-4" />}
+      </button>
+    );
+  };
+
+  // ===== STAT CARD =====
+  const StatCard = ({ label, value, color }: { label: string; value: number; color: string }) => (
+    <div className="flex flex-col items-center justify-center p-3 rounded-lg shadow-sm min-h-[50px]" style={{ backgroundColor: color }}>
       <span className="text-[11px] font-medium truncate text-center text-white/90 leading-tight max-w-full">{label}</span>
       <span className="text-lg font-bold tracking-normal mt-0.5 leading-none text-white">{value}</span>
-    </button>
+    </div>
   );
 
-  // ===== DETAIL TABLE COMPONENT =====
+  // ===== DETAIL TABLE =====
   const DetailTable = ({ 
     schedules, 
     unitName, 
@@ -802,14 +797,15 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
     unitMembers: UserType[];
     unitColor: string;
   }) => {
+    // COMPLETELY HIDE "Làm việc tại cơ quan" - only show if week has ONLY that
     const nonOfficeSchedules = schedules.filter(s => s.taskType !== 'Làm việc tại cơ quan');
     const hasOnlyOfficeWork = schedules.length > 0 && nonOfficeSchedules.length === 0;
     const displaySchedules = hasOnlyOfficeWork ? schedules : nonOfficeSchedules;
 
     if (displaySchedules.length === 0) {
       return (
-        <div className="p-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 text-center">
-          <span className="text-xs italic text-slate-400">— Không có công việc nào trong tuần này —</span>
+        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 text-center">
+          <span className="text-xs italic text-slate-400">— Không có công việc khác ngoài làm việc tại cơ quan —</span>
         </div>
       );
     }
@@ -857,202 +853,14 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
     );
   };
 
-  // ===== LEFT SECTION: LEADERS & DEPTS (with stat cards + detail tables) =====
-  const LeftSection = ({ 
-    title, 
-    subtitle,
-    icon, 
-    headerColor,
-    units,
-    sectionKey,
-    compact = false
-  }: { 
-    title: string;
-    subtitle: string;
-    icon: React.ReactNode;
-    headerColor: string;
-    units: Array<{id: string; name: string; position?: string; color: string; members: UserType[]; stats: any; allSchedules: WeeklySchedule[]}>;
-    sectionKey: string;
-    compact?: boolean;
-  }) => {
-    const totalUnits = units.length;
-    const totalTasks = units.reduce((sum, u) => sum + u.stats.total, 0);
-
-    return (
-      <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden h-full" style={{ borderTop: `3px solid ${headerColor}` }}>
-        {/* Section Header - Fixed height for alignment */}
-        <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-2 uppercase tracking-wide flex items-center justify-between px-4 min-h-[40px]" style={{ flexShrink: 0 }}>
-          <span className="flex items-center gap-2 truncate">{icon} {title}</span>
-          <span className="text-[10px] opacity-90 whitespace-nowrap">{totalUnits} đơn vị | {totalTasks} việc</span>
-        </div>
-
-        {/* Stat Cards Grid - Compact: smaller cards */}
-        <div className={`p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] ${compact ? 'min-h-[80px]' : 'min-h-[120px]'}`} style={{ flexShrink: 0 }}>
-          <div className={`grid gap-1.5 ${units.length === 5 ? 'grid-cols-5' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
-            {units.map((unit) => (
-              <StatCard
-                key={unit.id}
-                label={compact ? unit.name : unit.name + (unit.position ? ` (${unit.position})` : '')}
-                value={unit.stats.total}
-                color={unit.color}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Detail Tables - Only show when not compact */}
-        {!compact && (
-          <div className="flex-1 overflow-y-auto p-3 space-y-2 min-h-0">
-            {units.map((unit) => (
-              <div key={unit.id} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" style={{ borderLeft: `3px solid ${unit.color}` }}>
-                <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
-                    <span className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{unit.name}</span>
-                    {unit.position && <span className="text-xs text-slate-500 px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-700">{unit.position}</span>}
-                  </div>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
-                    {unit.stats.total} việc
-                  </span>
-                </div>
-                <DetailTable 
-                  schedules={unit.allSchedules} 
-                  unitName={unit.id}
-                  unitMembers={unit.members}
-                  unitColor={unit.color}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // ===== RIGHT SECTION: BASE UNITS GRID (VUNG1 & VUNG2) - Stat Cards Only =====
-  const BaseUnitGrid = ({ 
-    title, 
-    subtitle,
-    icon, 
-    headerColor,
-    units,
-    sectionKey
-  }: { 
-    title: string;
-    subtitle: string;
-    icon: React.ReactNode;
-    headerColor: string;
-    units: Array<{id: string; name: string; color: string; members: UserType[]; stats: any; allSchedules: WeeklySchedule[]}>;
-    sectionKey: string;
-  }) => {
-    const totalUnits = units.length;
-    const totalTasks = units.reduce((sum, u) => sum + u.stats.total, 0);
-
-    return (
-      <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden h-full" style={{ borderTop: `3px solid ${headerColor}` }}>
-        {/* Section Header - Fixed height for alignment */}
-        <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-2 uppercase tracking-wide flex items-center justify-between px-4 min-h-[40px]" style={{ flexShrink: 0 }}>
-          <span className="flex items-center gap-2 truncate">{icon} {title}</span>
-          <span className="text-[10px] opacity-90 whitespace-nowrap">{totalUnits} đơn vị | {totalTasks} việc</span>
-        </div>
-
-        {/* Stat Cards Grid - 7 units - COMPACT */}
-        <div className="p-1.5 bg-[#f5f9f6] border-b border-[#c6d8c8] min-h-[80px]" style={{ flexShrink: 0 }}>
-          <div className="grid grid-cols-7 gap-1">
-            {units.map((unit) => (
-              <button
-                key={unit.id}
-                className="flex flex-col items-center justify-center p-1.5 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded shadow-sm min-h-[40px]"
-                style={{ backgroundColor: unit.color }}
-              >
-                <span className="text-[8px] font-medium truncate text-center text-white/90 leading-tight max-w-full">{unit.name.replace('Thống kê cơ sở ', 'CS ')}</span>
-                <span className="text-base font-bold tracking-normal mt-0 leading-none text-white">{unit.stats.total}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ===== BASE UNIT GRID WITH DETAIL (for right column) =====
-  const BaseUnitGridWithDetail = ({ 
-    title, 
-    subtitle,
-    icon, 
-    headerColor,
-    units,
-    sectionKey
-  }: { 
-    title: string;
-    subtitle: string;
-    icon: React.ReactNode;
-    headerColor: string;
-    units: Array<{id: string; name: string; color: string; members: UserType[]; stats: any; allSchedules: WeeklySchedule[]}>;
-    sectionKey: string;
-  }) => {
-    const totalUnits = units.length;
-    const totalTasks = units.reduce((sum, u) => sum + u.stats.total, 0);
-
-    return (
-      <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden h-full" style={{ borderTop: `3px solid ${headerColor}` }}>
-        {/* Section Header - Fixed height for alignment */}
-        <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-2 uppercase tracking-wide flex items-center justify-between px-4 min-h-[40px]" style={{ flexShrink: 0 }}>
-          <span className="flex items-center gap-2 truncate">{icon} {title}</span>
-          <span className="text-[10px] opacity-90 whitespace-nowrap">{totalUnits} đơn vị | {totalTasks} việc</span>
-        </div>
-
-        {/* Stat Cards Grid - 7 units - COMPACT */}
-        <div className="p-1.5 bg-[#f5f9f6] border-b border-[#c6d8c8] min-h-[80px]" style={{ flexShrink: 0 }}>
-          <div className="grid grid-cols-7 gap-1">
-            {units.map((unit) => (
-              <button
-                key={unit.id}
-                onClick={() => setExpandedSections(prev => ({ ...prev, [unit.id]: !prev[unit.id] }))}
-                className="flex flex-col items-center justify-center p-1.5 cursor-pointer hover:opacity-90 transition-all active:scale-95 rounded shadow-sm min-h-[40px]"
-                style={{ backgroundColor: unit.color }}
-              >
-                <span className="text-[8px] font-medium truncate text-center text-white/90 leading-tight max-w-full">{unit.name.replace('Thống kê cơ sở ', 'CS ')}</span>
-                <span className="text-base font-bold tracking-normal mt-0 leading-none text-white">{unit.stats.total}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Detail Tables - Expanded by default, full height */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1.5" style={{ minHeight: 0 }}>
-          {units.map((unit) => (
-            <div key={unit.id} className={`border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden transition-all duration-200`} style={{ borderLeft: `3px solid ${unit.color}` }}>
-              <div className="p-1.5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
-                  <span className="font-medium text-xs text-slate-800 dark:text-slate-200 truncate">{unit.name}</span>
-                </div>
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
-                  {unit.stats.total} việc
-                </span>
-              </div>
-              <DetailTable 
-                schedules={unit.allSchedules} 
-                unitName={unit.id}
-                unitMembers={unit.members}
-                unitColor={unit.color}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  // ===== LEADER MATRIX VIEW =====
+  // ===== LEADER MATRIX =====
   const LeaderMatrixView = () => {
     return (
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden flex-1">
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
           <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <Table className="w-5 h-5 text-[#2d6e3e]" />
-            <span>Lịch Lãnh đạo: {leaderUnits.length} người × 7 ngày × 2 buổi</span>
+            <span>Ma trận Lịch Lãnh đạo: {leaderUnits.length} người × 7 ngày × 2 buổi</span>
           </h3>
           <div className="flex items-center gap-2">
             <select
@@ -1081,7 +889,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
           </div>
         </div>
         
-        <div className="overflow-x-auto overflow-y-auto max-h-[500px] custom-scrollbar">
+        <div className="overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
           <table className="w-full min-w-max text-xs">
             <thead>
               <tr className="bg-[#006097] text-white sticky top-0 z-10">
@@ -1147,7 +955,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
                             className={`px-2 py-2 border-r border-slate-200 dark:border-slate-800 min-h-[80px] ${sessionIdx === 1 ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''} ${isToday ? 'ring-2 ring-sky-400/50' : ''} ${count > 0 ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''} hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors relative cursor-pointer`}
                             onClick={() => handleMatrixCellClick(unit.name, unit.members, dayIndex, session)}
                           >
-{count > 0 && (
+                            {count > 0 && (
                               <div className="flex flex-wrap gap-1 mb-1">
                                 {hasMeeting && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200">Họp</span>}
                                 {hasBusiness && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200">Công tác</span>}
@@ -1157,7 +965,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
                             )}
                             <div className="text-[11px] text-slate-700 dark:text-slate-300 line-clamp-3 pr-2">
                               {count > 0 ? daySchedules.map((s, i) => (
-                                <div key={i} className="mb-0.5 flex items-start gap-1 relative group">
+                                <div key={i} className="mb-0.5 flex items-start gap-1 relative">
                                   <span className={`w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0 ${{
                                     'Đã hoàn thành': 'bg-emerald-500',
                                     'Đang thực hiện': 'bg-sky-500',
@@ -1296,6 +1104,98 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
         </div>
       </div>
     );
+  };
+
+  if (showAddForm) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between sticky top-0 bg-white dark:bg-slate-900 rounded-t-2xl">
+            <h3 className="font-bold text-slate-800 dark:text-slate-100">Thêm lịch công tác mới</h3>
+            <button onClick={() => { setShowAddForm(false); setAddForm({}); }} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Nhân sự</label>
+              <input
+                type="text"
+                value={addForm.userName || ''}
+                onChange={(e) => setAddForm(prev => ({ ...prev, userName: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Chức vụ</label>
+              <input
+                type="text"
+                value={addForm.userPosition || ''}
+                onChange={(e) => setAddForm(prev => ({ ...prev, userPosition: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Ngày</label>
+              <input
+                type="date"
+                value={addForm.date || ''}
+                onChange={(e) => setAddForm(prev => ({ ...prev, date: e.target.value, dayOfWeek: new Date(e.target.value).getDay() }))}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Tên công việc</label>
+              <input
+                type="text"
+                value={addForm.taskName || ''}
+                onChange={(e) => setAddForm(prev => ({ ...prev, taskName: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Loại công việc</label>
+              <select
+                value={addForm.taskType || 'Công tác'}
+                onChange={(e) => setAddForm(prev => ({ ...prev, taskType: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+              >
+                <option value="Công tác">Công tác</option>
+                <option value="Họp">Họp</option>
+                <option value="Đào tạo">Đào tạo</option>
+                <option value="Khác">Khác</option>
+                <option value="Làm việc tại cơ quan">Làm việc tại cơ quan</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Địa điểm</label>
+              <input
+                type="text"
+                value={addForm.location || ''}
+                onChange={(e) => setAddForm(prev => ({ ...prev, location: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Ghi chú</label>
+              <textarea
+                value={addForm.notes || ''}
+                onChange={(e) => setAddForm(prev => ({ ...prev, notes: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={handleAddSchedule} className="flex-1 px-4 py-2 bg-[#2d6e3e] hover:bg-[#1e4d2b] text-white rounded-lg font-medium">Thêm</button>
+              <button onClick={() => { setShowAddForm(false); setAddForm({}); }} className="flex-1 px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg font-medium">Hủy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -1306,6 +1206,9 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4 flex-wrap">
+              <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+                <Menu className="w-6 h-6" />
+              </button>
               <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <CalendarIcon className="w-5 h-5 text-[#2d6e3e]" />
                 <span>Lịch Công tác tuần</span>
@@ -1343,37 +1246,19 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
             </div>
             
             <div className="flex items-center gap-2 flex-wrap">
-              <select
-                value={selectedWorkUnit}
-                onChange={(e) => setSelectedWorkUnit(e.target.value)}
-                className="px-3 py-1.5 text-sm font-medium border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 min-w-[180px]"
-              >
-                <option value="ALL">Tất cả đơn vị</option>
-                <option value="LEADER">Lãnh đạo</option>
-                <option value="PHONG">Phòng ban</option>
-                <option value="VUNG1">Vùng 1</option>
-                <option value="VUNG2">Vùng 2</option>
-                {PHONG_UNITS.map(d => <option key={d} value={d}>{d}</option>)}
-                {VUNG1_UNITS.map(d => <option key={d} value={d}>{d}</option>)}
-                {VUNG2_UNITS.map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
-              
-              <button onClick={downloadMatrixTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors whitespace-nowrap" title="Tải mẫu lịch (theo file dulieu_test)">
+              <button onClick={downloadMatrixTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition-colors whitespace-nowrap" title="Tải mẫu ma trận">
                 <DownloadIcon className="w-3.5 h-3.5" />
                 <span>Mẫu lịch tuần</span>
               </button>
-              
               <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white rounded-lg shadow-sm transition-colors whitespace-nowrap" title="Tải mẫu nhập liệu">
                 <DownloadIcon className="w-3.5 h-3.5" />
                 <span>Tải Lịch Tuần</span>
               </button>
-              
               <button onClick={triggerFileImport} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-sm transition-colors whitespace-nowrap" title="Nhập từ Excel">
                 <UploadIcon className="w-3.5 h-3.5" />
                 <span>Nhập Excel</span>
               </button>
               <input type="file" ref={fileInputRef} accept=".xlsx,.xls,.csv" onChange={handleFileImport} className="hidden" />
-              
               <button onClick={exportToExcel} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#2d6e3e] hover:bg-[#1e4d2b] text-white rounded-lg shadow-sm transition-colors whitespace-nowrap" title="Xuất Excel">
                 <FileSpreadsheet className="w-3.5 h-3.5" />
                 <span>Xuất Excel</span>
@@ -1382,70 +1267,169 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
           </div>
         </div>
 
-{/* ===== MAIN LAYOUT: 3 COLUMNS ===== */}
-        {/* COL 1: LÃNH ĐẠO (top) + PHÒNG BAN (bottom) - stacked */}
-        {/* COL 2: VÙNG 1 - full height with grid + expandable detail */}
-        {/* COL 3: VÙNG 2 - full height with grid + expandable detail */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 min-h-[700px]">
+        {/* ===== MAIN LAYOUT: SIDEBAR + MATRIX ===== */}
+        <div className="flex gap-3">
           
-          {/* COL 1: LEFT STACKED */}
-          <div className="lg:col-span-1 flex flex-col space-y-3 min-w-0">
+          {/* ===== LEFT SIDEBAR ===== */}
+          <aside className={`w-72 flex-shrink-0 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 flex flex-col ${!sidebarOpen ? 'hidden md:block' : 'block'} md:block`}>
+            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                <FilterIcon className="w-5 h-5 text-[#2d6e3e]" />
+                <span>Bộ lọc đơn vị</span>
+              </h3>
+              <button onClick={() => setSidebarOpen(false)} className="md:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
             
-            {/* LÃNH ĐẠO - FULL (stat cards + detail tables) */}
-            <LeftSection
-              title="1. Lãnh đạo Cục (4 người)"
-              subtitle="4 lãnh đạo"
-              icon={<UsersIcon className="w-4 h-4" />}
-              headerColor="#2d6e3e"
-              units={leaderUnits}
-              sectionKey="leader"
-              compact={false}
-            />
+            <div className="p-4 space-y-3 overflow-y-auto flex-1">
+              
+              {/* LÃNH ĐẠO */}
+              <div>
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2 px-2">LÃNH ĐẠO (4 người)</p>
+                {leaderUnits.map((unit) => (
+                  <SidebarItem
+                    key={unit.id}
+                    unit={unit}
+                    isActive={selectedLeader === unit.id}
+                    onClick={() => setSelectedLeader(selectedLeader === unit.id ? null : unit.id)}
+                    type="leader"
+                  />
+                ))}
+              </div>
 
-            {/* PHÒNG BAN - FULL (stat cards + detail tables) */}
-            <LeftSection
-              title="2. Khối Phòng ban (5 phòng)"
-              subtitle="5 phòng ban"
-              icon={<Building className="w-4 h-4" />}
-              headerColor="#3b82f6"
-              units={phongUnits}
-              sectionKey="phong"
-              compact={false}
-            />
+              {/* PHÒNG BAN */}
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2 px-2">PHÒNG BAN (5 phòng)</p>
+                {phongUnits.map((unit) => (
+                  <SidebarItem
+                    key={unit.id}
+                    unit={unit}
+                    isActive={selectedUnit === unit.id}
+                    onClick={() => setSelectedUnit(selectedUnit === unit.id ? null : unit.id)}
+                    type="phong"
+                  />
+                ))}
+              </div>
 
-          </div>
+              {/* VÙNG 1 */}
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2 px-2">VÙNG 1 (7 cơ sở)</p>
+                {vung1Units.map((unit) => (
+                  <SidebarItem
+                    key={unit.id}
+                    unit={unit}
+                    isActive={selectedUnit === unit.id}
+                    onClick={() => setSelectedUnit(selectedUnit === unit.id ? null : unit.id)}
+                    type="vung1"
+                  />
+                ))}
+              </div>
 
-          {/* COL 2: VÙNG 1 - GRID + DETAIL */}
-          <BaseUnitGridWithDetail
-            title="3. Vùng 1 - Thống kê cơ sở (7 đơn vị)"
-            subtitle="7 cơ sở thống kê"
-            icon={<Building2 className="w-4 h-4" />}
-            headerColor="#0d9488"
-            units={vung1Units}
-            sectionKey="vung1"
-            />
+              {/* VÙNG 2 */}
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2 px-2">VÙNG 2 (7 cơ sở)</p>
+                {vung2Units.map((unit) => (
+                  <SidebarItem
+                    key={unit.id}
+                    unit={unit}
+                    isActive={selectedUnit === unit.id}
+                    onClick={() => setSelectedUnit(selectedUnit === unit.id ? null : unit.id)}
+                    type="vung2"
+                  />
+                ))}
+              </div>
 
-          {/* COL 3: VÙNG 2 - GRID + DETAIL */}
-          <BaseUnitGridWithDetail
-            title="4. Vùng 2 - Thống kê cơ sở (7 đơn vị)"
-            subtitle="7 cơ sở thống kê"
-            icon={<Building2 className="w-4 h-4" />}
-            headerColor="#ec4899"
-            units={vung2Units}
-            sectionKey="vung2"
-            />
+            </div>
+          </aside>
 
-        </div>
+          {/* ===== MAIN CONTENT ===== */}
+          <main className="flex-1 min-w-0 flex flex-col">
+            
+            {/* ===== MATRIX ===== */}
+            <div className="flex-1 min-h-0">
+              <LeaderMatrixView />
+            </div>
 
-        {/* ===== MATRIX VIEW AT BOTTOM ===== */}
-        <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden" style={{ borderTop: '3px solid #2d6e3e' }}>
-          <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide flex items-center justify-between px-4">
-            <span className="flex items-center gap-2">
-              <Table className="w-4 h-4" />
-                Lịch công tác Lãnh đạo
-            </span>
-          </div>
-          <LeaderMatrixView />
+            {/* ===== DETAIL TABLES (Bottom) ===== */}
+            <div className="mt-3 space-y-3">
+              
+              {/* SELECTED LEADER DETAIL */}
+              {selectedLeader && leaderUnits.find(u => u.id === selectedLeader) && (
+                <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs overflow-hidden" style={{ borderTop: `3px solid ${LEADER_COLOR}` }}>
+                  <div className="bg-[#87af89] text-white text-[12px] font-semibold py-2 px-4 flex items-center justify-between">
+                    <span className="flex items-center gap-2"><UsersIcon className="w-4 h-4" /> Chi tiết Lãnh đạo</span>
+                    <button onClick={() => setSelectedLeader(null)} className="p-1 hover:bg-white/20 rounded">
+                      <XIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <DetailTable 
+                    schedules={leaderUnits.find(u => u.id === selectedLeader)!.allSchedules} 
+                    unitName={selectedLeader}
+                    unitMembers={leaderUnits.find(u => u.id === selectedLeader)!.members}
+                    unitColor={LEADER_COLOR}
+                  />
+                </div>
+              )}
+
+              {/* SELECTED UNIT DETAIL */}
+              {selectedUnit && (
+                <>
+                  {phongUnits.find(u => u.id === selectedUnit) && (
+                    <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs overflow-hidden" style={{ borderTop: `3px solid ${PHONG_COLOR}` }}>
+                      <div className="bg-[#87af89] text-white text-[12px] font-semibold py-2 px-4 flex items-center justify-between">
+                        <span className="flex items-center gap-2"><Building className="w-4 h-4" /> Chi tiết Phòng ban</span>
+                        <button onClick={() => setSelectedUnit(null)} className="p-1 hover:bg-white/20 rounded">
+                          <XIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <DetailTable 
+                        schedules={phongUnits.find(u => u.id === selectedUnit)!.allSchedules} 
+                        unitName={selectedUnit}
+                        unitMembers={phongUnits.find(u => u.id === selectedUnit)!.members}
+                        unitColor={PHONG_COLOR}
+                      />
+                    </div>
+                  )}
+                  {vung1Units.find(u => u.id === selectedUnit) && (
+                    <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs overflow-hidden" style={{ borderTop: `3px solid ${VUNG1_COLOR}` }}>
+                      <div className="bg-[#87af89] text-white text-[12px] font-semibold py-2 px-4 flex items-center justify-between">
+                        <span className="flex items-center gap-2"><Building2 className="w-4 h-4" /> Chi tiết Vùng 1</span>
+                        <button onClick={() => setSelectedUnit(null)} className="p-1 hover:bg-white/20 rounded">
+                          <XIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <DetailTable 
+                        schedules={vung1Units.find(u => u.id === selectedUnit)!.allSchedules} 
+                        unitName={selectedUnit}
+                        unitMembers={vung1Units.find(u => u.id === selectedUnit)!.members}
+                        unitColor={VUNG1_COLOR}
+                      />
+                    </div>
+                  )}
+                  {vung2Units.find(u => u.id === selectedUnit) && (
+                    <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs overflow-hidden" style={{ borderTop: `3px solid ${VUNG2_COLOR}` }}>
+                      <div className="bg-[#87af89] text-white text-[12px] font-semibold py-2 px-4 flex items-center justify-between">
+                        <span className="flex items-center gap-2"><Building2 className="w-4 h-4" /> Chi tiết Vùng 2</span>
+                        <button onClick={() => setSelectedUnit(null)} className="p-1 hover:bg-white/20 rounded">
+                          <XIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <DetailTable 
+                        schedules={vung2Units.find(u => u.id === selectedUnit)!.allSchedules} 
+                        unitName={selectedUnit}
+                        unitMembers={vung2Units.find(u => u.id === selectedUnit)!.members}
+                        unitColor={VUNG2_COLOR}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+
+            </div>
+
+          </main>
+
         </div>
 
       </div>
