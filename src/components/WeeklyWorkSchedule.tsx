@@ -92,6 +92,7 @@ interface MatrixCellData {
   content: string;
   taskType: string;
   location: string;
+  dateStr?: string; // Actual date from Excel file (dd/MM or dd/MM/yyyy)
 }
 
 const DEFAULT_LEADERS = [
@@ -493,7 +494,7 @@ export const WeeklyWorkSchedule: React.FC<{
     addToast('success', 'Thành công', `Đã xuất ${data.length} bản ghi ra Excel`);
   }, [schedules, users, weekDates, weekStartDate, addToast]);
 
-  const parseMatrixFormat = useCallback((jsonData: string[][]) => {
+const parseMatrixFormat = useCallback((jsonData: string[][]) => {
     if (jsonData.length < 2) return null;
     const headers = jsonData[0] as string[];
     if (!headers[0]?.toLowerCase().includes('ngày') || !headers[1]?.toLowerCase().includes('buổi')) return null;
@@ -502,6 +503,7 @@ export const WeeklyWorkSchedule: React.FC<{
     const rows = jsonData.slice(1);
     const result: MatrixCellData[] = [];
     let currentDayIndex = -1;
+    let currentDateStr = ''; // Store the actual date from Excel
     
     rows.forEach((row) => {
       const dayCell = row[0]?.toString().trim();
@@ -509,7 +511,14 @@ export const WeeklyWorkSchedule: React.FC<{
       
       if (dayCell) {
         const dayMatch = dayCell.match(/Thứ\s*(\d+)/);
-        if (dayMatch) currentDayIndex = parseInt(dayMatch[1]) - 2;
+        if (dayMatch) {
+          currentDayIndex = parseInt(dayMatch[1]) - 2;
+        }
+        // Extract date from format "Thứ 2 (03/08)" or "Thứ 2 (03/08/2025)"
+        const dateMatch = dayCell.match(/\((\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\)/);
+        if (dateMatch) {
+          currentDateStr = dateMatch[1];
+        }
       }
       
       if (currentDayIndex >= 0 && currentDayIndex < 7 && SESSIONS.includes(session)) {
@@ -522,7 +531,8 @@ export const WeeklyWorkSchedule: React.FC<{
               leaderName,
               content,
               taskType: content.includes('Họp') ? 'Họp' : content.includes('Đào tạo') ? 'Đào tạo' : 'Công tác',
-              location: content.includes('📍') || content.includes('') ? content.split(/[📍]/).pop()?.trim() : ''
+              location: content.includes('📍') || content.includes('') ? content.split(/[📍]/).pop()?.trim() : '',
+              dateStr: currentDateStr // Pass the actual date from Excel
             });
           }
         });
@@ -555,7 +565,22 @@ export const WeeklyWorkSchedule: React.FC<{
             const leader = DEFAULT_LEADERS.find(l => l.name === cell.leaderName);
             if (!leader) return;
             const matchedUser = users.find(u => u.fullName === leader.name);
-            const date = weekDates[cell.dayIndex]?.toISOString().split('T')[0];
+            
+            // Parse date from Excel (dateStr format: "dd/MM" or "dd/MM/yyyy")
+            let date: string;
+            if (cell.dateStr) {
+              const parts = cell.dateStr.split('/');
+              if (parts.length >= 2) {
+                const day = parts[0].padStart(2, '0');
+                const month = parts[1].padStart(2, '0');
+                const year = parts[2] ? parts[2] : new Date().getFullYear().toString();
+                date = `${year}-${month}-${day}`;
+              } else {
+                date = weekDates[cell.dayIndex]?.toISOString().split('T')[0] || '';
+              }
+            } else {
+              date = weekDates[cell.dayIndex]?.toISOString().split('T')[0] || '';
+            }
             if (!date) return;
             
             const tasks = cell.content.split(/[;\n]/).map(t => t.trim()).filter(Boolean);
@@ -1305,8 +1330,8 @@ export const WeeklyWorkSchedule: React.FC<{
                 <option value="ALL">Tất cả đơn vị</option>
                 <option value="LEADER">Lãnh đạo</option>
                 <option value="PHONG">Phòng ban</option>
-                <option value="VUNG1">Vùng 1 (7 cơ sở)</option>
-                <option value="VUNG2">Vùng 2 (7 cơ sở)</option>
+                <option value="VUNG1">Vùng 1</option>
+                <option value="VUNG2">Vùng 2</option>
                 {PHONG_UNITS.map(d => <option key={d} value={d}>{d}</option>)}
                 {VUNG1_UNITS.map(d => <option key={d} value={d}>{d}</option>)}
                 {VUNG2_UNITS.map(d => <option key={d} value={d}>{d}</option>)}

@@ -662,24 +662,20 @@ export default function App() {
   }, [meetings]);
 
   const handleAddWeeklySchedule = useCallback((schedule: WeeklySchedule) => {
-    const updated = [schedule, ...weeklySchedules];
-    setWeeklySchedulesState(updated);
-    saveWeeklySchedules(updated);
+    setWeeklySchedulesState(prev => [schedule, ...prev]);
+    // saveWeeklySchedules will be called in the state setter effect or we can call it here
+    // For now, we'll rely on the localStorage sync effect
     addToast('success', 'Thành công', 'Đã thêm lịch công tác mới.');
     setActiveTab('weekly_schedule');
-  }, [weeklySchedules, addToast]);
+  }, [addToast]);
 
   const handleUpdateWeeklySchedule = useCallback((schedule: WeeklySchedule) => {
-    const updated = weeklySchedules.map(s => s.id === schedule.id ? schedule : s);
-    setWeeklySchedulesState(updated);
-    saveWeeklySchedules(updated);
-  }, [weeklySchedules]);
+    setWeeklySchedulesState(prev => prev.map(s => s.id === schedule.id ? schedule : s));
+  }, []);
 
   const handleDeleteWeeklySchedule = useCallback((scheduleId: string) => {
-    const updated = weeklySchedules.filter(s => s.id !== scheduleId);
-    setWeeklySchedulesState(updated);
-    saveWeeklySchedules(updated);
-  }, [weeklySchedules]);
+    setWeeklySchedulesState(prev => prev.filter(s => s.id !== scheduleId));
+  }, []);
 
   const handleSyncDepartments = useCallback(() => {
     let updated = false;
