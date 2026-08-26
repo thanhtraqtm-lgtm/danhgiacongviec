@@ -96,10 +96,10 @@ interface MatrixCellData {
 }
 
 const DEFAULT_LEADERS = [
-  { name: 'Đào Trọng Truyền', position: 'Cục trưởng', department: 'Lãnh đạo' },
-  { name: 'Đào Thị Hiếu', position: 'Phó Cục trưởng', department: 'Lãnh đạo' },
-  { name: 'Vũ Tuấn Hùng', position: 'Phó Cục trưởng', department: 'Lãnh đạo' },
-  { name: 'Phạm Văn Tự', position: 'Phó Cục trưởng', department: 'Lãnh đạo' },
+  { name: 'Đào Trọng Truyền', position: 'Trưởng Thống kê', department: 'Lãnh đạo' },
+  { name: 'Đào Thị Hiếu', position: 'Phó Trưởng Thống kê', department: 'Lãnh đạo' },
+  { name: 'Vũ Tuấn Hùng', position: 'Phó Trưởng Thống kê', department: 'Lãnh đạo' },
+  { name: 'Phạm Văn Tự', position: 'Phó Trưởng Thống kê', department: 'Lãnh đạo' },
 ];
 
 const VUNG1_UNITS = [
@@ -958,7 +958,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
 
         {/* Stat Cards Grid - 7 units - COMPACT */}
         <div className="p-1.5 bg-[#f5f9f6] border-b border-[#c6d8c8] min-h-[80px]" style={{ flexShrink: 0 }}>
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-7 gap-1">
             {units.map((unit) => (
               <button
                 key={unit.id}
@@ -1004,7 +1004,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
 
         {/* Stat Cards Grid - 7 units - COMPACT */}
         <div className="p-1.5 bg-[#f5f9f6] border-b border-[#c6d8c8] min-h-[80px]" style={{ flexShrink: 0 }}>
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-7 gap-1">
             {units.map((unit) => (
               <button
                 key={unit.id}
@@ -1116,11 +1116,29 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
                         </div>
                       </td>
                       {leaderUnits.map((unit) => {
-                        const daySchedules = getFilteredSchedulesForCell(unit.name, unit.members, dayIndex, session);
+                        const targetDate = weekDates[dayIndex].toISOString().split('T')[0];
+                        const memberNames = new Set(unit.members.map(m => m.fullName));
+                        const daySchedules = schedules.filter(s => {
+                          if (s.date !== targetDate) return false;
+                          if (!memberNames.has(s.userName)) return false;
+                          if (filterTaskType !== 'ALL' && s.taskType !== filterTaskType) return false;
+                          const sessionMatch = s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng';
+                          if (sessionMatch !== session) return false;
+                          if (searchQuery.trim()) {
+                            const q = searchQuery.toLowerCase();
+                            const matchTask = s.taskName?.toLowerCase().includes(q);
+                            const matchUser = s.userName?.toLowerCase().includes(q);
+                            const matchNotes = s.notes?.toLowerCase().includes(q);
+                            const matchLocation = s.location?.toLowerCase().includes(q);
+                            if (!matchTask && !matchUser && !matchNotes && !matchLocation) return false;
+                          }
+                          return true;
+                        });
                         const count = daySchedules.length;
                         const hasMeeting = daySchedules.some(s => s.taskType === 'Họp');
                         const hasBusiness = daySchedules.some(s => s.taskType === 'Công tác');
                         const hasTraining = daySchedules.some(s => s.taskType === 'Đào tạo');
+                        const hasOffice = daySchedules.some(s => s.taskType === 'Làm việc tại cơ quan');
                         const isToday = date.toDateString() === new Date().toDateString();
                         
                         return (
@@ -1134,6 +1152,7 @@ const parseMatrixFormat = useCallback((jsonData: string[][]) => {
                                 {hasMeeting && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200">Họp</span>}
                                 {hasBusiness && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200">Công tác</span>}
                                 {hasTraining && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200">Đào tạo</span>}
+                                {hasOffice && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200">Cơ quan</span>}
                               </div>
                             )}
                             <div className="text-[11px] text-slate-700 dark:text-slate-300 line-clamp-3 pr-2">
