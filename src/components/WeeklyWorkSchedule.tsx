@@ -49,7 +49,9 @@ import {
   Menu,
   X as XIcon,
   Filter as FilterIcon,
-  BarChart3
+  BarChart3,
+  Check,
+  ExternalLink
 } from 'lucide-react';
 import { WeeklySchedule, User as UserType, DEPARTMENTS } from '../types';
 import * as XLSX from 'xlsx';
@@ -107,31 +109,31 @@ const DEFAULT_LEADERS = [
 ];
 
 const VUNG1_UNITS = [
-  'Thống kê cơ sở Phố Hiến',
-  'Thống kê cơ sở Như Quỳnh',
-  'Thống kê cơ sở Yên Mỹ',
-  'Thống kê cơ sở Mỹ Hào',
-  'Thống kê cơ sở Khoái Châu',
-  'Thống kê cơ sở Lương Bằng',
-  'Thống kê cơ sở Hoàng Hoa Thám',
+  'Phố Hiến',
+  'Như Quỳnh',
+  'Yên Mỹ',
+  'Mỹ Hào',
+  'Khoái Châu',
+  'Lương Bằng',
+  'Hoàng Hoa Thám',
 ];
 
 const VUNG2_UNITS = [
-  'Thống kê cơ sở Quỳnh Phụ',
-  'Thống kê cơ sở Hưng Hà',
-  'Thống kê cơ sở Đông Hưng',
-  'Thống kê cơ sở Thái Thụy',
-  'Thống kê cơ sở Tiền Hải',
-  'Thống kê cơ sở Kiến Xương',
-  'Thống kê cơ sở Vũ Thư',
+  'Quỳnh Phụ',
+  'Hưng Hà',
+  'Đông Hưng',
+  'Thái Thụy',
+  'Tiền Hải',
+  'Kiến Xương',
+  'Vũ Thư',
 ];
 
 const PHONG_UNITS = [
-  'Phòng Thống kê Tổng hợp',
-  'Phòng TCHC',
-  'Phòng Thống kê TMDV & Giá',
-  'Phòng Thống kê CNXD',
-  'Phòng Thống kê NN&XH',
+  { short: 'P. Tổng hợp', full: 'Phòng Thống kê Tổng hợp', count: 12 },
+  { short: 'Phòng TCHC', full: 'Phòng TCHC', count: 0 },
+  { short: 'P. TMDV & Giá', full: 'Phòng Thống kê TMDV & Giá', count: 0 },
+  { short: 'P. CNXD', full: 'Phòng Thống kê CNXD', count: 0 },
+  { short: 'P. NN&XH', full: 'Phòng Thống kê NN&XH', count: 0 },
 ];
 
 export const WeeklyWorkSchedule: React.FC<{
@@ -157,7 +159,6 @@ export const WeeklyWorkSchedule: React.FC<{
   });
   const [filterTaskType, setFilterTaskType] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [expandedUnits, setExpandedUnits] = useState<Record<string, boolean>>({});
   const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState<Partial<WeeklySchedule>>({});
@@ -204,16 +205,6 @@ export const WeeklyWorkSchedule: React.FC<{
       return true;
     }).sort((a, b) => a.dayOfWeek - b.dayOfWeek);
   }, [schedules, weekStartDate, weekEndDate, filterTaskType, searchQuery]);
-
-  const getStatsForUnit = useCallback((unitName: string, unitMembers: UserType[]) => {
-    const allSchedules = getSchedulesForUnit(unitName, unitMembers);
-    const nonOffice = allSchedules.filter(s => s.taskType !== 'Làm việc tại cơ quan');
-    return {
-      total: nonOffice.length,
-      unfinished: nonOffice.filter(s => s.status === 'Chưa bắt đầu').length,
-      completed: nonOffice.filter(s => s.status === 'Đã hoàn thành').length,
-    };
-  }, [getSchedulesForUnit]);
 
   const handlePrevWeek = () => {
     setCurrentWeekStart(new Date(weekStartDate.getTime() - 7 * 24 * 60 * 60 * 1000));
@@ -328,10 +319,6 @@ export const WeeklyWorkSchedule: React.FC<{
     }
   };
 
-  const toggleExpand = (unitId: string) => {
-    setExpandedUnits(prev => ({ ...prev, [unitId]: !prev[unitId] }));
-  };
-
   const downloadTemplate = useCallback(() => {
     const headers = [
       'Đối tượng (Lãnh đạo/Phòng ban/Cơ sở)',
@@ -437,9 +424,9 @@ export const WeeklyWorkSchedule: React.FC<{
 
     const allUnitConfigs = [
       { name: 'Lãnh đạo', getMembers: (n: string) => users.filter(u => DEFAULT_LEADERS.some(l => l.name === n && l.name === u.fullName)) },
-      ...PHONG_UNITS.map(name => ({ name, getMembers: (n: string) => users.filter(u => u.department === n) })),
-      ...VUNG1_UNITS.map(name => ({ name, getMembers: (n: string) => users.filter(u => u.department === n || u.workUnit === n) })),
-      ...VUNG2_UNITS.map(name => ({ name, getMembers: (n: string) => users.filter(u => u.department === n || u.workUnit === n) })),
+      ...PHONG_UNITS.map(p => ({ name: p.full, getMembers: (n: string) => users.filter(u => u.department === p.full) })),
+      ...VUNG1_UNITS.map(name => ({ name: `Thống kê cơ sở ${name}`, getMembers: (n: string) => users.filter(u => u.department === `Thống kê cơ sở ${name}` || u.workUnit === `Thống kê cơ sở ${name}`) })),
+      ...VUNG2_UNITS.map(name => ({ name: `Thống kê cơ sở ${name}`, getMembers: (n: string) => users.filter(u => u.department === `Thống kê cơ sở ${name}` || u.workUnit === `Thống kê cơ sở ${name}`) })),
     ];
 
     const data = allUnitConfigs.flatMap(({ name, getMembers }) => {
@@ -687,7 +674,7 @@ export const WeeklyWorkSchedule: React.FC<{
     fileInputRef.current?.click();
   };
 
-  // ===== UNIT CONFIGS =====
+  // ===== SECTION DATA =====
   const leaderUnits = useMemo(() => 
     DEFAULT_LEADERS.map((l) => ({
       id: `leader_${l.name}`,
@@ -695,370 +682,158 @@ export const WeeklyWorkSchedule: React.FC<{
       position: l.position,
       color: LEADER_COLOR,
       members: users.filter(u => u.fullName === l.name),
-      stats: getStatsForUnit(l.name, users.filter(u => u.fullName === l.name)),
-      allSchedules: getSchedulesForUnit(l.name, users.filter(u => u.fullName === l.name))
+      allSchedules: schedules.filter(s => {
+        const scheduleDate = new Date(s.date);
+        return scheduleDate >= weekStartDate && scheduleDate <= weekEndDate && 
+               s.userName === l.name && s.taskType !== 'Làm việc tại cơ quan';
+      })
     }))
-  , [users, getStatsForUnit, getSchedulesForUnit]);
+  , [users, weekStartDate, weekEndDate]);
 
   const phongUnits = useMemo(() => 
-    PHONG_UNITS.map((name) => ({
-      id: `phong_${name}`,
-      name,
+    PHONG_UNITS.map((p) => ({
+      id: `phong_${p.full}`,
+      name: p.short,
+      fullName: p.full,
       color: PHONG_COLOR,
-      members: users.filter(u => u.department === name),
-      stats: getStatsForUnit(name, users.filter(u => u.department === name)),
-      allSchedules: getSchedulesForUnit(name, users.filter(u => u.department === name))
+      members: users.filter(u => u.department === p.full),
+      allSchedules: schedules.filter(s => {
+        const scheduleDate = new Date(s.date);
+        return scheduleDate >= weekStartDate && scheduleDate <= weekEndDate && 
+               users.some(u => u.department === p.full && u.fullName === s.userName) && 
+               s.taskType !== 'Làm việc tại cơ quan';
+      })
     }))
-  , [users, getStatsForUnit, getSchedulesForUnit]);
+  , [users, weekStartDate, weekEndDate]);
 
   const vung1Units = useMemo(() => 
     VUNG1_UNITS.map((name) => ({
       id: `vung1_${name}`,
       name,
+      fullName: `Thống kê cơ sở ${name}`,
       color: VUNG1_COLOR,
-      members: users.filter(u => u.department === name || u.workUnit === name),
-      stats: getStatsForUnit(name, users.filter(u => u.department === name || u.workUnit === name)),
-      allSchedules: getSchedulesForUnit(name, users.filter(u => u.department === name || u.workUnit === name))
+      members: users.filter(u => u.department === `Thống kê cơ sở ${name}` || u.workUnit === `Thống kê cơ sở ${name}`),
+      allSchedules: schedules.filter(s => {
+        const scheduleDate = new Date(s.date);
+        return scheduleDate >= weekStartDate && scheduleDate <= weekEndDate && 
+               users.some(u => (u.department === `Thống kê cơ sở ${name}` || u.workUnit === `Thống kê cơ sở ${name}`) && u.fullName === s.userName) && 
+               s.taskType !== 'Làm việc tại cơ quan';
+      })
     }))
-  , [users, getStatsForUnit, getSchedulesForUnit]);
+  , [users, weekStartDate, weekEndDate]);
 
   const vung2Units = useMemo(() => 
     VUNG2_UNITS.map((name) => ({
       id: `vung2_${name}`,
       name,
+      fullName: `Thống kê cơ sở ${name}`,
       color: VUNG2_COLOR,
-      members: users.filter(u => u.department === name || u.workUnit === name),
-      stats: getStatsForUnit(name, users.filter(u => u.department === name || u.workUnit === name)),
-      allSchedules: getSchedulesForUnit(name, users.filter(u => u.department === name || u.workUnit === name))
+      members: users.filter(u => u.department === `Thống kê cơ sở ${name}` || u.workUnit === `Thống kê cơ sở ${name}`),
+      allSchedules: schedules.filter(s => {
+        const scheduleDate = new Date(s.date);
+        return scheduleDate >= weekStartDate && scheduleDate <= weekEndDate && 
+               users.some(u => (u.department === `Thống kê cơ sở ${name}` || u.workUnit === `Thống kê cơ sở ${name}`) && u.fullName === s.userName) && 
+               s.taskType !== 'Làm việc tại cơ quan';
+      })
     }))
-  , [users, getStatsForUnit, getSchedulesForUnit]);
+  , [users, weekStartDate, weekEndDate]);
 
   // ===== BLOCK COMPONENT =====
-  const Block = ({ 
+  const SectionBlock = ({ 
     title, 
     subtitle,
     icon, 
     headerColor,
     units,
-    type,
-    color
+    color,
+    type
   }: { 
     title: string;
     subtitle: string;
     icon: React.ReactNode;
     headerColor: string;
-    units: Array<{id: string; name: string; position?: string; color: string; members: UserType[]; stats: any; allSchedules: WeeklySchedule[]}>;
-    type: 'leader' | 'phong' | 'vung1' | 'vung2';
+    units: Array<{id: string; name: string; fullName?: string; position?: string; color: string; members: UserType[]; allSchedules: WeeklySchedule[]}>;
     color: string;
+    type: 'leader' | 'phong' | 'vung1' | 'vung2';
   }) => {
     const totalUnits = units.length;
-    const totalTasks = units.reduce((sum, u) => sum + u.stats.total, 0);
-    const isLeader = type === 'leader';
+    const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
 
     return (
       <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden" style={{ borderTop: `3px solid ${headerColor}` }}>
         {/* Block Header */}
         <div className="bg-[#87af89] text-white text-[12px] font-semibold py-2 px-4 flex items-center justify-between min-h-[40px]">
           <span className="flex items-center gap-2 truncate">{icon} {title}</span>
-          <span className="text-[10px] opacity-90 whitespace-nowrap">{totalUnits} đơn vị | {totalTasks} việc</span>
+          <span className="text-[10px] opacity-90 whitespace-nowrap">{subtitle}</span>
         </div>
 
-        {/* Stat Cards Grid */}
-        <div className={`p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] ${isLeader ? 'min-h-[100px]' : 'min-h-[80px]'}`}>
-          <div className={`grid gap-1.5 ${isLeader ? 'grid-cols-4' : 'grid-cols-7'}`}>
-            {units.map((unit) => (
-              <div 
-                key={unit.id}
-                className="flex flex-col items-center justify-center p-2 rounded-lg shadow-sm min-h-[50px] cursor-pointer hover:opacity-90 transition-all"
-                style={{ backgroundColor: unit.color }}
-                onClick={() => openAddForm(undefined, unit.name)}
-              >
-                <span className={`font-medium truncate text-center text-white/90 leading-tight max-w-full ${isLeader ? 'text-[11px]' : 'text-[8px]'}`}>
-                  {isLeader ? unit.name + (unit.position ? ` (${unit.position})` : '') : unit.name.replace('Thống kê cơ sở ', 'CS ')}
-                </span>
-                <span className={`font-bold tracking-normal mt-0.5 leading-none text-white ${isLeader ? 'text-lg' : 'text-base'}`}>
-                  {unit.stats.total}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Detail Tables - Expandable */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-2" style={{ minHeight: 0 }}>
-          {units.map((unit) => (
-            <div key={unit.id} className={`border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden transition-all duration-200`} style={{ borderLeft: `3px solid ${unit.color}` }}>
-              <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
-                  <span className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{unit.name}</span>
-                  {unit.position && <span className="text-xs text-slate-500 px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-700">{unit.position}</span>}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
-                    {unit.stats.total} việc
-                  </span>
-                  <button 
-                    onClick={() => openAddForm(undefined, unit.name)}
-                    className="p-1.5 hover:bg-white/50 dark:hover:bg-slate-700 rounded transition-colors"
-                    title="Thêm lịch"
-                  >
-                    <Plus className="w-4 h-4" style={{ color: unit.color }} />
-                  </button>
-                </div>
-              </div>
-              <DetailTable 
-                schedules={unit.allSchedules} 
-                unitName={unit.id}
-                unitMembers={unit.members}
-                unitColor={unit.color}
-              />
+        {/* Status Cards Row - Flexible width based on content */}
+        <div className="p-3 bg-[#f5f9f6] border-b border-[#c6d8c8] flex flex-wrap gap-2 items-center min-h-[60px]">
+          {units.map((unit, idx) => (
+            <div 
+              key={unit.id}
+              className="flex items-center justify-center px-3 py-2 rounded-lg shadow-sm cursor-pointer hover:opacity-90 transition-all"
+              style={{ backgroundColor: unit.color }}
+              onClick={() => openAddForm(undefined, unit.fullName || unit.name)}
+            >
+              <span className="font-medium text-white/90 leading-tight whitespace-nowrap">
+                {unit.name + (unit.position ? ` (${unit.position})` : '')}
+              </span>
+              <span className="ml-2 font-bold text-white text-lg">{unit.allSchedules.length} VIỆC</span>
             </div>
           ))}
+          <div className="flex-1" />
+          <button 
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-white hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-lg shadow-sm transition-colors whitespace-nowrap border border-slate-200 dark:border-slate-700"
+            onClick={() => openAddForm(undefined, units[0]?.fullName || units[0]?.name)}
+          >
+            <Plus className="w-3.5 h-3.5" style={{ color: color }} />
+            <span>+ Thêm lịch</span>
+          </button>
         </div>
-      </div>
-    );
-  };
 
-  // ===== STAT CARD =====
-  const StatCard = ({ label, value, color }: { label: string; value: number; color: string }) => (
-    <div className="flex flex-col items-center justify-center p-3 rounded-lg shadow-sm min-h-[50px]" style={{ backgroundColor: color }}>
-      <span className="text-[11px] font-medium truncate text-center text-white/90 leading-tight max-w-full">{label}</span>
-      <span className="text-lg font-bold tracking-normal mt-0.5 leading-none text-white">{value}</span>
-    </div>
-  );
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto p-4" style={{ minHeight: 200 }}>
+          <div className="bg-white border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+            {/* Green sub-header */}
+            <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-3 mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                  <Check className="w-5 h-5 text-green-700 dark:text-green-300" />
+                </div>
+                <span className="font-semibold text-green-800 dark:text-green-200 text-sm">
+                  Lịch công tác ngoài: {units[0]?.fullName || units[0]?.name} / 0 buổi
+                </span>
+              </div>
+              <button 
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-green-600 hover:bg-green-700 text-white rounded-lg shadow-sm transition-colors whitespace-nowrap"
+                onClick={() => openAddForm(undefined, units[0]?.fullName || units[0]?.name)}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Thêm lịch</span>
+              </button>
+            </div>
 
-  // ===== DETAIL TABLE =====
-  const DetailTable = ({ 
-    schedules, 
-    unitName, 
-    unitMembers,
-    unitColor 
-  }: { 
-    schedules: WeeklySchedule[];
-    unitName: string;
-    unitMembers: UserType[];
-    unitColor: string;
-  }) => {
-    // COMPLETELY HIDE "Làm việc tại cơ quan" - only show if week has ONLY that
-    const nonOfficeSchedules = schedules.filter(s => s.taskType !== 'Làm việc tại cơ quan');
-    const hasOnlyOfficeWork = schedules.length > 0 && nonOfficeSchedules.length === 0;
-    const displaySchedules = hasOnlyOfficeWork ? schedules : nonOfficeSchedules;
-
-    if (displaySchedules.length === 0) {
-      return (
-        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 text-center">
-          <span className="text-xs italic text-slate-400">— Không có công việc khác ngoài làm việc tại cơ quan —</span>
-        </div>
-      );
-    }
-
-    return (
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
-              <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300 w-8">STT</th>
-              <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300">Họ và tên</th>
-              <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300">Chức vụ</th>
-              <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300">Nội dung</th>
-              <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300">Thời gian</th>
-              <th className="px-2 py-1.5 text-left font-semibold text-slate-700 dark:text-slate-300">Địa điểm</th>
-            </tr>
-          </thead>
-          <tbody>
-            {displaySchedules.map((s, idx) => (
-              <tr key={s.id} className={`${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/50'} border-b border-slate-100 dark:border-slate-800 hover:bg-slate-100/50 dark:hover:bg-slate-700/50 transition-colors cursor-pointer`}
-                  onClick={() => handleMatrixCellClick(unitName, unitMembers, s.dayOfWeek, s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng')}>
-                <td className="px-2 py-1.5 text-slate-500 font-mono">{idx + 1}</td>
-                <td className="px-2 py-1.5 font-medium text-slate-900 dark:text-slate-100">{s.userName}</td>
-                <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">{s.userPosition || '—'}</td>
-                <td className="px-2 py-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold`} style={{backgroundColor: TASK_TYPE_COLORS[s.taskType as keyof typeof TASK_TYPE_COLORS] + '20', color: TASK_TYPE_COLORS[s.taskType as keyof typeof TASK_TYPE_COLORS]}}>
-                      {s.taskType}
-                    </span>
-                    <span className="font-medium text-slate-800 dark:text-slate-200 truncate max-w-[200px]">{s.taskName}</span>
-                  </div>
-                </td>
-                <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="flex items-center gap-1 text-xs"><Clock className="w-2.5 h-2.5" />{s.date} ({DAY_LABELS_SHORT[s.dayOfWeek]})</span>
-                    <span className="flex items-center gap-1 text-xs font-medium"><Clock className="w-2.5 h-2.5" />{s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng'}</span>
-                  </div>
-                </td>
-                <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">{s.location || '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  // ===== LEADER MATRIX =====
-  const LeaderMatrixView = () => {
-    return (
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
-          <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <Table className="w-5 h-5 text-[#2d6e3e]" />
-            <span>Ma trận Lịch Lãnh đạo: {leaderUnits.length} người × 7 ngày × 2 buổi</span>
-          </h3>
-          <div className="flex items-center gap-2">
-            <select
-              value={filterTaskType}
-              onChange={(e) => setFilterTaskType(e.target.value)}
-              className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded"
-            >
-              <option value="ALL">Tất cả loại</option>
-              <option value="Họp">Họp</option>
-              <option value="Công tác">Công tác</option>
-              <option value="Đào tạo">Đào tạo</option>
-              <option value="Khác">Khác</option>
-              <option value="Làm việc tại cơ quan">Làm việc tại cơ quan</option>
-            </select>
-            <input
-              type="text"
-              placeholder="Tìm kiếm..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded w-40 placeholder:text-slate-400"
-            />
-            <button onClick={exportToExcel} className="flex items-center gap-1 px-2 py-1 text-xs font-bold bg-[#2d6e3e] hover:bg-[#1e4d2b] text-white rounded border border-slate-300 transition-colors whitespace-nowrap">
-              <FileSpreadsheet className="w-3 h-3" />
-              Xuất Excel
-            </button>
+            {/* Central white panel */}
+            <div className="bg-white border border-slate-200 dark:border-slate-700 rounded-lg p-8 text-center">
+              <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4">
+                <Check className="w-8 h-8 text-green-700 dark:text-green-300" />
+              </div>
+              <p className="font-bold text-slate-800 dark:text-slate-200 text-lg mb-2">
+                Cả tuần làm việc tại cơ quan
+              </p>
+              <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
+                Không có lịch công tác ngoài, kiểm tra cơ sở hoặc hội họp ngoại khóa trong tuần này.
+              </p>
+              <button 
+                onClick={() => openAddForm(undefined, units[0]?.fullName || units[0]?.name)}
+                className="inline-flex items-center gap-1 text-green-700 dark:text-green-300 hover:text-green-800 dark:hover:text-green-200 font-medium text-sm underline"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>+ Bấm vào đây nếu muốn thêm lịch công tác ngoài</span>
+              </button>
+            </div>
           </div>
-        </div>
-        
-        <div className="overflow-x-auto overflow-y-auto max-h-[500px] custom-scrollbar">
-          <table className="w-full min-w-max text-xs">
-            <thead>
-              <tr className="bg-[#006097] text-white sticky top-0 z-10">
-                <th className="px-3 py-2 text-left font-medium w-24 border-r border-[#004d7a] sticky left-0 z-20 bg-[#006097]">Ngày / Buổi</th>
-                {leaderUnits.map((unit) => (
-                  <th key={unit.id} className={`px-2 py-2 text-center font-medium border-r border-[#004d7a] sticky left-[96px] z-10`} style={{ minWidth: '200px', backgroundColor: unit.color + '20' }}>
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: unit.color }} />
-                      <span className="font-bold truncate max-w-[160px]">{unit.name}</span>
-                    </div>
-                    <div className="text-[10px] opacity-80">{unit.position}</div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {weekDates.map((date, dayIndex) => (
-                <React.Fragment key={dayIndex}>
-                  {SESSIONS.map((session, sessionIdx) => (
-                    <tr key={session} className={`border-b border-slate-200 dark:border-slate-800 ${sessionIdx === 1 ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''}`}>
-                      <td className={`px-3 py-2 font-medium text-left border-r border-slate-200 dark:border-slate-800 sticky left-0 z-20 bg-white dark:bg-slate-900 ${sessionIdx === 1 ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''}`}>
-                        <div className="flex flex-col items-start">
-                          {sessionIdx === 0 && (
-                            <span className="text-[10px] text-slate-400">
-                              {date.toLocaleDateString('vi-VN', { month: '2-digit', day: '2-digit' })}
-                            </span>
-                          )}
-                          <span className="font-medium">{DAY_LABELS_SHORT[dayIndex]}</span>
-                          <span className={`text-[11px] px-1.5 py-0.5 rounded ${session === 'Sáng' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'}`}>
-                            {session}
-                          </span>
-                        </div>
-                      </td>
-                      {leaderUnits.map((unit) => {
-                        const targetDate = weekDates[dayIndex].toISOString().split('T')[0];
-                        const memberNames = new Set(unit.members.map(m => m.fullName));
-                        const daySchedules = schedules.filter(s => {
-                          if (s.date !== targetDate) return false;
-                          if (!memberNames.has(s.userName)) return false;
-                          if (filterTaskType !== 'ALL' && s.taskType !== filterTaskType) return false;
-                          const sessionMatch = s.notes?.includes('Chiều') ? 'Chiều' : 'Sáng';
-                          if (sessionMatch !== session) return false;
-                          if (searchQuery.trim()) {
-                            const q = searchQuery.toLowerCase();
-                            const matchTask = s.taskName?.toLowerCase().includes(q);
-                            const matchUser = s.userName?.toLowerCase().includes(q);
-                            const matchNotes = s.notes?.toLowerCase().includes(q);
-                            const matchLocation = s.location?.toLowerCase().includes(q);
-                            if (!matchTask && !matchUser && !matchNotes && !matchLocation) return false;
-                          }
-                          return true;
-                        });
-                        const count = daySchedules.length;
-                        const hasMeeting = daySchedules.some(s => s.taskType === 'Họp');
-                        const hasBusiness = daySchedules.some(s => s.taskType === 'Công tác');
-                        const hasTraining = daySchedules.some(s => s.taskType === 'Đào tạo');
-                        const hasOffice = daySchedules.some(s => s.taskType === 'Làm việc tại cơ quan');
-                        const isToday = date.toDateString() === new Date().toDateString();
-                        
-                        return (
-                          <td 
-                            key={unit.id} 
-                            className={`px-2 py-2 border-r border-slate-200 dark:border-slate-800 min-h-[80px] ${sessionIdx === 1 ? 'bg-slate-50/30 dark:bg-slate-800/30' : ''} ${isToday ? 'ring-2 ring-sky-400/50' : ''} ${count > 0 ? 'bg-amber-50/20 dark:bg-amber-950/10' : ''} hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors relative cursor-pointer`}
-                            onClick={() => handleMatrixCellClick(unit.name, unit.members, dayIndex, session)}
-                          >
-                            {count > 0 && (
-                              <div className="flex flex-wrap gap-1 mb-1">
-                                {hasMeeting && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200">Họp</span>}
-                                {hasBusiness && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200">Công tác</span>}
-                                {hasTraining && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200">Đào tạo</span>}
-                                {hasOffice && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200">Cơ quan</span>}
-                              </div>
-                            )}
-                            <div className="text-[11px] text-slate-700 dark:text-slate-300 line-clamp-3 pr-2">
-                              {count > 0 ? daySchedules.map((s, i) => (
-                                <div key={i} className="mb-0.5 flex items-start gap-1 relative">
-                                  <span className={`w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0 ${{
-                                    'Đã hoàn thành': 'bg-emerald-500',
-                                    'Đang thực hiện': 'bg-sky-500',
-                                    'Chưa bắt đầu': 'bg-amber-500',
-                                    'Hủy': 'bg-rose-500',
-                                  }[s.status] || 'bg-slate-400'}`} />
-                                  <span className="truncate flex-1">{s.taskName}</span>
-                                  <div className="flex gap-0.5">
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); handleEditClick(s); }}
-                                      className="p-1 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/20" 
-                                      title="Sửa"
-                                    >
-                                      <Edit2 className="w-3 h-3" />
-                                    </button>
-                                    <button 
-                                      onClick={(e) => { 
-                                        e.stopPropagation(); 
-                                        if (confirm('Bạn có chắc muốn xóa lịch công tác này?')) {
-                                          onDeleteSchedule(s.id);
-                                          addToast('success', 'Đã xóa', 'Lịch công tác đã được xóa thành công');
-                                        }
-                                      }}
-                                      className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20" 
-                                      title="Xóa"
-                                    >
-                                      <Trash2 className="w-3 h-3" />
-                                    </button>
-                                  </div>
-                                </div>
-                              )) : (
-                                <span className="text-slate-300 dark:text-slate-600 italic">—</span>
-                              )}
-                            </div>
-                            {count > 0 && (
-                              <div className="absolute bottom-1 right-1 flex gap-0.5">
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/90 dark:bg-slate-800/90 shadow-sm border border-slate-200 dark:border-slate-700">
-                                  {count}
-                                </span>
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     );
@@ -1307,88 +1082,88 @@ export const WeeklyWorkSchedule: React.FC<{
           </div>
         </div>
 
-        {/* ===== MAIN LAYOUT: 4 BLOCKS GRID + MATRIX ===== */}
-        <div className="space-y-4">
+        {/* ===== 2x2 GRID LAYOUT ===== */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           
-          {/* ROW 1: LEADERS | PHONG BAN */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <Block
-              title="1. Lãnh đạo Cục (4 người)"
-              subtitle="4 lãnh đạo"
-              icon={<UsersIcon className="w-4 h-4" />}
-              headerColor={LEADER_COLOR}
-              units={leaderUnits}
-              type="leader"
-              color={LEADER_COLOR}
-            />
-            <Block
-              title="2. Khối Phòng ban (5 phòng)"
-              subtitle="5 phòng ban"
-              icon={<Building className="w-4 h-4" />}
-              headerColor={PHONG_COLOR}
-              units={phongUnits}
-              type="phong"
-              color={PHONG_COLOR}
-            />
-          </div>
+          {/* SECTION 1: BAN LÃNH ĐẠO */}
+          <SectionBlock
+            title="1. LỊCH CÔNG TÁC BAN LÃNH ĐẠO"
+            subtitle="4 LÃNH ĐẠO"
+            icon={<UsersIcon className="w-4 h-4" />}
+            headerColor={LEADER_COLOR}
+            units={leaderUnits}
+            color={LEADER_COLOR}
+            type="leader"
+          />
 
-          {/* ROW 2: VUNG 1 | VUNG 2 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <Block
-              title="3. Vùng 1 - Thống kê cơ sở (7 đơn vị)"
-              subtitle="7 cơ sở thống kê"
-              icon={<Building2 className="w-4 h-4" />}
-              headerColor={VUNG1_COLOR}
-              units={vung1Units}
-              type="vung1"
-              color={VUNG1_COLOR}
-            />
-            <Block
-              title="4. Vùng 2 - Thống kê cơ sở (7 đơn vị)"
-              subtitle="7 cơ sở thống kê"
-              icon={<Building2 className="w-4 h-4" />}
-              headerColor={VUNG2_COLOR}
-              units={vung2Units}
-              type="vung2"
-              color={VUNG2_COLOR}
-            />
-          </div>
+          {/* SECTION 2: VÙNG 1 */}
+          <SectionBlock
+            title="2. LỊCH THỐNG KÊ CƠ SỞ VÙNG 1"
+            subtitle="7 CƠ SỞ VÙNG 1"
+            icon={<Building2 className="w-4 h-4" />}
+            headerColor={VUNG1_COLOR}
+            units={VUNG1_UNITS.map((name) => ({
+              id: `vung1_${name}`,
+              name,
+              fullName: `Thống kê cơ sở ${name}`,
+              color: VUNG1_COLOR,
+              members: users.filter(u => u.department === `Thống kê cơ sở ${name}` || u.workUnit === `Thống kê cơ sở ${name}`),
+              allSchedules: schedules.filter(s => {
+                const scheduleDate = new Date(s.date);
+                return scheduleDate >= weekStartDate && scheduleDate <= weekEndDate && 
+                       users.some(u => (u.department === `Thống kê cơ sở ${name}` || u.workUnit === `Thống kê cơ sở ${name}`) && u.fullName === s.userName) && 
+                       s.taskType !== 'Làm việc tại cơ quan';
+              })
+            }))}
+            color={VUNG1_COLOR}
+            type="vung1"
+          />
 
-          {/* ROW 3: MATRIX AT BOTTOM */}
-          <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs overflow-hidden" style={{ borderTop: '3px solid #2d6e3e' }}>
-            <div className="bg-[#87af89] text-white text-[12px] font-semibold py-1.5 px-4 flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Table className="w-4 h-4" />
-                Ma trận Lịch Lãnh đạo (4 người × 7 ngày × 2 buổi)
-              </span>
-              <div className="flex items-center gap-2">
-                <select
-                  value={filterTaskType}
-                  onChange={(e) => setFilterTaskType(e.target.value)}
-                  className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded"
-                >
-                  <option value="ALL">Tất cả loại</option>
-                  <option value="Họp">Họp</option>
-                  <option value="Công tác">Công tác</option>
-                  <option value="Đào tạo">Đào tạo</option>
-                  <option value="Khác">Khác</option>
-                  <option value="Làm việc tại cơ quan">Làm việc tại cơ quan</option>
-                </select>
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded w-40 placeholder:text-slate-400"
-                />
-                <button onClick={exportToExcel} className="flex items-center gap-1 px-2 py-1 text-xs font-bold bg-[#2d6e3e] hover:bg-[#1e4d2b] text-white rounded border border-slate-300 transition-colors whitespace-nowrap">
-                  <FileSpreadsheet className="w-3 h-3" />
-                  Xuất Excel
-                </button>
-              </div>
-            </div>
-            <LeaderMatrixView />
-          </div>
+          {/* SECTION 3: 5 PHÒNG CHỨC NĂNG */}
+          <SectionBlock
+            title="3. LỊCH CÔNG TÁC 5 PHÒNG CHỨC NĂNG"
+            subtitle="5 PHÒNG"
+            icon={<Building className="w-4 h-4" />}
+            headerColor={PHONG_COLOR}
+            units={PHONG_UNITS.map((p) => ({
+              id: `phong_${p.full}`,
+              name: p.short,
+              fullName: p.full,
+              color: PHONG_COLOR,
+              members: users.filter(u => u.department === p.full),
+              allSchedules: schedules.filter(s => {
+                const scheduleDate = new Date(s.date);
+                return scheduleDate >= weekStartDate && scheduleDate <= weekEndDate && 
+                       users.some(u => u.department === p.full && u.fullName === s.userName) && 
+                       s.taskType !== 'Làm việc tại cơ quan';
+              })
+            }))}
+            color={PHONG_COLOR}
+            type="phong"
+          />
+
+          {/* SECTION 4: VÙNG 2 */}
+          <SectionBlock
+            title="4. LỊCH THỐNG KÊ CƠ SỞ VÙNG 2"
+            subtitle="7 CƠ SỞ VÙNG 2"
+            icon={<Building2 className="w-4 h-4" />}
+            headerColor={VUNG2_COLOR}
+            units={VUNG2_UNITS.map((name) => ({
+              id: `vung2_${name}`,
+              name,
+              fullName: `Thống kê cơ sở ${name}`,
+              color: VUNG2_COLOR,
+              members: users.filter(u => u.department === `Thống kê cơ sở ${name}` || u.workUnit === `Thống kê cơ sở ${name}`),
+              allSchedules: schedules.filter(s => {
+                const scheduleDate = new Date(s.date);
+                return scheduleDate >= weekStartDate && scheduleDate <= weekEndDate && 
+                       users.some(u => (u.department === `Thống kê cơ sở ${name}` || u.workUnit === `Thống kê cơ sở ${name}`) && u.fullName === s.userName) && 
+                       s.taskType !== 'Làm việc tại cơ quan';
+              })
+            }))}
+            color={VUNG2_COLOR}
+            type="vung2"
+          />
 
         </div>
 
