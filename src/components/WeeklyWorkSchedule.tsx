@@ -1271,7 +1271,7 @@ export const WeeklyWorkSchedule: React.FC<{
         <div className="flex gap-3">
           
           {/* ===== LEFT SIDEBAR ===== */}
-          <aside className={`w-72 flex-shrink-0 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 flex flex-col ${!sidebarOpen ? 'hidden md:block' : 'block'} md:block`}>
+          <aside className={`w-72 flex-shrink-0 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 flex flex-col md:block ${!sidebarOpen ? 'hidden' : ''}`}>
             <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
               <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <FilterIcon className="w-5 h-5 text-[#2d6e3e]" />
