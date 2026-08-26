@@ -597,43 +597,42 @@ const SectionBlock = ({
       </div>
 
       {/* Cards Grid - Modern Design */}
-      <div className="p-4 space-y-3">
-        {units.map((unit, index) => (
-          <ModernCard
-            key={unit.id}
-            unit={unit}
-            index={index}
-            schedules={schedules}
-            weekStartDateStr={weekStartDateStr}
-            filterWorkType={filterWorkType}
-            onClick={() => handleToggleExpand(unit.id)}
-            onAddClick={(e) => handleAddClick(e, unit.fullName || unit.name)}
-            isExpanded={expandedUnitId === unit.id}
-            handleEditClick={handleEditClick}
-          />
-        ))}
+      <div className="p-4">
+        <div className="grid gap-3" style={{ 
+          gridTemplateColumns: units.length <= 2 
+            ? 'repeat(2, 1fr)' 
+            : units.length <= 4 
+              ? 'repeat(2, 1fr)' 
+              : units.length <= 6 
+                ? 'repeat(3, 1fr)' 
+                : 'repeat(4, 1fr)' 
+        }}>
+          {units.map((unit, index) => (
+            <ModernCard
+              key={unit.id}
+              unit={unit}
+              index={index}
+              schedules={schedules}
+              weekStartDateStr={weekStartDateStr}
+              filterWorkType={filterWorkType}
+              onClick={() => handleToggleExpand(unit.id)}
+              onAddClick={(e) => handleAddClick(e, unit.fullName || unit.name)}
+              isExpanded={expandedUnitId === unit.id}
+              handleEditClick={handleEditClick}
+            />
+          ))}
 
-        {/* Add New Card */}
-        <button
-          onClick={() => onAddForm(undefined, units[0]?.fullName || units[0]?.name)}
-          className="w-full group flex items-center justify-center gap-2 px-4 py-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-2xl text-slate-500 dark:text-slate-400 hover:border-[#2d6e3e] hover:text-[#2d6e3e] hover:bg-[#2d6e3e]/5 dark:hover:bg-[#2d6e3e]/10 transition-all duration-300"
-        >
-          <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:bg-[#2d6e3e] group-hover:text-white transition-all duration-300">
-            <Plus className="w-4.5 h-4.5 text-slate-400 dark:text-slate-500 group-hover:text-white transition-colors" />
-          </div>
-          <span className="font-medium text-sm">Thêm đơn vị / lịch mới</span>
-        </button>
-
-        {/* Empty state when no units */}
-        {units.length === 0 && (
-          <div className="py-12 text-center">
-            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
-              <Building2 className="w-8 h-8 text-slate-400" />
+          {/* Empty state when no units */}
+          {units.length === 0 && (
+            <div className="col-span-full py-12 text-center">
+              <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
+                <Building2 className="w-8 h-8 text-slate-400" />
+              </div>
+              <p className="font-bold text-slate-800 dark:text-slate-200 text-lg mb-2">Chưa có đơn vị nào</p>
+              <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">Chưa có dữ liệu đơn vị</p>
             </div>
-            <p className="font-bold text-slate-800 dark:text-slate-200 text-lg mb-2">Chưa có đơn vị nào</p>
-            <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">Nhấn nút thêm để tạo đơn vị mới</p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
