@@ -157,9 +157,7 @@ export const WeeklyWorkSchedule: React.FC<{
   });
   const [filterTaskType, setFilterTaskType] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedLeader, setSelectedLeader] = useState<string | null>(null);
-  const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [expandedUnits, setExpandedUnits] = useState<Record<string, boolean>>({});
   const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState<Partial<WeeklySchedule>>({});
@@ -236,7 +234,6 @@ export const WeeklyWorkSchedule: React.FC<{
   };
 
   const handleEditClick = (schedule: WeeklySchedule) => {
-    setSelectedUnit(schedule.userName);
     setShowAddForm(true);
     setAddForm(schedule);
   };
@@ -329,6 +326,10 @@ export const WeeklyWorkSchedule: React.FC<{
     } else {
       openAddForm(dayIndex, unitName);
     }
+  };
+
+  const toggleExpand = (unitId: string) => {
+    setExpandedUnits(prev => ({ ...prev, [unitId]: !prev[unitId] }));
   };
 
   const downloadTemplate = useCallback(() => {
@@ -732,48 +733,90 @@ export const WeeklyWorkSchedule: React.FC<{
     }))
   , [users, getStatsForUnit, getSchedulesForUnit]);
 
-  // ===== SIDEBAR ITEM =====
-  const SidebarItem = ({ 
-    unit, 
-    isActive, 
-    onClick,
-    type = 'leader',
-    key
+  // ===== BLOCK COMPONENT =====
+  const Block = ({ 
+    title, 
+    subtitle,
+    icon, 
+    headerColor,
+    units,
+    type,
+    color
   }: { 
-    unit: typeof leaderUnits[0]; 
-    isActive: boolean;
-    onClick: () => void;
-    type?: 'leader' | 'phong' | 'vung1' | 'vung2';
-    key?: React.Key;
+    title: string;
+    subtitle: string;
+    icon: React.ReactNode;
+    headerColor: string;
+    units: Array<{id: string; name: string; position?: string; color: string; members: UserType[]; stats: any; allSchedules: WeeklySchedule[]}>;
+    type: 'leader' | 'phong' | 'vung1' | 'vung2';
+    color: string;
   }) => {
-    const iconMap = {
-      leader: UsersIcon,
-      phong: Building,
-      vung1: Building2,
-      vung2: Building2
-    };
-    const Icon = iconMap[type];
+    const totalUnits = units.length;
+    const totalTasks = units.reduce((sum, u) => sum + u.stats.total, 0);
+    const isLeader = type === 'leader';
 
     return (
-      <button
-        onClick={onClick}
-        className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all text-left ${
-          isActive 
-            ? `bg-${type === 'leader' ? 'green' : type === 'phong' ? 'blue' : type === 'vung1' ? 'teal' : 'pink'}-600 text-white shadow-lg`
-            : 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200'
-        }`}
-        style={{ borderLeft: `4px solid ${unit.color}` }}
-      >
-        <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : unit.color }}>
-          <Icon className="w-4 h-4" style={{ color: isActive ? 'white' : unit.color }} />
+      <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden" style={{ borderTop: `3px solid ${headerColor}` }}>
+        {/* Block Header */}
+        <div className="bg-[#87af89] text-white text-[12px] font-semibold py-2 px-4 flex items-center justify-between min-h-[40px]">
+          <span className="flex items-center gap-2 truncate">{icon} {title}</span>
+          <span className="text-[10px] opacity-90 whitespace-nowrap">{totalUnits} đơn vị | {totalTasks} việc</span>
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-medium text-sm truncate">{unit.name}</p>
-          {unit.position && <p className="text-[11px] truncate opacity-75">{unit.position}</p>}
-          <p className="text-[11px] font-bold mt-1">{unit.stats.total} việc</p>
+
+        {/* Stat Cards Grid */}
+        <div className={`p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] ${isLeader ? 'min-h-[100px]' : 'min-h-[80px]'}`}>
+          <div className={`grid gap-1.5 ${isLeader ? 'grid-cols-4' : 'grid-cols-7'}`}>
+            {units.map((unit) => (
+              <div 
+                key={unit.id}
+                className="flex flex-col items-center justify-center p-2 rounded-lg shadow-sm min-h-[50px] cursor-pointer hover:opacity-90 transition-all"
+                style={{ backgroundColor: unit.color }}
+                onClick={() => openAddForm(undefined, unit.name)}
+              >
+                <span className={`font-medium truncate text-center text-white/90 leading-tight max-w-full ${isLeader ? 'text-[11px]' : 'text-[8px]'}`}>
+                  {isLeader ? unit.name + (unit.position ? ` (${unit.position})` : '') : unit.name.replace('Thống kê cơ sở ', 'CS ')}
+                </span>
+                <span className={`font-bold tracking-normal mt-0.5 leading-none text-white ${isLeader ? 'text-lg' : 'text-base'}`}>
+                  {unit.stats.total}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
-        {isActive && <ChevronRight className="w-4 h-4" />}
-      </button>
+
+        {/* Detail Tables - Expandable */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-2" style={{ minHeight: 0 }}>
+          {units.map((unit) => (
+            <div key={unit.id} className={`border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden transition-all duration-200`} style={{ borderLeft: `3px solid ${unit.color}` }}>
+              <div className="p-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: unit.color }} />
+                  <span className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{unit.name}</span>
+                  {unit.position && <span className="text-xs text-slate-500 px-1.5 py-0.5 rounded bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-700">{unit.position}</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 whitespace-nowrap">
+                    {unit.stats.total} việc
+                  </span>
+                  <button 
+                    onClick={() => openAddForm(undefined, unit.name)}
+                    className="p-1.5 hover:bg-white/50 dark:hover:bg-slate-700 rounded transition-colors"
+                    title="Thêm lịch"
+                  >
+                    <Plus className="w-4 h-4" style={{ color: unit.color }} />
+                  </button>
+                </div>
+              </div>
+              <DetailTable 
+                schedules={unit.allSchedules} 
+                unitName={unit.id}
+                unitMembers={unit.members}
+                unitColor={unit.color}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
     );
   };
 
@@ -856,7 +899,7 @@ export const WeeklyWorkSchedule: React.FC<{
   // ===== LEADER MATRIX =====
   const LeaderMatrixView = () => {
     return (
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden flex-1">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
         <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
           <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <Table className="w-5 h-5 text-[#2d6e3e]" />
@@ -889,7 +932,7 @@ export const WeeklyWorkSchedule: React.FC<{
           </div>
         </div>
         
-        <div className="overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
+        <div className="overflow-x-auto overflow-y-auto max-h-[500px] custom-scrollbar">
           <table className="w-full min-w-max text-xs">
             <thead>
               <tr className="bg-[#006097] text-white sticky top-0 z-10">
@@ -1206,9 +1249,6 @@ export const WeeklyWorkSchedule: React.FC<{
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 p-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4 flex-wrap">
-              <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
-                <Menu className="w-6 h-6" />
-              </button>
               <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 <CalendarIcon className="w-5 h-5 text-[#2d6e3e]" />
                 <span>Lịch Công tác tuần</span>
@@ -1267,168 +1307,88 @@ export const WeeklyWorkSchedule: React.FC<{
           </div>
         </div>
 
-        {/* ===== MAIN LAYOUT: SIDEBAR + MATRIX ===== */}
-        <div className="flex gap-3">
+        {/* ===== MAIN LAYOUT: 4 BLOCKS GRID + MATRIX ===== */}
+        <div className="space-y-4">
           
-          {/* ===== LEFT SIDEBAR ===== */}
-          <aside className={`w-72 flex-shrink-0 bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 flex flex-col md:block ${!sidebarOpen ? 'hidden' : ''}`}>
-            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-              <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                <FilterIcon className="w-5 h-5 text-[#2d6e3e]" />
-                <span>Bộ lọc đơn vị</span>
-              </h3>
-              <button onClick={() => setSidebarOpen(false)} className="md:hidden p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
-                <XIcon className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="p-4 space-y-3 overflow-y-auto flex-1">
-              
-              {/* LÃNH ĐẠO */}
-              <div>
-                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2 px-2">LÃNH ĐẠO (4 người)</p>
-                {leaderUnits.map((unit) => (
-                  <SidebarItem
-                    key={unit.id}
-                    unit={unit}
-                    isActive={selectedLeader === unit.id}
-                    onClick={() => setSelectedLeader(selectedLeader === unit.id ? null : unit.id)}
-                    type="leader"
-                  />
-                ))}
+          {/* ROW 1: LEADERS | PHONG BAN */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <Block
+              title="1. Lãnh đạo Cục (4 người)"
+              subtitle="4 lãnh đạo"
+              icon={<UsersIcon className="w-4 h-4" />}
+              headerColor={LEADER_COLOR}
+              units={leaderUnits}
+              type="leader"
+              color={LEADER_COLOR}
+            />
+            <Block
+              title="2. Khối Phòng ban (5 phòng)"
+              subtitle="5 phòng ban"
+              icon={<Building className="w-4 h-4" />}
+              headerColor={PHONG_COLOR}
+              units={phongUnits}
+              type="phong"
+              color={PHONG_COLOR}
+            />
+          </div>
+
+          {/* ROW 2: VUNG 1 | VUNG 2 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <Block
+              title="3. Vùng 1 - Thống kê cơ sở (7 đơn vị)"
+              subtitle="7 cơ sở thống kê"
+              icon={<Building2 className="w-4 h-4" />}
+              headerColor={VUNG1_COLOR}
+              units={vung1Units}
+              type="vung1"
+              color={VUNG1_COLOR}
+            />
+            <Block
+              title="4. Vùng 2 - Thống kê cơ sở (7 đơn vị)"
+              subtitle="7 cơ sở thống kê"
+              icon={<Building2 className="w-4 h-4" />}
+              headerColor={VUNG2_COLOR}
+              units={vung2Units}
+              type="vung2"
+              color={VUNG2_COLOR}
+            />
+          </div>
+
+          {/* ROW 3: MATRIX AT BOTTOM */}
+          <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs overflow-hidden" style={{ borderTop: '3px solid #2d6e3e' }}>
+            <div className="bg-[#87af89] text-white text-[12px] font-semibold py-1.5 px-4 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Table className="w-4 h-4" />
+                Ma trận Lịch Lãnh đạo (4 người × 7 ngày × 2 buổi)
+              </span>
+              <div className="flex items-center gap-2">
+                <select
+                  value={filterTaskType}
+                  onChange={(e) => setFilterTaskType(e.target.value)}
+                  className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded"
+                >
+                  <option value="ALL">Tất cả loại</option>
+                  <option value="Họp">Họp</option>
+                  <option value="Công tác">Công tác</option>
+                  <option value="Đào tạo">Đào tạo</option>
+                  <option value="Khác">Khác</option>
+                  <option value="Làm việc tại cơ quan">Làm việc tại cơ quan</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="px-2 py-1 text-xs border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded w-40 placeholder:text-slate-400"
+                />
+                <button onClick={exportToExcel} className="flex items-center gap-1 px-2 py-1 text-xs font-bold bg-[#2d6e3e] hover:bg-[#1e4d2b] text-white rounded border border-slate-300 transition-colors whitespace-nowrap">
+                  <FileSpreadsheet className="w-3 h-3" />
+                  Xuất Excel
+                </button>
               </div>
-
-              {/* PHÒNG BAN */}
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2 px-2">PHÒNG BAN (5 phòng)</p>
-                {phongUnits.map((unit) => (
-                  <SidebarItem
-                    key={unit.id}
-                    unit={unit}
-                    isActive={selectedUnit === unit.id}
-                    onClick={() => setSelectedUnit(selectedUnit === unit.id ? null : unit.id)}
-                    type="phong"
-                  />
-                ))}
-              </div>
-
-              {/* VÙNG 1 */}
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2 px-2">VÙNG 1 (7 cơ sở)</p>
-                {vung1Units.map((unit) => (
-                  <SidebarItem
-                    key={unit.id}
-                    unit={unit}
-                    isActive={selectedUnit === unit.id}
-                    onClick={() => setSelectedUnit(selectedUnit === unit.id ? null : unit.id)}
-                    type="vung1"
-                  />
-                ))}
-              </div>
-
-              {/* VÙNG 2 */}
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2 px-2">VÙNG 2 (7 cơ sở)</p>
-                {vung2Units.map((unit) => (
-                  <SidebarItem
-                    key={unit.id}
-                    unit={unit}
-                    isActive={selectedUnit === unit.id}
-                    onClick={() => setSelectedUnit(selectedUnit === unit.id ? null : unit.id)}
-                    type="vung2"
-                  />
-                ))}
-              </div>
-
             </div>
-          </aside>
-
-          {/* ===== MAIN CONTENT ===== */}
-          <main className="flex-1 min-w-0 flex flex-col">
-            
-            {/* ===== MATRIX ===== */}
-            <div className="flex-1 min-h-0">
-              <LeaderMatrixView />
-            </div>
-
-            {/* ===== DETAIL TABLES (Bottom) ===== */}
-            <div className="mt-3 space-y-3">
-              
-              {/* SELECTED LEADER DETAIL */}
-              {selectedLeader && leaderUnits.find(u => u.id === selectedLeader) && (
-                <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs overflow-hidden" style={{ borderTop: `3px solid ${LEADER_COLOR}` }}>
-                  <div className="bg-[#87af89] text-white text-[12px] font-semibold py-2 px-4 flex items-center justify-between">
-                    <span className="flex items-center gap-2"><UsersIcon className="w-4 h-4" /> Chi tiết Lãnh đạo</span>
-                    <button onClick={() => setSelectedLeader(null)} className="p-1 hover:bg-white/20 rounded">
-                      <XIcon className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <DetailTable 
-                    schedules={leaderUnits.find(u => u.id === selectedLeader)!.allSchedules} 
-                    unitName={selectedLeader}
-                    unitMembers={leaderUnits.find(u => u.id === selectedLeader)!.members}
-                    unitColor={LEADER_COLOR}
-                  />
-                </div>
-              )}
-
-              {/* SELECTED UNIT DETAIL */}
-              {selectedUnit && (
-                <>
-                  {phongUnits.find(u => u.id === selectedUnit) && (
-                    <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs overflow-hidden" style={{ borderTop: `3px solid ${PHONG_COLOR}` }}>
-                      <div className="bg-[#87af89] text-white text-[12px] font-semibold py-2 px-4 flex items-center justify-between">
-                        <span className="flex items-center gap-2"><Building className="w-4 h-4" /> Chi tiết Phòng ban</span>
-                        <button onClick={() => setSelectedUnit(null)} className="p-1 hover:bg-white/20 rounded">
-                          <XIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <DetailTable 
-                        schedules={phongUnits.find(u => u.id === selectedUnit)!.allSchedules} 
-                        unitName={selectedUnit}
-                        unitMembers={phongUnits.find(u => u.id === selectedUnit)!.members}
-                        unitColor={PHONG_COLOR}
-                      />
-                    </div>
-                  )}
-                  {vung1Units.find(u => u.id === selectedUnit) && (
-                    <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs overflow-hidden" style={{ borderTop: `3px solid ${VUNG1_COLOR}` }}>
-                      <div className="bg-[#87af89] text-white text-[12px] font-semibold py-2 px-4 flex items-center justify-between">
-                        <span className="flex items-center gap-2"><Building2 className="w-4 h-4" /> Chi tiết Vùng 1</span>
-                        <button onClick={() => setSelectedUnit(null)} className="p-1 hover:bg-white/20 rounded">
-                          <XIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <DetailTable 
-                        schedules={vung1Units.find(u => u.id === selectedUnit)!.allSchedules} 
-                        unitName={selectedUnit}
-                        unitMembers={vung1Units.find(u => u.id === selectedUnit)!.members}
-                        unitColor={VUNG1_COLOR}
-                      />
-                    </div>
-                  )}
-                  {vung2Units.find(u => u.id === selectedUnit) && (
-                    <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs overflow-hidden" style={{ borderTop: `3px solid ${VUNG2_COLOR}` }}>
-                      <div className="bg-[#87af89] text-white text-[12px] font-semibold py-2 px-4 flex items-center justify-between">
-                        <span className="flex items-center gap-2"><Building2 className="w-4 h-4" /> Chi tiết Vùng 2</span>
-                        <button onClick={() => setSelectedUnit(null)} className="p-1 hover:bg-white/20 rounded">
-                          <XIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <DetailTable 
-                        schedules={vung2Units.find(u => u.id === selectedUnit)!.allSchedules} 
-                        unitName={selectedUnit}
-                        unitMembers={vung2Units.find(u => u.id === selectedUnit)!.members}
-                        unitColor={VUNG2_COLOR}
-                      />
-                    </div>
-                  )}
-                </>
-              )}
-
-            </div>
-
-          </main>
+            <LeaderMatrixView />
+          </div>
 
         </div>
 
