@@ -285,27 +285,27 @@ const renderDetailTable = (unit: any) => {
       </div>
 
       {/* Cards Row - Single Row */}
-      <div className="p-3 bg-[#f5f9f6] border-b border-[#c6d8c8] flex items-center gap-2 overflow-x-auto">
+      <div className="p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] flex items-center gap-1.5 overflow-x-auto">
         {units.map((unit, index) => (
           <button
             key={unit.id}
             onClick={() => handleToggleExpand(unit.id)}
-            className={`flex flex-col items-center justify-center px-4 py-3 min-w-[140px] max-w-[180px] flex-shrink-0 rounded-lg shadow-sm cursor-pointer hover:opacity-90 transition-all ${cardColors[index % cardColors.length]}`}
+            className={`flex flex-col items-center justify-center px-2.5 py-2 min-w-[100px] max-w-[140px] flex-shrink-0 rounded cursor-pointer hover:opacity-90 transition-all ${cardColors[index % cardColors.length]}`}
           >
-            <span className="font-medium text-white/90 leading-tight text-center text-sm truncate">
+            <span className="font-medium text-white/90 leading-tight text-center text-xs truncate">
               {unit.name + (unit.position ? ` (${unit.position})` : '')}
             </span>
-            <span className="font-bold text-white text-lg mt-1">{getScheduleForUnit(unit.fullName || unit.name, unit.members).length} VIỆC</span>
-            {expandedUnitId === unit.id && <ChevronRight className="w-4 h-4 text-white/80 mt-1" />}
+            <span className="font-bold text-white text-base mt-0.5">{getScheduleForUnit(unit.fullName || unit.name, unit.members).length} VIỆC</span>
+            {expandedUnitId === unit.id && <ChevronRight className="w-3 h-3 text-white/80 mt-0.5" />}
           </button>
         ))}
         <div className="flex-1" />
         <button 
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-white hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-lg shadow-sm transition-colors whitespace-nowrap border border-slate-200 dark:border-slate-700"
+          className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-white hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 rounded shadow-sm transition-colors whitespace-nowrap border border-slate-200 dark:border-slate-700"
           onClick={() => onAddForm(undefined, units[0]?.fullName || units[0]?.name)}
         >
-          <Plus className="w-3.5 h-3.5" style={{ color: color }} />
-          <span>+ Thêm lịch</span>
+          <Plus className="w-3 h-3" style={{ color: color }} />
+          <span className="text-[10px]">Thêm</span>
         </button>
       </div>
 
@@ -316,7 +316,6 @@ const renderDetailTable = (unit: any) => {
         </div>
       )}
 
-      {/* Empty state when no card expanded */}
       {/* Empty state when no card expanded */}
       {!expandedUnitId && (
         <div className="flex-1 flex items-center justify-center p-8">
