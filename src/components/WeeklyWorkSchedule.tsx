@@ -82,6 +82,117 @@ const TASK_TYPE_COLORS = {
   'Khác': '#8b5cf6',
 };
 
+const WORK_TYPE_LABELS_VN = {
+  OFFICE: 'Làm việc tại cơ quan',
+  OUTSIDE: 'Công tác ngoài',
+  MEETING: 'Họp/Hội nghị',
+  OFF: 'Nghỉ/Off',
+};
+
+const WORK_TYPE_COLORS = {
+  OFFICE: '#f59e0b',
+  OUTSIDE: '#10b981',
+  MEETING: '#3b82f6',
+  OFF: '#6b7280',
+};
+
+const WORK_TYPE_ICONS = {
+  OFFICE: Building,
+  OUTSIDE: Briefcase,
+  MEETING: Users,
+  OFF: XCircleIcon,
+};
+
+const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'];
+const DAY_LABELS_SHORT = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+const SESSIONS = ['MORNING', 'AFTERNOON'];
+const SESSION_LABELS = { MORNING: 'Sáng', AFTERNOON: 'Chiều' };
+
+const LEADER_COLOR = '#2d6e3e';
+const PHONG_COLOR = '#3b82f6';
+const VUNG1_COLOR = '#0d9488';
+const VUNG2_COLOR = '#ec4899';
+
+const DEFAULT_LEADERS = [
+  { name: 'Đào Trọng Truyền', position: 'Trưởng Thống kê', unitName: 'Ban Lãnh đạo' },
+  { name: 'Đào Thị Hiếu', position: 'Phó Trưởng Thống kê', unitName: 'Ban Lãnh đạo' },
+  { name: 'Vũ Tuấn Hùng', position: 'Phó Trưởng Thống kê', unitName: 'Ban Lãnh đạo' },
+  { name: 'Phạm Văn Tự', position: 'Phó Trưởng Thống kê', unitName: 'Ban Lãnh đạo' },
+];
+
+const VUNG1_UNITS = [
+  'Phố Hiến', 'Như Quỳnh', 'Yên Mỹ', 'Mỹ Hào', 'Khoái Châu', 'Lương Bằng', 'Hoàng Hoa Thám'
+];
+
+const VUNG2_UNITS = [
+  'Quỳnh Phụ', 'Hưng Hà', 'Đông Hưng', 'Thái Thụy', 'Tiền Hải', 'Kiến Xương', 'Vũ Thư'
+];
+
+const PHONG_UNITS = [
+  { short: 'P. Tổng hợp', full: 'Phòng Thống kê Tổng hợp', count: 12 },
+  { short: 'Phòng TCHC', full: 'Phòng TCHC', count: 0 },
+  { short: 'P. TMDV & Giá', full: 'Phòng Thống kê TMDV & Giá', count: 0 },
+  { short: 'P. CNXD', full: 'Phòng Thống kê CNXD', count: 0 },
+  { short: 'P. NN&XH', full: 'Phòng Thống kê NN&XH', count: 0 },
+];
+
+const formatWeekRange = (start: Date) => {
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return `${start.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+};
+
+// Card colors for modern design
+const CARD_GRADIENTS = [
+  'from-emerald-500 to-emerald-600',
+  'from-blue-500 to-blue-600',
+  'from-amber-500 to-amber-600',
+  'from-purple-500 to-purple-600',
+  'from-rose-500 to-rose-600',
+  'from-indigo-500 to-indigo-600',
+  'from-orange-500 to-orange-600',
+];
+
+const CARD_HOVER_GRADIENTS = [
+  'from-emerald-600 to-emerald-700',
+  'from-blue-600 to-blue-700',
+  'from-amber-600 to-amber-700',
+  'from-purple-600 to-purple-700',
+  'from-rose-600 to-rose-700',
+  'from-indigo-600 to-indigo-700',
+  'from-orange-600 to-orange-700',
+];
+
+const CARD_BG_LIGHT = [
+  'bg-emerald-50 dark:bg-emerald-950/20',
+  'bg-blue-50 dark:bg-blue-950/20',
+  'bg-amber-50 dark:bg-amber-950/20',
+  'bg-purple-50 dark:bg-purple-950/20',
+  'bg-rose-50 dark:bg-rose-950/20',
+  'bg-indigo-50 dark:bg-indigo-950/20',
+  'bg-orange-50 dark:bg-orange-950/20',
+];
+
+const CARD_BORDER_LIGHT = [
+  'border-emerald-200 dark:border-emerald-800',
+  'border-blue-200 dark:border-blue-800',
+  'border-amber-200 dark:border-amber-800',
+  'border-purple-200 dark:border-purple-800',
+  'border-rose-200 dark:border-rose-800',
+  'border-indigo-200 dark:border-indigo-800',
+  'border-orange-200 dark:border-orange-800',
+];
+
+const CARD_TEXT_COLOR = [
+  'text-emerald-700 dark:text-emerald-300',
+  'text-blue-700 dark:text-blue-300',
+  'text-amber-700 dark:text-amber-300',
+  'text-purple-700 dark:text-purple-300',
+  'text-rose-700 dark:text-rose-300',
+  'text-indigo-700 dark:text-indigo-300',
+  'text-orange-700 dark:text-orange-300',
+];
+
 const LEADER_COLOR = '#2d6e3e';
 const PHONG_COLOR = '#3b82f6';
 const VUNG1_COLOR = '#0d9488';
@@ -137,6 +248,295 @@ const formatWeekRange = (start: Date) => {
   return `${start.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
 };
 
+// ===== MODERN CARD COMPONENT =====
+interface ModernCardProps {
+  unit: {
+    id: string;
+    name: string;
+    fullName?: string;
+    position?: string;
+    color: string;
+    members: UserType[];
+    allSchedules: any[];
+  };
+  index: number;
+  schedules: any[];
+  weekStartDateStr: string;
+  filterWorkType: string;
+  onClick: () => void;
+  onAddClick: (e: React.MouseEvent) => void;
+  isExpanded: boolean;
+  handleEditClick: (schedule: any) => void;
+}
+
+const ModernCard: React.FC<ModernCardProps> = ({
+  unit,
+  index,
+  schedules,
+  weekStartDateStr,
+  filterWorkType,
+  onClick,
+  onAddClick,
+  isExpanded,
+  handleEditClick
+}) => {
+  const gradient = CARD_GRADIENTS[index % CARD_GRADIENTS.length];
+  const hoverGradient = CARD_HOVER_GRADIENTS[index % CARD_HOVER_GRADIENTS.length];
+  const bgLight = CARD_BG_LIGHT[index % CARD_BG_LIGHT.length];
+  const borderLight = CARD_BORDER_LIGHT[index % CARD_BORDER_LIGHT.length];
+  const textColor = CARD_TEXT_COLOR[index % CARD_TEXT_COLOR.length];
+
+  const getScheduleForUnit = (unitName: string, unitMembers: UserType[]) => {
+    const memberNames = new Set(unitMembers.map(m => m.fullName));
+    return schedules.filter(s => {
+      if (s.weekStartDate !== weekStartDateStr) return false;
+      if (!memberNames.has(s.personName)) return false;
+      if (filterWorkType !== 'ALL' && s.workType !== filterWorkType) return false;
+      return true;
+    }).sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+  };
+
+  const unitSchedules = getScheduleForUnit(unit.fullName || unit.name, unit.members);
+  const totalTasks = unitSchedules.length;
+
+  // Group by work type
+  const workTypeCounts = unitSchedules.reduce((acc, s) => {
+    acc[s.workType] = (acc[s.workType] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Group by day
+  const schedulesByDay: Record<number, any[]> = {};
+  unitSchedules.forEach(s => {
+    if (!schedulesByDay[s.dayOfWeek]) schedulesByDay[s.dayOfWeek] = [];
+    schedulesByDay[s.dayOfWeek].push(s);
+  });
+
+  const daysWithTasks = Object.keys(schedulesByDay).length;
+  const busiestDay = Object.entries(schedulesByDay).reduce((max, [day, tasks]) => 
+    tasks.length > max.count ? { day: parseInt(day), count: tasks.length } : max, { day: -1, count: 0 });
+
+  if (isExpanded) {
+    return (
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+        {/* Expanded Header */}
+        <div className={`px-5 py-4 flex items-center justify-between ${gradient} text-white`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center`}>
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="font-bold text-base">{unit.name + (unit.position ? ` (${unit.position})` : '')}</h4>
+              <p className="text-xs opacity-90">{unit.fullName || unit.name}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs font-bold">
+              {totalTasks} việc
+            </span>
+            <button 
+              onClick={(e) => { e.stopPropagation(); onClick(); }}
+              className="p-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors"
+              title="Thu gọn"
+            >
+              <ChevronDown className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Stats Bar */}
+        <div className="px-5 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 flex flex-wrap gap-4">
+          <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+            <CalendarDays className="w-3.5 h-3.5" />
+            <span>{daysWithTasks}/7 ngày có lịch</span>
+          </div>
+          {Object.entries(workTypeCounts).map(([type, count]) => (
+            <span key={type} className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium" style={{backgroundColor: WORK_TYPE_COLORS[type] + '20', color: WORK_TYPE_COLORS[type]}}>
+              <WORK_TYPE_ICONS[type] className="w-3 h-3" />
+              {WORK_TYPE_LABELS_VN[type]} {count}
+            </span>
+          ))}
+        </div>
+
+        {/* Detail Table */}
+        <div className="overflow-x-auto max-h-[500px]">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700 sticky top-0">
+                <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300 w-28">Thời gian</th>
+                <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Nhân sự / Chức vụ</th>
+                <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Nội dung công việc</th>
+                <th className="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Địa điểm</th>
+                <th className="px-4 py-3 text-center font-semibold text-slate-700 dark:text-slate-300 w-20">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DAY_LABELS.map((dayLabel, dayIndex) => {
+                const daySchedules = schedulesByDay[dayIndex] || [];
+                const dayBg = CARD_BG_LIGHT[dayIndex % CARD_BG_LIGHT.length];
+
+                if (daySchedules.length === 0) {
+                  return (
+                    <tr key={dayIndex} className={`border-b border-slate-100 dark:border-slate-800 ${dayBg}`}>
+                      <td className="px-4 py-3 text-slate-500 font-medium">{dayLabel}</td>
+                      <td colSpan={4} className="px-4 py-3 text-slate-400 text-center text-sm">— Không có lịch —</td>
+                    </tr>
+                  );
+                }
+
+                return daySchedules.map((s, idx) => (
+                  <tr key={`${dayIndex}-${idx}`} className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${dayBg}`}>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium text-slate-800 dark:text-slate-200">{dayLabel}</span>
+                        <span className="flex items-center gap-1 text-xs">
+                          <span className={`px-2 py-0.5 rounded ${s.session === 'MORNING' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'}`}>
+                            {SESSION_LABELS[s.session]}
+                          </span>
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <p className="font-medium text-slate-800 dark:text-slate-100">{s.personName}</p>
+                        {s.personRole && <p className="text-xs text-slate-500 dark:text-slate-400">{s.personRole}</p>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-1 rounded text-[10px] font-medium" style={{backgroundColor: WORK_TYPE_COLORS[s.workType] + '20', color: WORK_TYPE_COLORS[s.workType]}}>
+                          <WORK_TYPE_ICONS[s.workType] className="w-3 h-3 inline-block mr-1" />
+                          {WORK_TYPE_LABELS_VN[s.workType]}
+                        </span>
+                        <span className="text-slate-800 dark:text-slate-200 truncate max-w-[350px]">{s.title}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-400">
+                      <MapPin className="w-3.5 h-3.5 inline-block mr-1 opacity-50" />
+                      {s.location || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleEditClick(s); }}
+                        className="p-2 text-slate-400 hover:text-indigo-600 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                        title="Sửa"
+                      >
+                        <Edit2 className="w-4.5 h-4.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ));
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Add Button at bottom */}
+        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700">
+          <button 
+            onClick={onAddClick}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <Plus className="w-4.5 h-4.5" style={{ color: unit.color }} />
+            <span>Thêm lịch công tác mới</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      className={`relative group w-full min-h-[140px] flex flex-col ${bgLight} ${borderLight} border rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden`}
+      style={{ borderTop: `3px solid ${unit.color}` }}
+    >
+      {/* Background accent */}
+      <div className={`absolute inset-0 ${gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+      
+      {/* Content */}
+      <div className="relative p-4 flex flex-col h-full">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white shadow-lg`} style={{ background: `linear-gradient(135deg, ${unit.color}, ${unit.color}dd)` }}>
+              <Building2 className="w-4.5 h-4.5" />
+            </div>
+            <div className="min-w-0">
+              <h4 className={`font-bold text-sm truncate ${textColor}`}>{unit.name + (unit.position ? ` (${unit.position})` : '')}</h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{unit.fullName || unit.name}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${textColor}`} style={{ backgroundColor: unit.color + '20' }}>
+              {totalTasks} việc
+            </span>
+            <ChevronRight className={`w-4 h-4 ${textColor}`} />
+          </div>
+        </div>
+
+        {/* Stats Preview */}
+        <div className="flex-1 flex flex-col justify-between min-h-0">
+          <div className="space-y-2">
+            {/* Work type pills */}
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(workTypeCounts).slice(0, 3).map(([type, count]) => (
+                <span key={type} className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-medium" style={{backgroundColor: WORK_TYPE_COLORS[type] + '20', color: WORK_TYPE_COLORS[type]}}>
+                  <WORK_TYPE_ICONS[type] className="w-2.5 h-2.5" />
+                  <span className="hidden sm:inline">{WORK_TYPE_LABELS_VN[type]}</span>
+                  <span className="sm:hidden">{count}</span>
+                </span>
+              ))}
+              {Object.keys(workTypeCounts).length > 3 && (
+                <span className="px-2 py-0.5 rounded text-[9px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800">
+                  +{Object.keys(workTypeCounts).length - 3} loại khác
+                </span>
+              )}
+            </div>
+
+            {/* Day indicators */}
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 custom-scrollbar">
+              {DAY_LABELS_SHORT.map((day, dayIndex) => {
+                const hasTasks = schedulesByDay[dayIndex] && schedulesByDay[dayIndex].length > 0;
+                return (
+                  <span 
+                    key={dayIndex}
+                    className={`flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-semibold transition-all ${
+                      hasTasks 
+                        ? `${textColor} bg-white/80 dark:bg-slate-800/80 shadow-sm border ${borderLight}`
+                        : 'text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400'
+                    }`}
+                    title={`${DAY_LABELS[dayIndex]}: ${hasTasks ? schedulesByDay[dayIndex].length + ' việc' : 'Không có lịch'}`}
+                  >
+                    {day}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Footer with quick stats */}
+          <div className="pt-3 border-t border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between text-xs">
+            <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1">
+              <CalendarDays className="w-3 h-3" />
+              {daysWithTasks}/7 ngày
+            </span>
+            {busiestDay.day >= 0 && (
+              <span className={`${textColor} font-semibold flex items-center gap-1`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                {DAY_LABELS_SHORT[busiestDay.day]} nhiều nhất ({busiestDay.count})
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Expand indicator */}
+        <div className="absolute bottom-0 right-0 w-full h-1 bg-gradient-to-r from-transparent via-white/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+      </div>
+    </button>
+  );
+};
+
 // ===== SECTION BLOCK COMPONENT =====
 const SectionBlock = ({ 
   title, 
@@ -171,174 +571,70 @@ const SectionBlock = ({
     setExpandedUnitId(prev => prev === unitId ? null : unitId);
   };
 
-  const getScheduleForUnit = (unitName: string, unitMembers: UserType[]) => {
-    const memberNames = new Set(unitMembers.map(m => m.fullName));
-    return schedules.filter(s => {
-      if (s.weekStartDate !== weekStartDateStr) return false;
-      if (!memberNames.has(s.personName)) return false;
-      if (filterWorkType !== 'ALL' && s.workType !== filterWorkType) return false;
-      return true;
-    }).sort((a, b) => a.dayOfWeek - b.dayOfWeek);
-  };
-
-const renderDetailTable = (unit: any) => {
-    const unitSchedules = getScheduleForUnit(unit.fullName || unit.name, unit.members);
-    
-    // Group schedules by day of week
-    const schedulesByDay: Record<number, any[]> = {};
-    unitSchedules.forEach(s => {
-      if (!schedulesByDay[s.dayOfWeek]) schedulesByDay[s.dayOfWeek] = [];
-      schedulesByDay[s.dayOfWeek].push(s);
-    });
-
-    const dayColors = [
-      'bg-emerald-50 dark:bg-emerald-950/20',
-      'bg-blue-50 dark:bg-blue-950/20',
-      'bg-amber-50 dark:bg-amber-950/20',
-      'bg-purple-50 dark:bg-purple-950/20',
-      'bg-rose-50 dark:bg-rose-950/20',
-      'bg-indigo-50 dark:bg-indigo-950/20',
-      'bg-orange-50 dark:bg-orange-950/20',
-    ];
-
-    return (
-      <div className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300 w-24">Thời gian</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300">Họ tên / Chức vụ</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300">Nội dung công việc</th>
-                <th className="px-3 py-2 text-left font-semibold text-slate-700 dark:text-slate-300">Địa điểm</th>
-                <th className="px-3 py-2 text-center font-semibold text-slate-700 dark:text-slate-300 w-24">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody>
-              {DAY_LABELS.map((dayLabel, dayIndex) => {
-                const daySchedules = schedulesByDay[dayIndex] || [];
-                const dayColor = dayColors[dayIndex % dayColors.length];
-                
-                if (daySchedules.length === 0) {
-                  return (
-                    <tr key={dayIndex} className={`border-b border-slate-100 dark:border-slate-800 ${dayColor}`}>
-                      <td className="px-3 py-2 text-slate-500 font-medium">{dayLabel}</td>
-                      <td colSpan={4} className="px-3 py-2 text-slate-400 text-center text-sm">
-                        — Không có lịch —
-                      </td>
-                    </tr>
-                  );
-                }
-
-                return daySchedules.map((s, idx) => (
-                  <tr key={`${dayIndex}-${idx}`} className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${dayColors[dayIndex % dayColors.length]}`}>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium text-slate-800 dark:text-slate-200">{dayLabel}</span>
-                        <span className="flex items-center gap-1 text-xs">
-                          <span className={`px-1.5 py-0.5 rounded ${s.session === 'MORNING' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'}`}>
-                            {SESSION_LABELS[s.session]}
-                          </span>
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div>
-                        <p className="font-medium text-slate-800 dark:text-slate-100">{s.personName}</p>
-                        {s.personRole && <p className="text-xs text-slate-500 dark:text-slate-400">{s.personRole}</p>}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium`} style={{backgroundColor: WORK_TYPE_COLORS[s.workType] + '20', color: WORK_TYPE_COLORS[s.workType]}}>
-                          {WORK_TYPE_LABELS[s.workType]}
-                        </span>
-                        <span className="text-slate-800 dark:text-slate-200 truncate max-w-[300px]">{s.title}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-slate-600 dark:text-slate-400">{s.location || '—'}</td>
-                    <td className="px-3 py-2 text-center">
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleEditClick(s); }}
-                        className="p-1.5 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
-                        title="Sửa"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ));
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
+  const handleAddClick = (e: React.MouseEvent, unitName: string) => {
+    e.stopPropagation();
+    onAddForm(undefined, unitName);
   };
 
   return (
-    <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden" style={{ borderTop: `3px solid ${headerColor}` }}>
+    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden" style={{ borderTop: `3px solid ${headerColor}` }}>
       {/* Header */}
-      <div className="bg-[#87af89] text-white text-[12px] font-semibold py-2 px-4 flex items-center justify-between min-h-[40px]">
-        <span className="flex items-center gap-2 truncate">{icon} {title}</span>
-        <span className="text-[10px] opacity-90 whitespace-nowrap">{subtitle}</span>
-      </div>
-
-      {/* Cards Row - Single Row */}
-      <div className="p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] flex items-center gap-1.5 overflow-x-auto">
-        {units.map((unit, index) => (
-          <button
-            key={unit.id}
-            onClick={() => handleToggleExpand(unit.id)}
-            className={`flex flex-col items-center justify-center px-2.5 py-2 min-w-[100px] max-w-[140px] flex-shrink-0 rounded cursor-pointer hover:opacity-90 transition-all ${cardColors[index % cardColors.length]}`}
-          >
-            <span className="font-medium text-white/90 leading-tight text-center text-xs truncate">
-              {unit.name + (unit.position ? ` (${unit.position})` : '')}
-            </span>
-            <span className="font-bold text-white text-base mt-0.5">{getScheduleForUnit(unit.fullName || unit.name, unit.members).length} VIỆC</span>
-            {expandedUnitId === unit.id && <ChevronRight className="w-3 h-3 text-white/80 mt-0.5" />}
-          </button>
-        ))}
-        <div className="flex-1" />
-        <button 
-          className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold bg-white hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 rounded shadow-sm transition-colors whitespace-nowrap border border-slate-200 dark:border-slate-700"
-          onClick={() => onAddForm(undefined, units[0]?.fullName || units[0]?.name)}
-        >
-          <Plus className="w-3 h-3" style={{ color: color }} />
-          <span className="text-[10px]">Thêm</span>
-        </button>
-      </div>
-
-      {/* Detail Table - Expanded */}
-      {expandedUnitId && (
-        <div className="flex-1 overflow-y-auto p-4">
-          {units.find(u => u.id === expandedUnitId) && renderDetailTable(units.find(u => u.id === expandedUnitId)!)}
-        </div>
-      )}
-
-      {/* Empty state when no card expanded */}
-      {!expandedUnitId && (
-        <div className="flex-1 flex items-center justify-center p-8">
-          <div className="bg-white border border-slate-200 dark:border-slate-700 rounded-lg p-8 text-center">
-            <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="w-8 h-8 text-green-700 dark:text-green-300" />
-            </div>
-            <p className="font-bold text-slate-800 dark:text-slate-200 text-lg mb-2">
-              Cả tuần làm việc tại cơ quan
-            </p>
-            <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
-              Không có lịch công tác ngoài, kiểm tra cơ sở hoặc hội họp ngoại khóa trong tuần này.
-            </p>
-            <button 
-              onClick={() => onAddForm(undefined, units[0]?.fullName || units[0]?.name)}
-              className="inline-flex items-center gap-1 text-green-700 dark:text-green-300 hover:text-green-800 dark:hover:text-green-200 font-medium text-sm underline"
-            >
-              <ExternalLink className="w-4 h-4" />
-              <span>+ Bấm vào đây nếu muốn thêm lịch công tác ngoài</span>
-            </button>
+      <div className={`px-5 py-4 flex items-center justify-between ${`bg-gradient-to-r from-${headerColor.replace('#', '')} to-${headerColor.replace('#', '')}dd`} text-white`}>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+            {icon}
+          </div>
+          <div>
+            <h3 className="font-bold text-sm tracking-wide uppercase">{title}</h3>
+            <p className="text-[11px] opacity-90">{subtitle}</p>
           </div>
         </div>
-      )}
+        <div className="flex items-center gap-2">
+          <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-[10px] font-bold">
+            {units.reduce((sum, u) => sum + u.members.length, 0)} nhân sự
+          </span>
+        </div>
+      </div>
+
+      {/* Cards Grid - Modern Design */}
+      <div className="p-4 space-y-3">
+        {units.map((unit, index) => (
+          <ModernCard
+            key={unit.id}
+            unit={unit}
+            index={index}
+            schedules={schedules}
+            weekStartDateStr={weekStartDateStr}
+            filterWorkType={filterWorkType}
+            onClick={() => handleToggleExpand(unit.id)}
+            onAddClick={(e) => handleAddClick(e, unit.fullName || unit.name)}
+            isExpanded={expandedUnitId === unit.id}
+            handleEditClick={handleEditClick}
+          />
+        ))}
+
+        {/* Add New Card */}
+        <button
+          onClick={() => onAddForm(undefined, units[0]?.fullName || units[0]?.name)}
+          className="w-full group flex items-center justify-center gap-2 px-4 py-4 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-2xl text-slate-500 dark:text-slate-400 hover:border-[#2d6e3e] hover:text-[#2d6e3e] hover:bg-[#2d6e3e]/5 dark:hover:bg-[#2d6e3e]/10 transition-all duration-300"
+        >
+          <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center group-hover:bg-[#2d6e3e] group-hover:text-white transition-all duration-300">
+            <Plus className="w-4.5 h-4.5 text-slate-400 dark:text-slate-500 group-hover:text-white transition-colors" />
+          </div>
+          <span className="font-medium text-sm">Thêm đơn vị / lịch mới</span>
+        </button>
+
+        {/* Empty state when no units */}
+        {units.length === 0 && (
+          <div className="py-12 text-center">
+            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
+              <Building2 className="w-8 h-8 text-slate-400" />
+            </div>
+            <p className="font-bold text-slate-800 dark:text-slate-200 text-lg mb-2">Chưa có đơn vị nào</p>
+            <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">Nhấn nút thêm để tạo đơn vị mới</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
