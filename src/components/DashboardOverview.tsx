@@ -425,8 +425,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
 
         
-        {/* 2x2 GRID LAYOUT */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+{/* MAIN LAYOUT: Left 40% (Quadrant 1 & 3), Right 60% (Quadrant 2 & 4) */}
+         <div className="flex flex-col lg:flex-row gap-2" style={{ flex: '0 0 100%' }}>
+           <div className="flex flex-col gap-2" style={{ flex: '0 0 40%', minWidth: '0' }}>
           
           
           {/* ================= QUADRANT 1: TỔNG QUAN CHUNG ================= */}
@@ -504,11 +505,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
 
           
-          {/* ================= QUADRANT 2 ================= */}
-          <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden">
-            <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide">
-              2. Khối Các Phòng
-            </div>
+{/* ================= QUADRANT 3: KHỐI VÙNG 1 ================= */}
+           <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden">
+             <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide">
+               3. KHỐI VÙNG 1
+             </div>
             {/* KPI Row - 5 Columns */}
             <div className="grid grid-cols-5 gap-1.5 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]">
               <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
@@ -575,81 +576,83 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </div>
               </div>
             </div>
-          </div>
-{/* ================= QUADRANT 3 ================= */}
-          <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden">
-            <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide">
-              3. KHỐI VÙNG 1
-            </div>
-            {/* KPI Row - 5 Columns */}
-            <div className="grid grid-cols-5 gap-1.5 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]">
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Tổng số việc</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.total}</span>
-              </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Chưa hoàn thành</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.unfinished}</span>
-              </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Chưa HT trễ hạn</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.unfinishedLate}</span>
-              </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2563eb] text-white shadow-xs" onClick={() => { setActiveCardFilter('COMPLETED'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Hoàn thành</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.completed}</span>
-              </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#8b5cf6] text-white shadow-xs" onClick={() => { setActiveCardFilter('COMPLETED_LATE'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">HT trễ hạn</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.completedLate}</span>
-              </div>
-            </div>
-            {/* Charts Area */}
-            <div className="flex flex-col sm:flex-row h-[280px]">
-              {/* Composed Chart */}
-              <div className="w-full sm:w-[60%] pt-2 pb-2 pr-2 border-r border-[#e8efe9] flex flex-col">
-                 <span className="text-[11px] font-semibold text-[#4f6f56] text-center w-full block mt-2 mb-2 tracking-wide">CHI TIẾT ĐƠN VỊ</span>
-                <div className="flex-1 min-h-0 relative flex flex-col" style={{ backgroundColor: '#f0f7f2', backgroundImage: 'linear-gradient(to right, #d8e8df 1px, transparent 1px), linear-gradient(to bottom, #d8e8df 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={vung1Data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4ebe5" />
-                    <XAxis dataKey="name" tick={{ fontSize: 8, fill: "#2d4a36", fontWeight: "600" }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 9, fill: "#7a8c7f" }} axisLine={false} tickLine={false} />
-                    <Tooltip cursor={{ fill: "rgba(241,245,242,0.7)" }} content={<DeptTooltip />} />
-                    <Legend verticalAlign="top" height={24} iconType="rect" wrapperStyle={{ fontSize: "10px", color: "#4f6f56" }} />
-                    <Bar dataKey="Tổng việc" name="Tổng CV" fill="#cbd5e1" barSize={20} radius={[2, 2, 0, 0]} />
-                    <Line type="monotone" dataKey="Tổng hoàn thành" name="Hoàn thành" stroke="#2563eb" strokeWidth={3.5} dot={{ r: 5, fill: "#2563eb" }} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-                </div>
-              </div>
-              
-              {/* Solid Pie Chart */}
-              <div className="w-full sm:w-[40%] flex flex-col">
-                <div className="h-[100%] p-2 relative flex flex-col items-center justify-center rounded" style={{ backgroundColor: '#f0f7f2', backgroundImage: 'linear-gradient(to right, #d8e8df 1px, transparent 1px), linear-gradient(to bottom, #d8e8df 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
-                  <span className="text-[11px] font-semibold text-[#4f6f56] absolute top-4 text-center tracking-wide">TỶ LỆ HOÀN THÀNH<br/>TRÊN TỔNG SỐ</span>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0">
-                     <span className="text-[20px] font-bold text-[#2563eb]">{vung1Stats.total ? Math.round(((vung1Stats.completed + vung1Stats.completedLate) / vung1Stats.total) * 100) : 0}%</span>
-                  </div>
-                  <ResponsiveContainer width="100%" height="80%" className="z-10 mt-6">
-                    <PieChart>
-                      <Pie data={[
-                        { name: "Đã hoàn thành", value: vung1Stats.completed + vung1Stats.completedLate },
-                        { name: "Chưa hoàn thành", value: vung1Stats.unfinished + vung1Stats.unfinishedLate }
-                      ]} innerRadius="65%" outerRadius="85%" dataKey="value" stroke="#fff" strokeWidth={2}>
-                        <Cell fill="#2563eb" />
-                        <Cell fill="#e11d48" />
-                      </Pie>
-                      <Tooltip contentStyle={{ fontSize: "10px", padding: "2px 6px", borderColor: "#c6d8c8" }} />
-                      <Legend verticalAlign="bottom" height={20} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '10px', color: '#4f6f56', paddingBottom: 2 }} formatter={(value) => <span style={{ color: '#4f6f56' }}>{value}</span>} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          </div>
-{/* ================= QUADRANT 4 ================= */}
-          <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden">
+</div>
+           </div>
+           <div className="flex flex-col gap-2" style={{ flex: '0 0 60%', minWidth: '0' }}>
+        {/* ================= QUADRANT 2: KHỐI CÁC PHÒNG ================= */}
+           <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden">
+             <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide">
+               2. Khối Các Phòng
+             </div>
+             {/* KPI Row - 5 Columns */}
+             <div className="grid grid-cols-5 gap-1.5 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]">
+               <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
+                 <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Tổng số việc</span>
+                 <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.total}</span>
+               </div>
+               <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
+                 <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Chưa hoàn thành</span>
+                 <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.unfinished}</span>
+               </div>
+               <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
+                 <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Chưa HT trễ hạn</span>
+                 <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.unfinishedLate}</span>
+               </div>
+               <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2563eb] text-white shadow-xs" onClick={() => { setActiveCardFilter('COMPLETED'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
+                 <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Hoàn thành</span>
+                 <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.completed}</span>
+               </div>
+               <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#8b5cf6] text-white shadow-xs" onClick={() => { setActiveCardFilter('COMPLETED_LATE'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
+                 <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">HT trễ hạn</span>
+                 <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.completedLate}</span>
+               </div>
+             </div>
+             {/* Charts Area */}
+             <div className="flex flex-col sm:flex-row h-[280px]">
+               {/* Composed Chart */}
+               <div className="w-full sm:w-[60%] pt-2 pb-2 pr-2 border-r border-[#e8efe9] flex flex-col">
+                  <span className="text-[11px] font-semibold text-[#4f6f56] text-center w-full block mt-2 mb-2 tracking-wide">CHI TIẾT ĐƠN VỊ</span>
+                 <div className="flex-1 min-h-0 relative flex flex-col" style={{ backgroundColor: '#f0f7f2', backgroundImage: 'linear-gradient(to right, #d8e8df 1px, transparent 1px), linear-gradient(to bottom, #d8e8df 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
+                 <ResponsiveContainer width="100%" height="100%">
+                   <ComposedChart data={vung1Data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4ebe5" />
+                     <XAxis dataKey="name" tick={{ fontSize: 8, fill: "#2d4a36", fontWeight: "600" }} axisLine={false} tickLine={false} />
+                     <YAxis tick={{ fontSize: 9, fill: "#7a8c7f" }} axisLine={false} tickLine={false} />
+                     <Tooltip cursor={{ fill: "rgba(241,245,242,0.7)" }} content={<DeptTooltip />} />
+                     <Legend verticalAlign="top" height={24} iconType="rect" wrapperStyle={{ fontSize: "10px", color: "#4f6f56" }} />
+                     <Bar dataKey="Tổng việc" name="Tổng CV" fill="#cbd5e1" barSize={20} radius={[2, 2, 0, 0]} />
+                     <Line type="monotone" dataKey="Tổng hoàn thành" name="Hoàn thành" stroke="#2563eb" strokeWidth={3.5} dot={{ r: 5, fill: "#2563eb" }} />
+                   </ComposedChart>
+                 </ResponsiveContainer>
+                 </div>
+               </div>
+               
+               {/* Solid Pie Chart */}
+               <div className="w-full sm:w-[40%] flex flex-col">
+                 <div className="h-[100%] p-2 relative flex flex-col items-center justify-center rounded" style={{ backgroundColor: '#f0f7f2', backgroundImage: 'linear-gradient(to right, #d8e8df 1px, transparent 1px), linear-gradient(to bottom, #d8e8df 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
+                   <span className="text-[11px] font-semibold text-[#4f6f56] absolute top-4 text-center tracking-wide">TỶ LỆ HOÀN THÀNH<br/>TRÊN TỔNG SỐ</span>
+                   <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0">
+                      <span className="text-[20px] font-bold text-[#2563eb]">{vung1Stats.total ? Math.round(((vung1Stats.completed + vung1Stats.completedLate) / vung1Stats.total) * 100) : 0}%</span>
+                   </div>
+                   <ResponsiveContainer width="100%" height="80%" className="z-10 mt-6">
+                     <PieChart>
+                       <Pie data={[
+                         { name: "Đã hoàn thành", value: vung1Stats.completed + vung1Stats.completedLate },
+                         { name: "Chưa hoàn thành", value: vung1Stats.unfinished + vung1Stats.unfinishedLate }
+                       ]} innerRadius="65%" outerRadius="85%" dataKey="value" stroke="#fff" strokeWidth={2}>
+                         <Cell fill="#2563eb" />
+                         <Cell fill="#e11d48" />
+                       </Pie>
+                       <Tooltip contentStyle={{ fontSize: "10px", padding: "2px 6px", borderColor: "#c6d8c8" }} />
+                       <Legend verticalAlign="bottom" height={20} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '10px', color: '#4f6f56', paddingBottom: 2 }} formatter={(value) => <span style={{ color: '#4f6f56' }}>{value}</span>} />
+                     </PieChart>
+                   </ResponsiveContainer>
+                 </div>
+               </div>
+             </div>
+           </div>
+        {/* ================= QUADRANT 4: KHỐI VÙNG 2 ================= */}
+           <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden">
             <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide">
               4. KHỐI VÙNG 2
             </div>
