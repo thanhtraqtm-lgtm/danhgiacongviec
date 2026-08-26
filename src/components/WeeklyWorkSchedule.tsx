@@ -690,7 +690,7 @@ export const WeeklyWorkSchedule: React.FC<{
       id: `leader_${l.name}`,
       name: l.name,
       position: l.position,
-      color: LEADER_COLORS[idx],
+      color: LEADER_COLORS[0], // All leaders use same color as first leader (Đào Trọng Truyền)
       members: users.filter(u => u.fullName === l.name),
       stats: getStatsForUnit(l.name, users.filter(u => u.fullName === l.name)),
       allSchedules: getSchedulesForUnit(l.name, users.filter(u => u.fullName === l.name))
@@ -701,7 +701,7 @@ export const WeeklyWorkSchedule: React.FC<{
     PHONG_UNITS.map((name, idx) => ({
       id: `phong_${name}`,
       name,
-      color: DEPT_COLORS[idx % DEPT_COLORS.length],
+      color: DEPT_COLORS[0], // All Phong use same color as first (Phòng Thống kê Tổng hợp)
       members: users.filter(u => u.department === name),
       stats: getStatsForUnit(name, users.filter(u => u.department === name)),
       allSchedules: getSchedulesForUnit(name, users.filter(u => u.department === name))
@@ -712,7 +712,7 @@ export const WeeklyWorkSchedule: React.FC<{
     VUNG1_UNITS.map((name, idx) => ({
       id: `vung1_${name}`,
       name,
-      color: VUNG1_COLORS[idx % VUNG1_COLORS.length],
+      color: VUNG1_COLORS[0], // All Vung1 use same color as first (CS Phố Hiến)
       members: users.filter(u => u.department === name || u.workUnit === name),
       stats: getStatsForUnit(name, users.filter(u => u.department === name || u.workUnit === name)),
       allSchedules: getSchedulesForUnit(name, users.filter(u => u.department === name || u.workUnit === name))
@@ -723,7 +723,7 @@ export const WeeklyWorkSchedule: React.FC<{
     VUNG2_UNITS.map((name, idx) => ({
       id: `vung2_${name}`,
       name,
-      color: VUNG2_COLORS[idx % VUNG2_COLORS.length],
+      color: VUNG2_COLORS[0], // All Vung2 use same color as first (CS Quỳnh Phụ)
       members: users.filter(u => u.department === name || u.workUnit === name),
       stats: getStatsForUnit(name, users.filter(u => u.department === name || u.workUnit === name)),
       allSchedules: getSchedulesForUnit(name, users.filter(u => u.department === name || u.workUnit === name))
@@ -1111,14 +1111,36 @@ export const WeeklyWorkSchedule: React.FC<{
                             )}
                             <div className="text-[11px] text-slate-700 dark:text-slate-300 line-clamp-3 pr-2">
                               {count > 0 ? daySchedules.map((s, i) => (
-                                <div key={i} className="mb-0.5 flex items-start gap-1">
+                                <div key={i} className="mb-0.5 flex items-start gap-1 relative group">
                                   <span className={`w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0 ${{
                                     'Đã hoàn thành': 'bg-emerald-500',
                                     'Đang thực hiện': 'bg-sky-500',
                                     'Chưa bắt đầu': 'bg-amber-500',
                                     'Hủy': 'bg-rose-500',
                                   }[s.status] || 'bg-slate-400'}`} />
-                                  <span className="truncate">{s.taskName}</span>
+                                  <span className="truncate flex-1">{s.taskName}</span>
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute right-0 top-0 flex gap-0.5">
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); handleEditClick(s); }}
+                                      className="p-1 text-slate-400 hover:text-indigo-600 rounded hover:bg-indigo-50 dark:hover:bg-indigo-900/20" 
+                                      title="Sửa"
+                                    >
+                                      <Edit2 className="w-3 h-3" />
+                                    </button>
+                                    <button 
+                                      onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        if (confirm('Bạn có chắc muốn xóa lịch công tác này?')) {
+                                          onDeleteSchedule(s.id);
+                                          addToast('success', 'Đã xóa', 'Lịch công tác đã được xóa thành công');
+                                        }
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-rose-600 rounded hover:bg-rose-50 dark:hover:bg-rose-900/20" 
+                                      title="Xóa"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
                                 </div>
                               )) : (
                                 <span className="text-slate-300 dark:text-slate-600 italic">—</span>
@@ -1323,7 +1345,7 @@ export const WeeklyWorkSchedule: React.FC<{
           {/* COL 1: LEFT STACKED */}
           <div className="lg:col-span-1 flex flex-col space-y-3 min-w-0">
             
-            {/* LÃNH ĐẠO - COMPACT (only stat cards) */}
+            {/* LÃNH ĐẠO - FULL (stat cards + detail tables) */}
             <LeftSection
               title="1. Lãnh đạo Cục (4 người)"
               subtitle="4 lãnh đạo"
@@ -1331,7 +1353,7 @@ export const WeeklyWorkSchedule: React.FC<{
               headerColor="#2d6e3e"
               units={leaderUnits}
               sectionKey="leader"
-              compact={true}
+              compact={false}
             />
 
             {/* PHÒNG BAN - FULL (stat cards + detail tables) */}
