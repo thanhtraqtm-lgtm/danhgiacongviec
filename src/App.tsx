@@ -373,6 +373,8 @@ export default function App() {
       const tab = event.detail;
       if (tab === 'meeting_register') {
         setActiveTab('meeting_register');
+      } else if (tab === 'weekly_schedule') {
+        setActiveTab('weekly_schedule');
       }
     };
     window.addEventListener('navigate-to-tab', handleNavigateToTab as EventListener);
@@ -1096,6 +1098,7 @@ export default function App() {
         {activeTab === 'dashboard' && (
           <DashboardOverview
             tasks={tasks}
+            schedules={weeklySchedules}
             selectedDepartment={selectedDepartment}
             setSelectedDepartment={setSelectedDepartment}
             addToast={addToast}

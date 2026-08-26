@@ -1,4 +1,4 @@
-import { formatDate } from "../utils/dateUtils";
+import { formatDate, formatWeekRange } from "../utils/dateUtils";
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   CheckCircle2, 
@@ -12,7 +12,13 @@ import {
   Filter, 
   Download,
   BarChart3,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  User,
+  Users
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -32,12 +38,26 @@ import {
   RadialBar,
   PolarAngleAxis
 , ComposedChart, Line } from 'recharts';
-import { KpiTask, DEPARTMENTS } from '../types/index';
+import { KpiTask, DEPARTMENTS, WeeklySchedule } from '../types/index';
 import { Award, ShieldAlert } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
+// Constants for Weekly Schedule Matrix
+const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'];
+const DAY_LABELS_SHORT = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+const SESSIONS = ['MORNING', 'AFTERNOON'];
+const SESSION_LABELS = { MORNING: 'Sáng', AFTERNOON: 'Chiều' };
+
+const DEFAULT_LEADERS = [
+  { name: 'Đào Trọng Truyền', position: 'Trưởng Thống kê' },
+  { name: 'Đào Thị Hiếu', position: 'Phó Trưởng Thống kê' },
+  { name: 'Vũ Tuấn Hùng', position: 'Phó Trưởng Thống kê' },
+  { name: 'Phạm Văn Tự', position: 'Phó Trưởng Thống kê' },
+];
+
 interface DashboardOverviewProps {
   tasks: KpiTask[];
+  schedules?: WeeklySchedule[];
   selectedDepartment: string;
   setSelectedDepartment: (dept: string) => void;
   addToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, description?: string) => void;
@@ -91,6 +111,7 @@ const DeptTooltip: React.FC<any> = ({ active, payload, label }) => {
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   tasks = [],
+  schedules = [],
   selectedDepartment,
   setSelectedDepartment,
   addToast,
@@ -101,6 +122,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCardFilter, setActiveCardFilter] = useState<'ALL' | 'UNFINISHED' | 'LATE' | 'COMPLETED' | 'COMPLETED_LATE'>('ALL');
   const [selectedGroup, setSelectedGroup] = useState<'ALL' | 'PHONG' | 'VUNG1' | 'VUNG2'>('ALL');
+
+  // Current week start date (Monday)
+  const [weekStartDate] = useState<Date>(() => {
+    const now = new Date();
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(now.setDate(diff));
+  });
+  const weekStartDateStr = weekStartDate.toISOString().split('T')[0];
 
   // (stats moved below — it now derives from phongStats + vung1Stats + vung2Stats
   //  so that Tổng chung EXACTLY equals the sum of the 3 region blocks.)
@@ -436,27 +466,27 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               1. Tổng Chung 
             </div>
             
-            {/* KPI Row - 5 Columns */}
-            <div className="grid grid-cols-5 gap-1.5 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]">
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Tổng số việc</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{allStats.total}</span>
+            {/* KPI Row - 5 Equal Width Cards using Flexbox */}
+            <div className="flex flex-wrap gap-2 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]" style={{ width: '100%' }}>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Tổng số việc</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{allStats.total}</span>
               </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Chưa hoàn thành</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{allStats.unfinished}</span>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{allStats.unfinished}</span>
               </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Chưa HT trễ hạn</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{allStats.late}</span>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa HT trễ hạn</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{allStats.late}</span>
               </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2563eb] text-white shadow-xs" onClick={() => { setActiveCardFilter('COMPLETED'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Hoàn thành</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{allStats.completed}</span>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2563eb] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Hoàn thành</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{allStats.completed}</span>
               </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#8b5cf6] text-white shadow-xs" onClick={() => { setActiveCardFilter('COMPLETED_LATE'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">HT trễ hạn</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{allStats.completedLate}</span>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#8b5cf6] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED_LATE'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">HT trễ hạn</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{allStats.completedLate}</span>
               </div>
             </div>
             {/* Charts Area */}
@@ -579,34 +609,34 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 </div>
            </div>
            <div className="flex flex-col gap-2" style={{ flex: '0 0 60%', minWidth: '0' }}>
-        {/* ================= QUADRANT 2: KHỐI CÁC PHÒNG ================= */}
-           <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden">
-             <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide">
-               2. Khối Các Phòng
-             </div>
-             {/* KPI Row - 5 Columns */}
-             <div className="grid grid-cols-5 gap-1.5 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]">
-               <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                 <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Tổng số việc</span>
-                 <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.total}</span>
-               </div>
-               <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                 <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Chưa hoàn thành</span>
-                 <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.unfinished}</span>
-               </div>
-               <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                 <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Chưa HT trễ hạn</span>
-                 <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.unfinishedLate}</span>
-               </div>
-               <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2563eb] text-white shadow-xs" onClick={() => { setActiveCardFilter('COMPLETED'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                 <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Hoàn thành</span>
-                 <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.completed}</span>
-               </div>
-               <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#8b5cf6] text-white shadow-xs" onClick={() => { setActiveCardFilter('COMPLETED_LATE'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                 <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">HT trễ hạn</span>
-                 <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung1Stats.completedLate}</span>
-               </div>
-             </div>
+{/* ================= QUADRANT 2: KHỐI CÁC PHÒNG ================= */}
+            <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden">
+              <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide">
+                2. Khối Các Phòng
+              </div>
+              {/* KPI Row - 5 Equal Width Cards using Flexbox */}
+              <div className="flex flex-wrap gap-2 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]" style={{ width: '100%' }}>
+                <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                  <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Tổng số việc</span>
+                  <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{phongStats.total}</span>
+                </div>
+                <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                  <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành</span>
+                  <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{phongStats.unfinished}</span>
+                </div>
+                <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                  <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa HT trễ hạn</span>
+                  <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{phongStats.unfinishedLate}</span>
+                </div>
+                <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2563eb] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                  <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Hoàn thành</span>
+                  <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{phongStats.completed}</span>
+                </div>
+                <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#8b5cf6] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED_LATE'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                  <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">HT trễ hạn</span>
+                  <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{phongStats.completedLate}</span>
+                </div>
+              </div>
              {/* Charts Area */}
              <div className="flex flex-col sm:flex-row h-[280px]">
                {/* Composed Chart */}
@@ -656,27 +686,27 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide">
               4. KHỐI VÙNG 2
             </div>
-            {/* KPI Row - 5 Columns */}
-            <div className="grid grid-cols-5 gap-1.5 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]">
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Tổng số việc</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung2Stats.total}</span>
+            {/* KPI Row - 5 Equal Width Cards using Flexbox */}
+            <div className="flex flex-wrap gap-2 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]" style={{ width: '100%' }}>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Tổng số việc</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung2Stats.total}</span>
               </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Chưa hoàn thành</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung2Stats.unfinished}</span>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung2Stats.unfinished}</span>
               </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Chưa HT trễ hạn</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung2Stats.unfinishedLate}</span>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa HT trễ hạn</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung2Stats.unfinishedLate}</span>
               </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2563eb] text-white shadow-xs" onClick={() => { setActiveCardFilter('COMPLETED'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Hoàn thành</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung2Stats.completed}</span>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2563eb] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Hoàn thành</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung2Stats.completed}</span>
               </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#8b5cf6] text-white shadow-xs" onClick={() => { setActiveCardFilter('COMPLETED_LATE'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">HT trễ hạn</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{vung2Stats.completedLate}</span>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#8b5cf6] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED_LATE'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">HT trễ hạn</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung2Stats.completedLate}</span>
               </div>
             </div>
             {/* Charts Area */}
@@ -734,6 +764,97 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </div>
       </div>
+
+        {/* ================= WEEKLY SCHEDULE MATRIX - 4 LEADERS ================= */}
+        <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col mt-3 overflow-hidden">
+          <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide flex items-center justify-between px-4">
+            <span>5. Ma Trận Lịch Tuần - 4 Lãnh Đạo</span>
+            <span className="text-[10px] opacity-80">Click vào ô để xem chi tiết / thêm lịch</span>
+          </div>
+          <div className="p-3 overflow-x-auto">
+            <div className="min-w-max">
+              <table className="w-full min-w-[900px] border-collapse text-[11px] font-sans">
+                <thead>
+                  <tr className="bg-[#f0f7f2] border-b border-[#c6d8c8]">
+                    <th className="px-2 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] sticky left-0 bg-[#f0f7f2] z-10 w-28">Lãnh đạo / Chức vụ</th>
+                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T2</th>
+                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T3</th>
+                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T4</th>
+                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T5</th>
+                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T6</th>
+                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T7</th>
+                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] w-20">CN</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {DEFAULT_LEADERS.map((leader, lIdx) => (
+                    <tr key={leader.name} className={`${lIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} border-b border-slate-100 hover:bg-slate-50/80 transition-colors`}>
+                      <td className="px-2 py-1.5 font-semibold text-[#2d6e3e] border-r border-[#c6d8c8] sticky left-0 bg-inherit z-10 w-28 text-nowrap">
+                        {leader.name} <br/><span className="text-[9px] font-normal text-slate-500">{leader.position}</span>
+                      </td>
+                      {DAY_LABELS.map((_, dayIdx) => (
+                        <td key={dayIdx} className="px-1 py-1 border-r border-[#e8efe9] w-20 min-w-[70px] max-w-[70px] align-top">
+                          <div className="space-y-1 min-h-[48px]">
+                            {SESSIONS.map((session, sIdx) => {
+                              const dayOfWeek = (dayIdx + 1) % 7;
+                              const leaderSchedules = schedules.filter(s => 
+                                s.weekStartDate === weekStartDateStr && 
+                                s.personName === leader.name &&
+                                s.dayOfWeek === dayOfWeek &&
+                                s.session === session
+                              );
+                              return (
+                                <div 
+                                  key={session}
+                                  className={`relative p-1 rounded text-[9px] leading-tight min-h-[18px] cursor-pointer transition-all hover:shadow-md hover:z-10 ${
+                                    leaderSchedules.length > 0 
+                                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
+                                      : 'bg-slate-50 border border-slate-200 text-slate-400 hover:bg-slate-100'
+                                  }`}
+                                  onClick={() => {
+                                    // Navigate to weekly schedule tab with this leader
+                                    window.dispatchEvent(new CustomEvent('navigate-to-tab', { detail: 'weekly_schedule' }));
+                                  }}
+                                  title={leaderSchedules.length > 0 
+                                    ? leaderSchedules.map(s => `${SESSION_LABELS[s.session]}: ${s.title}`).join('\n')
+                                    : `${DAY_LABELS[dayIdx]} ${SESSION_LABELS[session]} - Click để thêm lịch`}
+                                >
+                                  <span className="font-medium text-[8px] opacity-70">{SESSION_LABELS[session].charAt(0)}</span>
+                                  {leaderSchedules.length > 0 ? (
+                                    <span className="block truncate">{leaderSchedules[0].title}</span>
+                                  ) : (
+                                    <span className="block text-center opacity-50">—</span>
+                                  )}
+                                  {leaderSchedules.length > 1 && (
+                                    <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[7px] rounded-full w-4 h-4 flex items-center justify-center">+{leaderSchedules.length - 1}</span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="bg-[#f5f9f6] border-t border-[#c6d8c8] px-4 py-2 flex items-center justify-between">
+            <span className="text-[10px] text-slate-600">
+              Tuần: {formatWeekRange(weekStartDate)}
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] text-slate-500 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Có lịch
+              </span>
+              <span className="text-[9px] text-slate-500 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-slate-200 border border-slate-300"></span> Trống
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* ================= DATA TABLE ================= */}
         <div id="dataTable" className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col mt-3 scroll-mt-20">
           <div className="bg-[#93b995] text-white text-[10px] font-bold py-1.5 uppercase tracking-widest flex justify-between px-4 items-center">
