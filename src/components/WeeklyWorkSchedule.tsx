@@ -840,7 +840,7 @@ export const WeeklyWorkSchedule: React.FC<{
 
         {/* Stat Cards Grid - Compact: smaller cards */}
         <div className={`p-2 bg-[#f5f9f6] border-b border-[#c6d8c8] ${compact ? 'min-h-[80px]' : 'min-h-[120px]'}`} style={{ flexShrink: 0 }}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-1.5">
+          <div className={`grid gap-1.5 ${units.length === 5 ? 'grid-cols-5' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'}`}>
             {units.map((unit) => (
               <StatCard
                 key={unit.id}
