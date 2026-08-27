@@ -499,7 +499,8 @@ const SectionBlock = ({
   schedules,
   weekStartDateStr,
   filterWorkType,
-  handleEditClick
+  handleEditClick,
+  onUnitClick
 }: { 
   title: string;
   subtitle: string;
@@ -513,6 +514,7 @@ const SectionBlock = ({
   weekStartDateStr: string;
   filterWorkType: string;
   handleEditClick: (schedule: any) => void;
+  onUnitClick?: (unit: any) => void;
 }) => {
   const [expandedUnitId, setExpandedUnitId] = useState<string | null>(null);
 
@@ -580,7 +582,10 @@ const SectionBlock = ({
               schedules={schedules}
               weekStartDateStr={weekStartDateStr}
               filterWorkType={filterWorkType}
-              onClick={() => handleToggleExpand(unit.id)}
+              onClick={() => {
+                handleToggleExpand(unit.id);
+                onUnitClick?.(unit);
+              }}
               onAddClick={(e) => handleAddClick(e, unit.fullName || unit.name)}
               isExpanded={expandedUnitId === unit.id}
               handleEditClick={handleEditClick}
@@ -646,7 +651,12 @@ export const WeeklyWorkSchedule: React.FC<{
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState<any>({});
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedUnit, setSelectedUnit] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUnitClick = useCallback((unit: any) => {
+    setSelectedUnit(unit);
+  }, []);
 
   const weekStartDate = useMemo(() => {
     const d = new Date(currentWeekStart);
@@ -1242,7 +1252,7 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <SectionBlock
             title="1. LỊCH CÔNG TÁC BAN LÃNH ĐẠO"
-            subtitle="4 LÃNH ĐẠO"
+            subtitle="KHỐI 1 - 4 LÃNH ĐẠO"
             icon={<Users className="w-4 h-4" />}
             headerColor={LEADER_COLOR}
             units={leaderUnits}
@@ -1253,10 +1263,11 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
             weekStartDateStr={weekStartDateStr}
             filterWorkType={filterWorkType}
             handleEditClick={handleEditClick}
+            onUnitClick={handleUnitClick}
           />
           <SectionBlock
-            title="2. LỊCH THỐNG KÊ CƠ SỞ VÙNG 1"
-            subtitle="7 CƠ SỞ VÙNG 1"
+            title="2. LỊCH CÔNG TÁC THỐNG KÊ CƠ SỞ VÙNG 1"
+            subtitle="KHỐI 2 - 7 CƠ SỞ VÙNG 1"
             icon={<Building2 className="w-4 h-4" />}
             headerColor={VUNG1_COLOR}
             units={VUNG1_UNITS.map(name => ({
@@ -1274,10 +1285,11 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
             weekStartDateStr={weekStartDateStr}
             filterWorkType={filterWorkType}
             handleEditClick={handleEditClick}
+            onUnitClick={handleUnitClick}
           />
           <SectionBlock
-            title="3. LỊCH CÔNG TÁC 5 PHÒNG CHỨC NĂNG"
-            subtitle="5 PHÒNG"
+            title="3. LỊCH CÔNG TÁC PHÒNG THỐNG KÊ"
+            subtitle="KHỐI 3 - 5 PHÒNG CHỨC NĂNG"
             icon={<Building className="w-4 h-4" />}
             headerColor={PHONG_COLOR}
             units={PHONG_UNITS.map(p => ({
@@ -1295,10 +1307,11 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
             weekStartDateStr={weekStartDateStr}
             filterWorkType={filterWorkType}
             handleEditClick={handleEditClick}
+            onUnitClick={handleUnitClick}
           />
           <SectionBlock
-            title="4. LỊCH THỐNG KÊ CƠ SỞ VÙNG 2"
-            subtitle="7 CƠ SỞ VÙNG 2"
+            title="4. LỊCH CÔNG TÁC THỐNG KÊ CƠ SỞ VÙNG 2"
+            subtitle="KHỐI 4 - 7 CƠ SỞ VÙNG 2"
             icon={<Building2 className="w-4 h-4" />}
             headerColor={VUNG2_COLOR}
             units={VUNG2_UNITS.map(name => ({
@@ -1316,98 +1329,113 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
             weekStartDateStr={weekStartDateStr}
             filterWorkType={filterWorkType}
             handleEditClick={handleEditClick}
+            onUnitClick={handleUnitClick}
           />
         </div>
 
-        {/* ================= WEEKLY SCHEDULE MATRIX - 4 LEADERS ================= */}
-        <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col mt-4 overflow-hidden">
-          <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide flex items-center justify-between px-4">
-            <span>5. Ma Trận Lịch Tuần - 4 Lãnh Đạo</span>
-            <span className="text-[10px] opacity-80">Click vào ô để xem chi tiết / thêm lịch</span>
-          </div>
-          <div className="p-3 overflow-x-auto">
-            <div className="min-w-max">
-              <table className="w-full min-w-[900px] border-collapse text-[11px] font-sans">
-                <thead>
-                  <tr className="bg-[#f0f7f2] border-b border-[#c6d8c8]">
-                    <th className="px-2 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] sticky left-0 bg-[#f0f7f2] z-10 w-28">Lãnh đạo / Chức vụ</th>
-                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T2</th>
-                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T3</th>
-                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T4</th>
-                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T5</th>
-                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T6</th>
-                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T7</th>
-                    <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] w-20">CN</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {DEFAULT_LEADERS.map((leader, lIdx) => (
-                    <tr key={leader.name} className={`${lIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} border-b border-slate-100 hover:bg-slate-50/80 transition-colors`}>
-                      <td className="px-2 py-1.5 font-semibold text-[#2d6e3e] border-r border-[#c6d8c8] sticky left-0 bg-inherit z-10 w-28 text-nowrap">
-                        {leader.name} <br/><span className="text-[9px] font-normal text-slate-500">{leader.position}</span>
-                      </td>
-                      {DAY_LABELS.map((_, dayIdx) => (
-                        <td key={dayIdx} className="px-1 py-1 border-r border-[#e8efe9] w-20 min-w-[70px] max-w-[70px] align-top">
-                          <div className="space-y-1 min-h-[48px]">
-                            {SESSIONS.map((session, sIdx) => {
-                              const dayOfWeek = (dayIdx + 1) % 7;
-                              const leaderSchedules = schedules.filter(s => 
-                                s.weekStartDate === weekStartDateStr && 
-                                s.personName === leader.name &&
-                                s.dayOfWeek === dayOfWeek &&
-                                s.session === session
-                              );
-                              return (
-                                <div 
-                                  key={session}
-                                  className={`relative p-1 rounded text-[9px] leading-tight min-h-[18px] cursor-pointer transition-all hover:shadow-md hover:z-10 ${
-                                    leaderSchedules.length > 0 
-                                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
-                                      : 'bg-slate-50 border border-slate-200 text-slate-400 hover:bg-slate-100'
-                                  }`}
-                                  onClick={() => {
-                                    // Navigate to add/edit form for this cell
-                                    openAddForm(dayIdx, leader.name, session);
-                                  }}
-                                  title={leaderSchedules.length > 0 
-                                    ? leaderSchedules.map(s => `${SESSION_LABELS[s.session]}: ${s.title}`).join('\n')
-                                    : `${DAY_LABELS[dayIdx]} ${SESSION_LABELS[session]} - Click để thêm lịch`}
-                                >
-                                  <span className="font-medium text-[8px] opacity-70">{SESSION_LABELS[session].charAt(0)}</span>
-                                  {leaderSchedules.length > 0 ? (
-                                    <span className="block truncate">{leaderSchedules[0].title}</span>
-                                  ) : (
-                                    <span className="block text-center opacity-50">—</span>
-                                  )}
-                                  {leaderSchedules.length > 1 && (
-                                    <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[7px] rounded-full w-4 h-4 flex items-center justify-center">+{leaderSchedules.length - 1}</span>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </td>
-                      ))}
+        {/* ================= DYNAMIC UNIT MATRIX ================= */}
+        {selectedUnit && (
+          <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col mt-4 overflow-hidden">
+            <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide flex items-center justify-between px-4">
+              <span>5. Ma Trận Lịch Tuần - {selectedUnit.fullName}</span>
+              <span className="text-[10px] opacity-80">{selectedUnit.members.length} nhân sự - Click ô để thêm/sửa</span>
+            </div>
+            <div className="p-3 overflow-x-auto">
+              <div className="min-w-max">
+                <table className="w-full min-w-[900px] border-collapse text-[11px] font-sans">
+                  <thead>
+                    <tr className="bg-[#f0f7f2] border-b border-[#c6d8c8]">
+                      <th className="px-2 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] sticky left-0 bg-[#f0f7f2] z-10 w-32">Nhân sự / Chức vụ</th>
+                      <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T2</th>
+                      <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T3</th>
+                      <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T4</th>
+                      <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T5</th>
+                      <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T6</th>
+                      <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T7</th>
+                      <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] w-20">CN</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {selectedUnit.members.map((member, mIdx) => (
+                      <tr key={member.id} className={`${mIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} border-b border-slate-100 hover:bg-slate-50/80 transition-colors`}>
+                        <td className="px-2 py-1.5 font-semibold text-[#2d6e3e] border-r border-[#c6d8c8] sticky left-0 bg-inherit z-10 w-32 text-nowrap">
+                          {member.fullName} <br/><span className="text-[9px] font-normal text-slate-500">{member.position}</span>
+                        </td>
+                        {DAY_LABELS.map((_, dayIdx) => (
+                          <td key={dayIdx} className="px-1 py-1 border-r border-[#e8efe9] w-20 min-w-[70px] max-w-[70px] align-top">
+                            <div className="space-y-1 min-h-[48px]">
+                              {SESSIONS.map((session, sIdx) => {
+                                const dayOfWeek = (dayIdx + 1) % 7;
+                                const memberSchedules = schedules.filter(s => 
+                                  s.weekStartDate === weekStartDateStr && 
+                                  s.personName === member.fullName &&
+                                  s.dayOfWeek === dayOfWeek &&
+                                  s.session === session
+                                );
+                                return (
+                                  <div 
+                                    key={session}
+                                    className={`relative p-1 rounded text-[9px] leading-tight min-h-[18px] cursor-pointer transition-all hover:shadow-md hover:z-10 ${
+                                      memberSchedules.length > 0 
+                                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
+                                        : 'bg-slate-50 border border-slate-200 text-slate-400 hover:bg-slate-100'
+                                    }`}
+                                    onClick={() => {
+                                      openAddForm(dayIdx, member.fullName, session);
+                                    }}
+                                    title={memberSchedules.length > 0 
+                                      ? memberSchedules.map(s => `${SESSION_LABELS[s.session]}: ${s.title}`).join('\n')
+                                      : `${DAY_LABELS[dayIdx]} ${SESSION_LABELS[session]} - Click để thêm lịch`}
+                                  >
+                                    <span className="font-medium text-[8px] opacity-70">{SESSION_LABELS[session].charAt(0)}</span>
+                                    {memberSchedules.length > 0 ? (
+                                      <span className="block truncate">{memberSchedules[0].title}</span>
+                                    ) : (
+                                      <span className="block text-center opacity-50">—</span>
+                                    )}
+                                    {memberSchedules.length > 1 && (
+                                      <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[7px] rounded-full w-4 h-4 flex items-center justify-center">+{memberSchedules.length - 1}</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                    {selectedUnit.members.length === 0 && (
+                      <tr>
+                        <td colSpan={9} className="px-4 py-8 text-center text-slate-500">
+                          Chưa có nhân sự trong đơn vị này
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="bg-[#f5f9f6] border-t border-[#c6d8c8] px-4 py-2 flex items-center justify-between">
+              <span className="text-[10px] text-slate-600">
+                Tuần: {formatWeekRange(weekStartDate)}
+              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] text-slate-500 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Có lịch
+                </span>
+                <span className="text-[9px] text-slate-500 flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-slate-200 border border-slate-300"></span> Trống
+                </span>
+                <button 
+                  onClick={() => setSelectedUnit(null)}
+                  className="text-[9px] text-slate-500 hover:text-slate-700 flex items-center gap-1"
+                >
+                  <X className="w-3 h-3" /> Đóng
+                </button>
+              </div>
             </div>
           </div>
-          <div className="bg-[#f5f9f6] border-t border-[#c6d8c8] px-4 py-2 flex items-center justify-between">
-            <span className="text-[10px] text-slate-600">
-              Tuần: {formatWeekRange(weekStartDate)}
-            </span>
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] text-slate-500 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Có lịch
-              </span>
-              <span className="text-[9px] text-slate-500 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-slate-200 border border-slate-300"></span> Trống
-              </span>
-            </div>
-          </div>
-        </div>
+        )}
 
       </div>
     </div>
