@@ -103,11 +103,6 @@ const WORK_TYPE_ICONS = {
   OFF: XCircleIcon,
 };
 
-const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'];
-const DAY_LABELS_SHORT = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-const SESSIONS = ['MORNING', 'AFTERNOON'];
-const SESSION_LABELS = { MORNING: 'Sáng', AFTERNOON: 'Chiều' };
-
 const LEADER_COLOR = '#2d6e3e';
 const PHONG_COLOR = '#3b82f6';
 const VUNG1_COLOR = '#0d9488';
