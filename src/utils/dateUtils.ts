@@ -31,3 +31,9 @@ export const formatDate = (dateStr: string) => {
   }
   return dateStr;
 };
+
+export const formatWeekRange = (start: Date) => {
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  return `${start.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+};

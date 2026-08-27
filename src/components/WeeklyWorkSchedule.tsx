@@ -188,61 +188,6 @@ const CARD_TEXT_COLOR = [
   'text-orange-700 dark:text-orange-300',
 ];
 
-const LEADER_COLOR = '#2d6e3e';
-const PHONG_COLOR = '#3b82f6';
-const VUNG1_COLOR = '#0d9488';
-const VUNG2_COLOR = '#ec4899';
-
-const WORK_TYPE_LABELS = {
-  OFFICE: 'Làm việc tại cơ quan',
-  OUTSIDE: 'Công tác ngoài',
-  MEETING: 'Họp/Hội nghị',
-  OFF: 'Nghỉ/Off',
-};
-
-const WORK_TYPE_COLORS = {
-  OFFICE: '#f59e0b',
-  OUTSIDE: '#10b981',
-  MEETING: '#3b82f6',
-  OFF: '#6b7280',
-};
-
-const WORK_TYPE_ICONS = {
-  OFFICE: Building,
-  OUTSIDE: Briefcase,
-  MEETING: Users,
-  OFF: XCircleIcon,
-};
-
-const DEFAULT_LEADERS = [
-  { name: 'Đào Trọng Truyền', position: 'Trưởng Thống kê', unitName: 'Ban Lãnh đạo' },
-  { name: 'Đào Thị Hiếu', position: 'Phó Trưởng Thống kê', unitName: 'Ban Lãnh đạo' },
-  { name: 'Vũ Tuấn Hùng', position: 'Phó Trưởng Thống kê', unitName: 'Ban Lãnh đạo' },
-  { name: 'Phạm Văn Tự', position: 'Phó Trưởng Thống kê', unitName: 'Ban Lãnh đạo' },
-];
-
-const VUNG1_UNITS = [
-  'Phố Hiến', 'Như Quỳnh', 'Yên Mỹ', 'Mỹ Hào', 'Khoái Châu', 'Lương Bằng', 'Hoàng Hoa Thám'
-];
-
-const VUNG2_UNITS = [
-  'Quỳnh Phụ', 'Hưng Hà', 'Đông Hưng', 'Thái Thụy', 'Tiền Hải', 'Kiến Xương', 'Vũ Thư'
-];
-
-const PHONG_UNITS = [
-  { short: 'P. Tổng hợp', full: 'Phòng Thống kê Tổng hợp', count: 12 },
-  { short: 'Phòng TCHC', full: 'Phòng TCHC', count: 0 },
-  { short: 'P. TMDV & Giá', full: 'Phòng Thống kê TMDV & Giá', count: 0 },
-  { short: 'P. CNXD', full: 'Phòng Thống kê CNXD', count: 0 },
-  { short: 'P. NN&XH', full: 'Phòng Thống kê NN&XH', count: 0 },
-];
-
-const formatWeekRange = (start: Date) => {
-  const end = new Date(start);
-  end.setDate(end.getDate() + 6);
-  return `${start.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${end.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
-};
-
 // ===== MODERN CARD COMPONENT =====
 interface ModernCardProps {
   unit: {
@@ -345,12 +290,15 @@ const ModernCard: React.FC<ModernCardProps> = ({
             <CalendarDays className="w-3.5 h-3.5" />
             <span>{daysWithTasks}/7 ngày có lịch</span>
           </div>
-          {Object.entries(workTypeCounts).map(([type, count]) => (
-            <span key={type} className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium" style={{backgroundColor: WORK_TYPE_COLORS[type] + '20', color: WORK_TYPE_COLORS[type]}}>
-              <WORK_TYPE_ICONS[type] className="w-3 h-3" />
-              {WORK_TYPE_LABELS_VN[type]} {count}
-            </span>
-          ))}
+          {Object.entries(workTypeCounts).map(([type, count]) => {
+            const Icon = WORK_TYPE_ICONS[type as keyof typeof WORK_TYPE_ICONS] || Building;
+            return (
+              <span key={type} className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium" style={{backgroundColor: WORK_TYPE_COLORS[type] + '20', color: WORK_TYPE_COLORS[type]}}>
+                <Icon className="w-3 h-3" />
+                {WORK_TYPE_LABELS_VN[type]} {count}
+              </span>
+            );
+          })}
         </div>
 
         {/* Detail Table */}
@@ -400,7 +348,10 @@ const ModernCard: React.FC<ModernCardProps> = ({
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span className="px-2.5 py-1 rounded text-[10px] font-medium" style={{backgroundColor: WORK_TYPE_COLORS[s.workType] + '20', color: WORK_TYPE_COLORS[s.workType]}}>
-                          <WORK_TYPE_ICONS[s.workType] className="w-3 h-3 inline-block mr-1" />
+                          {(() => {
+                            const Icon = WORK_TYPE_ICONS[s.workType as keyof typeof WORK_TYPE_ICONS] || Building;
+                            return <Icon className="w-3 h-3 inline-block mr-1" />;
+                          })()}
                           {WORK_TYPE_LABELS_VN[s.workType]}
                         </span>
                         <span className="text-slate-800 dark:text-slate-200 truncate max-w-[350px]">{s.title}</span>
@@ -475,13 +426,16 @@ const ModernCard: React.FC<ModernCardProps> = ({
           <div className="space-y-2">
             {/* Work type pills */}
             <div className="flex flex-wrap gap-1.5">
-              {Object.entries(workTypeCounts).slice(0, 3).map(([type, count]) => (
-                <span key={type} className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-medium" style={{backgroundColor: WORK_TYPE_COLORS[type] + '20', color: WORK_TYPE_COLORS[type]}}>
-                  <WORK_TYPE_ICONS[type] className="w-2.5 h-2.5" />
-                  <span className="hidden sm:inline">{WORK_TYPE_LABELS_VN[type]}</span>
-                  <span className="sm:hidden">{count}</span>
-                </span>
-              ))}
+              {Object.entries(workTypeCounts).slice(0, 3).map(([type, count]) => {
+                const Icon = WORK_TYPE_ICONS[type as keyof typeof WORK_TYPE_ICONS] || Building;
+                return (
+                  <span key={type} className="flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-medium" style={{backgroundColor: WORK_TYPE_COLORS[type] + '20', color: WORK_TYPE_COLORS[type]}}>
+                    <Icon className="w-2.5 h-2.5" />
+                    <span className="hidden sm:inline">{WORK_TYPE_LABELS_VN[type]}</span>
+                    <span className="sm:hidden">{count}</span>
+                  </span>
+                );
+              })}
               {Object.keys(workTypeCounts).length > 3 && (
                 <span className="px-2 py-0.5 rounded text-[9px] font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800">
                   +{Object.keys(workTypeCounts).length - 3} loại khác

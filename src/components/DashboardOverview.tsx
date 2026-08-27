@@ -764,6 +764,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </div>
         </div>
       </div>
+        </div>
 
         {/* ================= WEEKLY SCHEDULE MATRIX - 4 LEADERS ================= */}
         <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col mt-3 overflow-hidden">
