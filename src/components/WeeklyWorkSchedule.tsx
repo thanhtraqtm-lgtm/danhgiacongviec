@@ -546,7 +546,7 @@ const SectionBlock = ({
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden" style={{ borderTop: `3px solid ${headerColor}` }}>
       {/* Header */}
-      <div className={`px-5 py-4 flex items-center justify-between ${`bg-gradient-to-r from-${headerColor.replace('#', '')} to-${headerColor.replace('#', '')}dd`} text-white`}>
+      <div className={`px-5 py-4 flex items-center justify-between bg-gradient-to-r from-[${headerColor}] to-[${headerColor}] text-white`}>
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
             {icon}
