@@ -606,6 +606,7 @@ export const MeetingCalendar: React.FC<MeetingCalendarProps> = ({
         </div>
     );
     return arr;
+  }
   }, [year, month, startingDay, daysInMonth, selectedDay, filteredMeetings]);
 
   const selectedDayMeetings = useMemo(() => selectedDay ? filteredMeetings.filter(m => {
