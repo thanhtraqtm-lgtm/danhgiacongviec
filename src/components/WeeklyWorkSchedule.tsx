@@ -131,6 +131,10 @@ const PHONG_UNITS = [
   { short: 'P. NN&XH', full: 'Phòng Thống kê NN&XH', count: 0 },
 ];
 
+// Fuzzy match department names (case-insensitive, trim, accent-insensitive)
+const normDept = (s: string) => (s || '').normalize('NFC').toLowerCase().trim().replace(/\s+/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+const deptMatch = (userDept: string, targetDept: string) => normDept(userDept) === normDept(targetDept);
+
 const formatWeekRange = (start: Date) => {
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
@@ -690,7 +694,7 @@ export const WeeklyWorkSchedule: React.FC<{
       position: l.position,
       fullName: l.name,
       color: LEADER_COLOR,
-      members: users.filter(u => u.fullName === l.name),
+      members: users.filter(u => deptMatch(u.fullName, l.name)),
       allSchedules: schedules.filter(s => s.weekStartDate === weekStartDateStr && s.personName === l.name)
     }))
   , [users, schedules, weekStartDateStr]);
@@ -1281,8 +1285,8 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
               name,
               fullName: `Thống kê cơ sở ${name}`,
               color: VUNG1_COLOR,
-              members: users.filter(u => u.department === `Thống kê cơ sở ${name}` || u.workUnit === `Thống kê cơ sở ${name}`),
-              allSchedules: schedules.filter(s => s.weekStartDate === weekStartDateStr && s.unitName === `Thống kê cơ sở ${name}`)
+              members: users.filter(u => deptMatch(u.department, `Thống kê cơ sở ${name}`) || deptMatch(u.workUnit, `Thống kê cơ sở ${name}`)),
+              allSchedules: schedules.filter(s => s.weekStartDate === weekStartDateStr && deptMatch(s.unitName, `Thống kê cơ sở ${name}`))
             }))}
             color={VUNG1_COLOR}
             type="vung1"
@@ -1303,8 +1307,8 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
               name: p.short,
               fullName: p.full,
               color: PHONG_COLOR,
-              members: users.filter(u => u.department === p.full),
-              allSchedules: schedules.filter(s => s.weekStartDate === weekStartDateStr && s.unitName === p.full)
+              members: users.filter(u => deptMatch(u.department, p.full) || deptMatch(u.workUnit, p.full)),
+              allSchedules: schedules.filter(s => s.weekStartDate === weekStartDateStr && deptMatch(s.unitName, p.full))
             }))}
             color={PHONG_COLOR}
             type="phong"
@@ -1325,8 +1329,8 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
               name,
               fullName: `Thống kê cơ sở ${name}`,
               color: VUNG2_COLOR,
-              members: users.filter(u => u.department === `Thống kê cơ sở ${name}` || u.workUnit === `Thống kê cơ sở ${name}`),
-              allSchedules: schedules.filter(s => s.weekStartDate === weekStartDateStr && s.unitName === `Thống kê cơ sở ${name}`)
+              members: users.filter(u => deptMatch(u.department, `Thống kê cơ sở ${name}`) || deptMatch(u.workUnit, `Thống kê cơ sở ${name}`)),
+              allSchedules: schedules.filter(s => s.weekStartDate === weekStartDateStr && deptMatch(s.unitName, `Thống kê cơ sở ${name}`))
             }))}
             color={VUNG2_COLOR}
             type="vung2"
@@ -1349,9 +1353,10 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
             <div className="p-3 overflow-x-auto">
               <div className="min-w-max">
                 <table className="w-full min-w-[900px] border-collapse text-[11px] font-sans">
-                  <thead>
+<thead>
                     <tr className="bg-[#f0f7f2] border-b border-[#c6d8c8]">
                       <th className="px-2 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] sticky left-0 bg-[#f0f7f2] z-10 w-32">Nhân sự / Chức vụ</th>
+                      <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-24">Phòng ban</th>
                       <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T2</th>
                       <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T3</th>
                       <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-20">T4</th>
@@ -1366,6 +1371,9 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
                       <tr key={member.id} className={`${mIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} border-b border-slate-100 hover:bg-slate-50/80 transition-colors`}>
                         <td className="px-2 py-1.5 font-semibold text-[#2d6e3e] border-r border-[#c6d8c8] sticky left-0 bg-inherit z-10 w-32 text-nowrap">
                           {member.fullName} <br/><span className="text-[9px] font-normal text-slate-500">{member.position}</span>
+                        </td>
+                        <td className="px-1.5 py-1.5 text-slate-600 text-[9px] border-r border-[#e8efe9] text-center">
+                          {member.department || member.workUnit || '—'}
                         </td>
                         {DAY_LABELS.map((_, dayIdx) => (
                           <td key={dayIdx} className="px-1 py-1 border-r border-[#e8efe9] w-20 min-w-[70px] max-w-[70px] align-top">
