@@ -767,6 +767,12 @@ export const WeeklyWorkSchedule: React.FC<{
     setEditingId(null);
   };
 
+  const openEditForm = (schedule: any) => {
+    setAddForm({ ...schedule });
+    setShowAddForm(true);
+    setEditingId(schedule.id);
+  };
+
   const handleMatrixCellClick = (unitName: string, unitMembers: UserType[], dayIndex: number, session: 'MORNING' | 'AFTERNOON') => {
     const dayOfWeek = (dayIndex + 1) % 7;
     const memberNames = new Set(unitMembers.map(m => m.fullName));
@@ -1372,29 +1378,57 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
                                   s.dayOfWeek === dayOfWeek &&
                                   s.session === session
                                 );
+                                const firstSchedule = memberSchedules[0];
+                                const workTypeColor = firstSchedule ? WORK_TYPE_COLORS[firstSchedule.workType] || WORK_TYPE_COLORS.OFFICE : '';
+                                const WorkTypeIcon = firstSchedule ? (WORK_TYPE_ICONS[firstSchedule.workType as keyof typeof WORK_TYPE_ICONS] || Building) : Building;
                                 return (
                                   <div 
                                     key={session}
-                                    className={`relative p-1 rounded text-[9px] leading-tight min-h-[18px] cursor-pointer transition-all hover:shadow-md hover:z-10 ${
+                                    className={`relative p-1 rounded text-[9px] leading-tight min-h-[18px] cursor-pointer transition-all hover:shadow-md hover:z-10 group ${
                                       memberSchedules.length > 0 
                                         ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
                                         : 'bg-slate-50 border border-slate-200 text-slate-400 hover:bg-slate-100'
                                     }`}
-                                    onClick={() => {
-                                      openAddForm(dayIdx, member.fullName, session);
+                                    onClick={(e) => {
+                                      if (!e.target.closest('button')) {
+                                        if (memberSchedules.length > 0) {
+                                          openEditForm(memberSchedules[0]);
+                                        } else {
+                                          openAddForm(dayIdx, member.fullName, session);
+                                        }
+                                      }
                                     }}
                                     title={memberSchedules.length > 0 
-                                      ? memberSchedules.map(s => `${SESSION_LABELS[s.session]}: ${s.title}`).join('\n')
+                                      ? memberSchedules.map(s => `${SESSION_LABELS[s.session]}: ${s.title} (${WORK_TYPE_LABELS_VN[s.workType] || s.workType})`).join('\n')
                                       : `${DAY_LABELS[dayIdx]} ${SESSION_LABELS[session]} - Click để thêm lịch`}
                                   >
                                     <span className="font-medium text-[8px] opacity-70">{SESSION_LABELS[session].charAt(0)}</span>
                                     {memberSchedules.length > 0 ? (
-                                      <span className="block truncate">{memberSchedules[0].title}</span>
+                                      <>
+                                        <span className="block truncate">{firstSchedule.title}</span>
+                                        <span className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 text-[7px] font-medium rounded" style={{ backgroundColor: workTypeColor + '20', color: workTypeColor }}>
+                                          <WorkTypeIcon className="w-2.5 h-2.5" />
+                                          {WORK_TYPE_LABELS_VN[firstSchedule.workType] || firstSchedule.workType}
+                                        </span>
+                                      </>
                                     ) : (
                                       <span className="block text-center opacity-50">—</span>
                                     )}
                                     {memberSchedules.length > 1 && (
                                       <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[7px] rounded-full w-4 h-4 flex items-center justify-center">+{memberSchedules.length - 1}</span>
+                                    )}
+                                    {/* Edit button on hover */}
+                                    {memberSchedules.length > 0 && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openEditForm(firstSchedule);
+                                        }}
+                                        className="absolute top-0 right-0 m-0.5 p-1 text-emerald-600 hover:bg-emerald-100 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Sửa lịch này"
+                                      >
+                                        <Edit2 className="w-3.5 h-3.5" />
+                                      </button>
                                     )}
                                   </div>
                                 );
