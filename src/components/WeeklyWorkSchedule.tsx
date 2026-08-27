@@ -518,7 +518,23 @@ const SectionBlock = ({
 
   const handleToggleExpand = (unitId: string) => {
     setExpandedUnitId(prev => prev === unitId ? null : unitId);
+    // Close other blocks' expanded cards by dispatching custom event
+    window.dispatchEvent(new CustomEvent('close-other-cards', { detail: unitId }));
   };
+
+  // Listen for close-other-cards event from other SectionBlocks
+  useEffect(() => {
+    const handleCloseOthers = (event: CustomEvent<string>) => {
+      const clickedUnitId = event.detail;
+      if (expandedUnitId && expandedUnitId !== clickedUnitId) {
+        setExpandedUnitId(null);
+      }
+    };
+    window.addEventListener('close-other-cards', handleCloseOthers as EventListener);
+    return () => {
+      window.removeEventListener('close-other-cards', handleCloseOthers as EventListener);
+    };
+  }, [expandedUnitId]);
 
   const handleAddClick = (e: React.MouseEvent, unitName: string) => {
     e.stopPropagation();
@@ -901,15 +917,14 @@ export const WeeklyWorkSchedule: React.FC<{
     const headers = jsonData[0] as string[];
     if (!headers[0]?.toLowerCase().includes('ngày') || !headers[1]?.toLowerCase().includes('buổi')) return null;
     
-    const leaderNames = headers.slice(3).map(h => h.split('\n')[0].split('(')[0].trim());
+    const leaderNames = headers.slice(2).map(h => h.split('\n')[0].split('(')[0].trim());
     const rows = jsonData.slice(1);
     const result: any[] = [];
     let currentDayIndex = -1;
     
     rows.forEach((row) => {
       const dayCell = row[0]?.toString().trim();
-      const dayOfWeekStr = row[1]?.toString().trim() || '';
-      const session = row[2]?.toString().trim() || '';
+      const session = row[1]?.toString().trim() || '';
       
       if (dayCell) {
         const dayMatch = dayCell.match(/Thứ\s*(\d+)/);
@@ -918,18 +933,19 @@ export const WeeklyWorkSchedule: React.FC<{
         }
       }
       
-      if (currentDayIndex >= 0 && currentDayIndex < 7 && SESSIONS.includes(session)) {
+      if (currentDayIndex >= 0 && currentDayIndex < 7 && ['Sáng', 'Chiều'].includes(session)) {
         const dayOfWeek = [1,2,3,4,5,6,0][currentDayIndex];
+        const sessionKey = session === 'Sáng' ? 'MORNING' : 'AFTERNOON';
         leaderNames.forEach((leaderName, leaderIdx) => {
-          const content = row[leaderIdx + 3]?.toString().trim() || '';
+          const content = row[leaderIdx + 2]?.toString().trim() || '';
           if (content && content !== '—' && content !== '') {
             result.push({
               weekStartDate: weekStartDateStr,
               dayOfWeek,
-              session: SESSIONS[SESSIONS.indexOf(session)],
+              session: sessionKey,
               personName: leaderName,
               title: content,
-              workType: content.includes('Họp') ? 'MEETING' : content.includes('Công tác') ? 'OUTSIDE' : 'OFFICE',
+              workType: content.includes('Họp') ? 'MEETING' : content.includes('Công tác') ? 'OUTSIDE' : content.includes('nghỉ') || content.includes('Nghỉ') ? 'OFF' : 'OFFICE',
               location: content.includes('📍') || content.includes('') ? content.split(/[📍]/).pop()?.trim() : ''
             });
           }
@@ -1205,8 +1221,11 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
               <button onClick={downloadTemplate} className="p-2 hover:bg-sky-100 dark:hover:bg-sky-900/30 rounded-lg transition-colors" title="Mẫu nhập">
                 <DownloadIcon className="w-4 h-4 text-sky-600" />
               </button>
-              <button onClick={triggerFileImport} className="p-2 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-lg transition-colors" title="Nhập Excel">
+              <button onClick={triggerFileImport} className="p-2 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-lg transition-colors" title="Nhập Excel (danh sách)">
                 <UploadIcon className="w-4 h-4 text-amber-600" />
+              </button>
+              <button onClick={triggerFileImport} className="p-2 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-lg transition-colors" title="Nhập Ma trận (Lịch Lãnh Đạo)">
+                <FileSpreadsheet className="w-4 h-4 text-purple-600" />
               </button>
               <input type="file" ref={fileInputRef} accept=".xlsx,.xls,.csv" onChange={handleFileImport} className="hidden" />
               <button onClick={exportToExcel} className="p-2 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg transition-colors" title="Xuất Excel">
