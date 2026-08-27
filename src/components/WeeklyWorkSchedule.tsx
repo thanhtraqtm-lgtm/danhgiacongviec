@@ -1348,7 +1348,7 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
           />
         </div>
 
-        {/* ================= DYNAMIC UNIT MATRIX ================= */}
+{/* ================= DYNAMIC UNIT MATRIX ================= */}
         {selectedUnit && (
           <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col mt-4 overflow-hidden">
             <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide flex items-center justify-between px-4">
@@ -1358,7 +1358,7 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
             <div className="p-3 overflow-x-auto">
               <div className="min-w-max">
                 <table className="w-full min-w-[900px] border-collapse text-[11px] font-sans">
-<thead>
+                  <thead>
                     <tr className="bg-[#f0f7f2] border-b border-[#c6d8c8]">
                       <th className="px-2 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] sticky left-0 bg-[#f0f7f2] z-10 w-32">Nhân sự / Chức vụ</th>
                       <th className="px-1.5 py-1.5 text-center font-bold text-[#2d4a36] border-r border-[#c6d8c8] w-24">Phòng ban</th>
@@ -1392,34 +1392,43 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
                                   s.session === session
                                 );
                                 const firstSchedule = memberSchedules[0];
+                                const hasSchedule = memberSchedules.length > 0;
                                 const workTypeColor = firstSchedule ? WORK_TYPE_COLORS[firstSchedule.workType] || WORK_TYPE_COLORS.OFFICE : '';
                                 const WorkTypeIcon = firstSchedule ? (WORK_TYPE_ICONS[firstSchedule.workType as keyof typeof WORK_TYPE_ICONS] || Building) : Building;
+                                
+                                // Determine cell classes
+                                const cellBg = hasSchedule ? 'bg-emerald-50' : 'bg-slate-50';
+                                const cellBorder = hasSchedule ? 'border-emerald-200' : 'border-slate-200';
+                                const cellHover = hasSchedule ? 'hover:bg-emerald-100' : 'hover:bg-slate-100';
+                                
+                                // Text colors
+                                const sessionLabelColor = 'text-slate-600 dark:text-slate-400';
+                                const titleColor = hasSchedule ? 'text-emerald-900 dark:text-emerald-100' : 'text-slate-400';
+                                const badgeBg = hasSchedule ? workTypeColor + '20' : '';
+                                const badgeColor = hasSchedule ? workTypeColor : '';
+                                
                                 return (
                                   <div 
                                     key={session}
-                                    className={`relative p-1 rounded text-[9px] leading-tight min-h-[18px] cursor-pointer transition-all hover:shadow-md hover:z-10 group ${
-                                      memberSchedules.length > 0 
-                                        ? 'bg-emerald-50 border border-emerald-200' 
-                                        : 'bg-slate-50 border border-slate-200 hover:bg-slate-100'
-                                    }`}
+                                    className={`relative p-1 rounded text-[9px] leading-tight min-h-[18px] cursor-pointer transition-all hover:shadow-md hover:z-10 ${cellBg} border ${cellBorder} ${cellHover}`}
                                     onClick={(e) => {
                                       if (!e.target.closest('button')) {
-                                        if (memberSchedules.length > 0) {
-                                          openEditForm(memberSchedules[0]);
+                                        if (hasSchedule) {
+                                          openEditForm(firstSchedule);
                                         } else {
                                           openAddForm(dayIdx, member.fullName, session);
                                         }
                                       }
                                     }}
-                                    title={memberSchedules.length > 0 
+                                    title={hasSchedule 
                                       ? memberSchedules.map(s => `${SESSION_LABELS[s.session]}: ${s.title} (${WORK_TYPE_LABELS_VN[s.workType] || s.workType})`).join('\n')
                                       : `${DAY_LABELS[dayIdx]} ${SESSION_LABELS[session]} - Click để thêm lịch`}
                                   >
                                     <span className="font-medium text-[8px] opacity-70 text-slate-600 dark:text-slate-400">{SESSION_LABELS[session].charAt(0)}</span>
-                                    {memberSchedules.length > 0 ? (
+                                    {hasSchedule ? (
                                       <>
                                         <span className="block truncate text-emerald-900 dark:text-emerald-100">{firstSchedule.title}</span>
-                                        <span className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 text-[7px] font-medium rounded" style={{ backgroundColor: workTypeColor + '20', color: workTypeColor }}>
+                                        <span className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 text-[7px] font-medium rounded" style={{ backgroundColor: badgeBg, color: badgeColor }}>
                                           <WorkTypeIcon className="w-2.5 h-2.5" />
                                           {WORK_TYPE_LABELS_VN[firstSchedule.workType] || firstSchedule.workType}
                                         </span>
@@ -1431,7 +1440,7 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
                                       <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[7px] rounded-full w-4 h-4 flex items-center justify-center">+{memberSchedules.length - 1}</span>
                                     )}
                                     {/* Edit button on hover */}
-                                    {memberSchedules.length > 0 && (
+                                    {hasSchedule && (
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
