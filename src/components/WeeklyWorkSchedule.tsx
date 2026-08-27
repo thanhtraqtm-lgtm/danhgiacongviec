@@ -1399,8 +1399,8 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
                                     key={session}
                                     className={`relative p-1 rounded text-[9px] leading-tight min-h-[18px] cursor-pointer transition-all hover:shadow-md hover:z-10 group ${
                                       memberSchedules.length > 0 
-                                        ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
-                                        : 'bg-slate-50 border border-slate-200 text-slate-400 hover:bg-slate-100'
+                                        ? 'bg-emerald-50 border border-emerald-200' 
+                                        : 'bg-slate-50 border border-slate-200 hover:bg-slate-100'
                                     }`}
                                     onClick={(e) => {
                                       if (!e.target.closest('button')) {
@@ -1415,7 +1415,7 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
                                       ? memberSchedules.map(s => `${SESSION_LABELS[s.session]}: ${s.title} (${WORK_TYPE_LABELS_VN[s.workType] || s.workType})`).join('\n')
                                       : `${DAY_LABELS[dayIdx]} ${SESSION_LABELS[session]} - Click để thêm lịch`}
                                   >
-                                    <span className="font-medium text-[8px] opacity-70">{SESSION_LABELS[session].charAt(0)}</span>
+                                    <span className="font-medium text-[8px] opacity-70 text-slate-600 dark:text-slate-400">{SESSION_LABELS[session].charAt(0)}</span>
                                     {memberSchedules.length > 0 ? (
                                       <>
                                         <span className="block truncate text-emerald-900 dark:text-emerald-100">{firstSchedule.title}</span>
