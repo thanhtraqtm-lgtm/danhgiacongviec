@@ -661,7 +661,6 @@ export const WeeklyWorkSchedule: React.FC<{
   const [addForm, setAddForm] = useState<any>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedUnit, setSelectedUnit] = useState<any>(null);
-  const [lastWorkType, setLastWorkType] = useState<string>('OFFICE');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUnitClick = useCallback((unit: any) => {
@@ -741,7 +740,6 @@ export const WeeklyWorkSchedule: React.FC<{
       return;
     }
     onUpdateSchedule(scheduleId, { ...addForm, updatedAt: new Date().toISOString() });
-    setLastWorkType(addForm.workType || 'OFFICE');
     setEditingId(null);
     setAddForm({});
     addToast('success', 'Thành công', 'Đã cập nhật lịch công tác');
@@ -753,7 +751,6 @@ export const WeeklyWorkSchedule: React.FC<{
       return;
     }
     onAddSchedule({ ...addForm });
-    setLastWorkType(addForm.workType || 'OFFICE');
     setShowAddForm(false);
     setAddForm({});
     addToast('success', 'Thành công', 'Đã thêm lịch công tác mới');
@@ -764,7 +761,7 @@ export const WeeklyWorkSchedule: React.FC<{
       weekStartDate: weekStartDateStr,
       dayOfWeek: dayIndex !== undefined ? (dayIndex + 1) % 7 : 1,
       session: session || 'MORNING',
-      workType: lastWorkType,
+      workType: 'OFFICE',
     };
     if (unitName) {
       const unitUsers = users.filter(u => deptMatch(u.fullName, unitName) || deptMatch(u.department, unitName) || deptMatch(u.workUnit, unitName));
