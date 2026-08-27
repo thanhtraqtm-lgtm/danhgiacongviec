@@ -133,7 +133,12 @@ const PHONG_UNITS = [
 
 // Fuzzy match department names (case-insensitive, trim, accent-insensitive)
 const normDept = (s: string) => (s || '').normalize('NFC').toLowerCase().trim().replace(/\s+/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
-const deptMatch = (userDept: string, targetDept: string) => normDept(userDept) === normDept(targetDept);
+const deptMatch = (userDept: string, targetDept: string) => {
+  const normUser = normDept(userDept);
+  const normTarget = normDept(targetDept);
+  // Exact match OR user contains target OR target contains user (for partial matching)
+  return normUser === normTarget || normUser.includes(normTarget) || normTarget.includes(normUser);
+};
 
 const formatWeekRange = (start: Date) => {
   const end = new Date(start);
@@ -656,6 +661,7 @@ export const WeeklyWorkSchedule: React.FC<{
   const [addForm, setAddForm] = useState<any>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedUnit, setSelectedUnit] = useState<any>(null);
+  const [lastWorkType, setLastWorkType] = useState<string>('OFFICE');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleUnitClick = useCallback((unit: any) => {
@@ -735,6 +741,7 @@ export const WeeklyWorkSchedule: React.FC<{
       return;
     }
     onUpdateSchedule(scheduleId, { ...addForm, updatedAt: new Date().toISOString() });
+    setLastWorkType(addForm.workType || 'OFFICE');
     setEditingId(null);
     setAddForm({});
     addToast('success', 'Thành công', 'Đã cập nhật lịch công tác');
@@ -746,6 +753,7 @@ export const WeeklyWorkSchedule: React.FC<{
       return;
     }
     onAddSchedule({ ...addForm });
+    setLastWorkType(addForm.workType || 'OFFICE');
     setShowAddForm(false);
     setAddForm({});
     addToast('success', 'Thành công', 'Đã thêm lịch công tác mới');
@@ -756,10 +764,10 @@ export const WeeklyWorkSchedule: React.FC<{
       weekStartDate: weekStartDateStr,
       dayOfWeek: dayIndex !== undefined ? (dayIndex + 1) % 7 : 1,
       session: session || 'MORNING',
-      workType: 'OFFICE',
+      workType: lastWorkType,
     };
     if (unitName) {
-      const unitUsers = users.filter(u => u.fullName === unitName || u.department === unitName || u.workUnit === unitName);
+      const unitUsers = users.filter(u => deptMatch(u.fullName, unitName) || deptMatch(u.department, unitName) || deptMatch(u.workUnit, unitName));
       if (unitUsers[0]) {
         initialForm.personName = unitUsers[0].fullName;
         initialForm.personRole = unitUsers[0].position;
@@ -1413,14 +1421,14 @@ const matrixData = parseMatrixFormat(jsonData as string[][]);
                                     <span className="font-medium text-[8px] opacity-70">{SESSION_LABELS[session].charAt(0)}</span>
                                     {memberSchedules.length > 0 ? (
                                       <>
-                                        <span className="block truncate">{firstSchedule.title}</span>
+                                        <span className="block truncate text-emerald-900 dark:text-emerald-100">{firstSchedule.title}</span>
                                         <span className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 text-[7px] font-medium rounded" style={{ backgroundColor: workTypeColor + '20', color: workTypeColor }}>
                                           <WorkTypeIcon className="w-2.5 h-2.5" />
                                           {WORK_TYPE_LABELS_VN[firstSchedule.workType] || firstSchedule.workType}
                                         </span>
                                       </>
                                     ) : (
-                                      <span className="block text-center opacity-50">—</span>
+                                      <span className="block text-center text-slate-400">—</span>
                                     )}
                                     {memberSchedules.length > 1 && (
                                       <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[7px] rounded-full w-4 h-4 flex items-center justify-center">+{memberSchedules.length - 1}</span>
