@@ -139,8 +139,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users }) => {
     <div className="min-h-screen w-full flex flex-col justify-between bg-gradient-to-b from-[#EBF4EE] via-[#F2F7F3] to-[#E5F0E8] dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 text-slate-800 dark:text-slate-100 selection:bg-[#007A44] selection:text-white">
       {/* Top Bar Trang trọng */}
       <header className="w-full bg-[#007A44] text-white shadow-md border-b border-[#006638] px-4 py-3">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
             <div className="w-10 h-10 flex items-center justify-center shrink-0">
               {logoUrl && !imgError ? (
                 <img 
