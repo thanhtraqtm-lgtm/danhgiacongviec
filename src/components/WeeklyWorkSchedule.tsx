@@ -2061,16 +2061,21 @@ export const WeeklyWorkSchedule: React.FC<{
                 <CalendarIcon className="w-4 h-4 text-slate-500" />
                 <input
                   type="date"
-                  value={currentWeekStart.toISOString().split('T')[0]}
+                  value={toLocalDateString(weekStartDate)}
                   onChange={(e) => {
-                    const selected = new Date(e.target.value);
-                    const day = selected.getDay();
-                    const diff = selected.getDate() - day + (day === 0 ? -6 : 1);
-                    setCurrentWeekStart(new Date(selected.setDate(diff)));
+                    if (!e.target.value) return;
+                    const [year, month, day] = e.target.value.split('-').map(Number);
+                    const selected = new Date(year, month - 1, day);
+                    const dayOfWeek = selected.getDay();
+                    const diff = selected.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                    const monday = new Date(selected.setDate(diff));
+                    
+                    // Cập nhật cả 2 state cho khớp nhau hoàn toàn nếu component của bạn dùng cả 2
+                    setCurrentWeekStart(monday);
+                    // Nếu có state weekStartDate riêng, hãy cập nhật nó ở đây luôn
                   }}
                   className="bg-transparent border-none outline-none text-sm font-medium text-slate-800 dark:text-slate-200 w-auto min-w-[150px]"
                 />
-              </div>
               
               <div className="flex items-center gap-1">
                 <button onClick={handlePrevWeek} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Tuần trước">
