@@ -188,7 +188,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     setUsername(user.username);
     setPassword(user.password || '123456');
 
-    // Rule: Phó phòng không được gán quyền Trưởng phòng mà để là Chuyên viên
     const normPos = (user.position || '').toLowerCase().trim();
     if (normPos.includes('phó phòng') || normPos.includes('phó trưởng phòng') || normPos.includes('phó chi cục')) {
       setRole('STAFF');
@@ -225,8 +224,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
       return;
     }
     
-    // Rule: Phó phòng không được gán Trưởng phòng mà để là Chuyên viên (STAFF)
-    // Q. Trưởng Thống kê cơ sở / Trưởng phòng -> DEPT_HEAD
     let assignedRole = role;
     const normPos = position.toLowerCase().trim();
     if (normPos.includes('phó') && !normPos.includes('cục trưởng')) {
@@ -290,7 +287,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
   return (
     <div className="space-y-4 animate-in fade-in-50">
-      {/* Top Toolbar Card matching screenshot */}
+      {/* Top Toolbar Card */}
       <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl p-3 shadow-xs flex flex-col lg:flex-row items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 shrink-0 select-none">
           <Users className="w-5 h-5 text-sky-700 dark:text-sky-400" />
@@ -300,7 +297,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 w-full lg:w-auto">
-          {/* Search box */}
           <div className="relative">
             <input
               type="text"
@@ -312,7 +308,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
 
-          {/* Department Filter */}
           <select
             value={filterDepartment}
             onChange={(e) => setFilterDepartment(e.target.value)}
@@ -324,7 +319,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             ))}
           </select>
 
-          {/* Action Buttons */}
           <button
             onClick={handleExportExcel}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-[#198754] hover:bg-[#157347] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
@@ -368,7 +362,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
         </div>
       </div>
 
-      {/* Main Table with Green Header and Clean Government Grid */}
+      {/* Main Table */}
       <div className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-xs overflow-hidden">
         <div className="overflow-x-auto max-h-[640px] custom-scrollbar">
           <table className="w-full text-left border-collapse text-xs">
@@ -483,419 +477,146 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             </tbody>
           </table>
         </div>
-      </div>
+        </div>
 
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-4xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
-            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800">
-              <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-sm uppercase tracking-wide">
-                {editingUser ? 'Sửa Thông Tin Nhân Sự' : 'Thêm Nhân Sự Mới'}
-              </h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-white p-1">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="p-6 text-xs max-h-[80vh] overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Họ và Tên (*)</label>
-                  <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Năm sinh</label>
-                  <input type="text" value={birthYear} onChange={(e) => setBirthYear(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Ngày vào ngành</label>
-                  <input type="date" value={joinDate} onChange={(e) => setJoinDate(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Chức vụ</label>
-                  <input 
-                    type="text" 
-                    value={position} 
-                    onChange={(e) => handlePositionChange(e.target.value)} 
-                    placeholder="Ví dụ: Cục trưởng, Trưởng phòng, Phó phòng, Chuyên viên..." 
-                    className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" 
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Đơn vị công tác</label>
-                  <input type="text" value={workUnit} onChange={(e) => setWorkUnit(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Phòng ban</label>
-                  <select value={department} onChange={(e) => setDepartment(e.target.value as Department)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer">
-                    {departments.map((d) => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Phân quyền vai trò hệ thống (*)</label>
-                  <select 
-                    value={role} 
-                    onChange={(e) => setRole(e.target.value as any)} 
-                    className="w-full p-2.5 rounded-lg border border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer font-bold"
-                  >
-                    <option value="PROVINCE_LEADER">🏛️ Lãnh đạo Cục (Cục trưởng, Phó Cục trưởng)</option>
-                    <option value="DEPT_HEAD">🏢 Trưởng phòng / Chi cục trưởng (Phê duyệt cấp 1)</option>
-                    <option value="STAFF">👤 Chuyên viên (Bao gồm Phó phòng, Thống kê viên - Tự đánh giá)</option>
-                  </select>
-                  <p className="text-[11px] text-slate-500 mt-1 italic">* Lưu ý: Phó phòng không gán quyền Trưởng phòng mà để vai trò là Chuyên viên.</p>
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Mô tả công việc được giao</label>
-                  <input type="text" value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} placeholder="Tóm tắt nhiệm vụ chính" className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Số điện thoại</label>
-                  <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500 font-mono" />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Địa chỉ Email</label>
-                  <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Username (*)</label>
-                  <input type="text" required value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono outline-none focus:ring-1 focus:ring-indigo-500" />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Mật khẩu</label>
-                  <input type="text" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono outline-none focus:ring-1 focus:ring-indigo-500" />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
-                <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
-                  Hủy
-                </button>
-                <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow hover:bg-indigo-700 transition-colors">
-                  {editingUser ? 'Lưu thay đổi' : 'Thêm Nhân Sự'}
+        {/* Modal Thêm / Sửa Nhân sự */}
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl w-full max-w-4xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
+              <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800">
+                <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-sm uppercase tracking-wide">
+                  {editingUser ? 'Sửa Thông Tin Nhân Sự' : 'Thêm Nhân Sự Mới'}
+                </h3>
+                <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-white p-1">
+                  <X className="w-4 h-4" />
                 </button>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showClearConfirmUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-md shadow-xl border border-slate-200 dark:border-slate-800">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Xác nhận xóa dữ liệu</h3>
-            <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">
-              Bạn có chắc chắn muốn xóa toàn bộ danh sách tài khoản? Hành động này không thể hoàn tác.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button onClick={cancelClearData} className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">Hủy</button>
-              <button onClick={confirmClearData} className="px-4 py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-colors">Xóa Tất Cả</button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {deleteConfirmUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-md shadow-xl border border-slate-200 dark:border-slate-800">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Xác nhận xóa người dùng</h3>
-            <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">
-              Bạn có muốn xóa tài khoản <strong>{deleteConfirmUser.name}</strong> không? Hành động này không thể hoàn tác.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setDeleteConfirmUser(null)} className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">Hủy</button>
-              <button onClick={confirmDeleteRow} className="px-4 py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-colors">Xóa Người Dùng</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-      {/* DEDICATED ADMIN ACCOUNTS MODAL - STRICTLY FOR LOGGED-IN ADMINS */}
-      {showAdminModal && isCurrentAdmin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl shadow-2xl border border-amber-500/40 overflow-hidden flex flex-col max-h-[90vh]">
-            {/* Header */}
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-amber-500/30">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
-                  <Shield className="w-5 h-5" />
+               
+              <form onSubmit={handleSubmit} className="p-6 text-xs max-h-[80vh] overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Họ và Tên (*)</label>
+                    <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Năm sinh</label>
+                    <input type="text" value={birthYear} onChange={(e) => setBirthYear(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Ngày vào ngành</label>
+                    <input type="date" value={joinDate} onChange={(e) => setJoinDate(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" />
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-base font-bold text-amber-300 flex items-center gap-2">
-                    QUẢN TRỊ TÀI KHOẢN ADMIN HỆ THỐNG
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      Bảo mật cao
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Chỉ Quản trị viên mới có quyền tạo và quản lý tài khoản Admin. Không hiển thị trong danh sách nhân sự.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowAdminModal(false);
-                  setShowAddAdminForm(false);
-                  setEditingAdminUser(null);
-                }}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            {/* Modal Body */}
-            <div className="p-5 space-y-4 overflow-y-auto flex-1">
-              {/* Security info banner */}
-              <div className="flex items-start gap-3 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs text-amber-900 dark:text-amber-200">
-                <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-semibold">Phân tách tài khoản Admin độc lập:</p>
-                  <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                    Tài khoản Admin đã được đưa ra khỏi danh sách nhân sự của đơn vị để tránh nhầm lẫn khi chấm điểm KPI và bảo mật thông tin phân quyền.
-                    Chỉ có tài khoản Admin hiện tại mới có quyền tạo thêm tài khoản Admin mới hoặc chỉnh sửa mật khẩu.
-                  </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Chức vụ</label>
+                    <input 
+                      type="text" 
+                      value={position} 
+                      onChange={(e) => handlePositionChange(e.target.value)} 
+                      placeholder="Ví dụ: Cục trưởng, Trưởng phòng, Phó phòng..." 
+                      className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Đơn vị công tác</label>
+                    <input type="text" value={workUnit} onChange={(e) => setWorkUnit(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Phòng ban</label>
+                    <select value={department} onChange={(e) => setDepartment(e.target.value as Department)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer">
+                      {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
                 </div>
-              </div>
 
-              {/* Action Toolbar */}
-              <div className="flex items-center justify-between">
-                <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                  <span>Danh sách tài khoản Admin ({adminUsers.length})</span>
-                </div>
-                {!showAddAdminForm && (
-                  <button
-                    onClick={handleOpenAddAdmin}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>+ Tạo Admin mới</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Embedded Admin Add/Edit Form */}
-              {showAddAdminForm && (
-                <form onSubmit={handleSaveAdmin} className="p-4 bg-slate-50 dark:bg-slate-800/80 border border-amber-300 dark:border-amber-700/60 rounded-xl space-y-3 animate-in fade-in">
-                  <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
-                    <span className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase">
-                      {editingAdminUser ? 'Chỉnh sửa Quản trị viên' : 'Thêm Quản trị viên mới'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowAddAdminForm(false);
-                        setEditingAdminUser(null);
-                      }}
-                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Phân quyền vai trò hệ thống (*)</label>
+                    <select 
+                      value={role} 
+                      onChange={(e) => setRole(e.target.value as any)} 
+                      className="w-full p-2.5 rounded-lg border border-indigo-300 dark:border-indigo-700 bg-indigo-50/50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer font-bold"
                     >
-                      Đóng form
-                    </button>
+                      <option value="PROVINCE_LEADER">🏛️ Lãnh đạo Cục (Cục trưởng, Phó Cục trưởng)</option>
+                      <option value="DEPT_HEAD">🏢 Trưởng phòng / Chi cục trưởng (Phê duyệt cấp 1)</option>
+                      <option value="STAFF">👤 Chuyên viên (Bao gồm Phó phòng, Thống kê viên - Tự đánh giá)</option>
+                    </select>
+                    <p className="text-[11px] text-slate-500 mt-1 italic">* Lưu ý: Phó phòng không gán quyền Trưởng phòng mà để vai trò là Chuyên viên.</p>
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Họ và tên Quản trị viên (*)
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={adminFullName}
-                        onChange={(e) => setAdminFullName(e.target.value)}
-                        placeholder="Ví dụ: Quản trị viên hệ thống"
-                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-amber-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Tên đăng nhập (Username) (*)
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={adminUsername}
-                        onChange={(e) => setAdminUsername(e.target.value)}
-                        placeholder="Ví dụ: admin, admin2"
-                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-amber-500 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Mật khẩu đăng nhập (*)
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={adminPassword}
-                        onChange={(e) => setAdminPassword(e.target.value)}
-                        placeholder="Nhập mật khẩu an toàn..."
-                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-amber-500 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Số điện thoại liên hệ
-                      </label>
-                      <input
-                        type="text"
-                        value={adminPhone}
-                        onChange={(e) => setAdminPhone(e.target.value)}
-                        placeholder="0988xxxxxx"
-                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-amber-500 font-mono"
-                      />
-                    </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Mô tả công việc được giao</label>
+                    <input type="text" value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} placeholder="Tóm tắt nhiệm vụ chính" className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" />
                   </div>
+                </div>
 
-                  <div className="flex items-center justify-between pt-2">
-                    <p className="text-[11px] text-slate-500 italic">
-                      * Vai trò tự động gán là ADMIN tối cao, có toàn quyền quản trị ứng dụng.
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowAddAdminForm(false);
-                          setEditingAdminUser(null);
-                        }}
-                        className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 rounded-lg font-semibold hover:bg-slate-300 transition-colors"
-                      >
-                        Hủy
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-4 py-1.5 text-xs text-white bg-amber-600 hover:bg-amber-700 rounded-lg font-bold shadow-xs transition-colors"
-                      >
-                        {editingAdminUser ? 'Lưu cập nhật' : 'Xác nhận tạo Admin'}
-                      </button>
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Số điện thoại</label>
+                    <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500 font-mono" />
                   </div>
-                </form>
-              )}
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Địa chỉ Email</label>
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-indigo-500" />
+                  </div>
+                </div>
 
-              {/* Admin Users Table */}
-              <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-xs">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-slate-700 uppercase tracking-wider">
-                    <tr>
-                      <th className="py-2.5 px-3 w-12 text-center">STT</th>
-                      <th className="py-2.5 px-3">Họ và tên</th>
-                      <th className="py-2.5 px-3">Tên đăng nhập</th>
-                      <th className="py-2.5 px-3">Mật khẩu</th>
-                      <th className="py-2.5 px-3">Liên hệ</th>
-                      <th className="py-2.5 px-3 text-center">Quyền hạn</th>
-                      <th className="py-2.5 px-3 text-center w-24">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
-                    {adminUsers.map((admin, idx) => {
-                      const isShowingPass = !!showAdminPassMap[admin.id];
-                      const isCurrent = currentUser?.id === admin.id;
-                      return (
-                        <tr key={admin.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                          <td className="py-2.5 px-3 text-center text-slate-500 font-mono">{idx + 1}</td>
-                          <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-slate-100">
-                            {admin.fullName}
-                            {isCurrent && (
-                              <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
-                                Đang đăng nhập
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                            {admin.username}
-                          </td>
-                          <td className="py-2.5 px-3 font-mono">
-                            <div className="flex items-center gap-1.5">
-                              <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300">
-                                {isShowingPass ? (admin.password || '123456') : '••••••••'}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => toggleShowPass(admin.id)}
-                                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded"
-                                title={isShowingPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                              >
-                                {isShowingPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                              </button>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400">
-                            {admin.phone || admin.email || '—'}
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
-                              <Shield className="w-3 h-3 text-amber-500" />
-                              ADMIN TỐI CAO
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={() => handleOpenEditAdmin(admin)}
-                                className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-colors"
-                                title="Chỉnh sửa thông tin / mật khẩu"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteAdmin(admin)}
-                                disabled={adminUsers.length <= 1 || isCurrent}
-                                className={`p-1.5 rounded-md transition-colors ${
-                                  adminUsers.length <= 1 || isCurrent
-                                    ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
-                                    : 'text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30'
-                                }`}
-                                title={
-                                  adminUsers.length <= 1
-                                    ? 'Cần duy trì ít nhất 1 tài khoản Admin'
-                                    : isCurrent
-                                    ? 'Không thể xóa tài khoản đang đăng nhập'
-                                    : 'Xóa tài khoản Admin này'
-                                }
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Username (*)</label>
+                    <input type="text" required value={username} onChange={(e) => setUsername(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono outline-none focus:ring-1 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">Mật khẩu</label>
+                    <input type="text" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono outline-none focus:ring-1 focus:ring-indigo-500" />
+                  </div>
+                </div>
 
-            {/* Footer */}
-            <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex justify-end">
-              <button
-                onClick={() => {
-                  setShowAdminModal(false);
-                  setShowAddAdminForm(false);
-                  setEditingAdminUser(null);
-                }}
-                className="px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                Đóng
-              </button>
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+                  <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
+                    Hủy
+                  </button>
+                  <button type="submit" className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg shadow hover:bg-indigo-700 transition-colors">
+                    {editingUser ? 'Lưu thay đổi' : 'Thêm Nhân Sự'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+
+        {/* Modal Xác nhận Xóa Tất cả */}
+        {showClearConfirmUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-md shadow-xl border border-slate-200 dark:border-slate-800">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Xác nhận xóa dữ liệu</h3>
+              <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">
+                Bạn có chắc chắn muốn xóa toàn bộ danh sách tài khoản? Hành động này không thể hoàn tác.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button onClick={cancelClearData} className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">Hủy</button>
+                <button onClick={confirmClearData} className="px-4 py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-colors">Xóa Tất Cả</button>
+              </div>
+            </div>
+          </div>
+        )}
+         
+        {/* Modal Xác nhận Xóa một Người dùng */}
+        {deleteConfirmUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-6 w-full max-w-md shadow-xl border border-slate-200 dark:border-slate-800">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Xác nhận xóa người dùng</h3>
+              <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">
+                Bạn có muốn xóa tài khoản <strong>{deleteConfirmUser.name}</strong> không? Hành động này không thể hoàn tác.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setDeleteConfirmUser(null)} className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">Hủy</button>
+                <button onClick={confirmDeleteRow} className="px-4 py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-colors">Xóa Người Dùng</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
   );
 };
