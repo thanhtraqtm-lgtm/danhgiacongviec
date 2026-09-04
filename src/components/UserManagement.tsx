@@ -46,11 +46,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   globalRole = 'ADMIN',
   currentUser
 }) => {
-  // Helper to distinguish System Admin from provincial staff
-  const isUserAdmin = (u: User) => u.role === 'ADMIN' || (u.username && u.username.toLowerCase() === 'admin');
-  const staffUsers = (users || []).filter((u) => !isUserAdmin(u));
-  const adminUsers = (users || []).filter((u) => isUserAdmin(u));
-
   const isCurrentAdmin = (currentUser && (currentUser.role === 'ADMIN' || currentUser.username?.toLowerCase() === 'admin')) || globalRole === 'ADMIN';
   const canManage = isCurrentAdmin || globalRole === 'PROVINCE_LEADER';
   const isStaff = !canManage;
@@ -78,17 +73,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
 
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<{id: string, name: string} | null>(null);
   const [showClearConfirmUser, setShowClearConfirmUser] = useState(false);
-
-  // Dedicated Admin Accounts Management State (ONLY accessible by Admin)
-  const [showAdminModal, setShowAdminModal] = useState(false);
-  const [showAddAdminForm, setShowAddAdminForm] = useState(false);
-  const [editingAdminUser, setEditingAdminUser] = useState<User | null>(null);
-  const [adminFullName, setAdminFullName] = useState('');
-  const [adminUsername, setAdminUsername] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [adminPhone, setAdminPhone] = useState('');
-  const [adminEmail, setAdminEmail] = useState('');
-  const [showAdminPassMap, setShowAdminPassMap] = useState<Record<string, boolean>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -284,87 +268,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     setShowAddModal(false);
   };
 
-  // Dedicated Admin Account Management Handlers (ONLY accessible by Admin)
-  const handleOpenAddAdmin = () => {
-    setEditingAdminUser(null);
-    setAdminFullName('');
-    setAdminUsername('');
-    setAdminPassword('');
-    setAdminPhone('');
-    setAdminEmail('');
-    setShowAddAdminForm(true);
-  };
-
-  const handleOpenEditAdmin = (admin: User) => {
-    setEditingAdminUser(admin);
-    setAdminFullName(admin.fullName || '');
-    setAdminUsername(admin.username || '');
-    setAdminPassword(admin.password || '123456');
-    setAdminPhone(admin.phone || '');
-    setAdminEmail(admin.email || '');
-    setShowAddAdminForm(true);
-  };
-
-  const handleSaveAdmin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adminUsername.trim() || !adminFullName.trim() || !adminPassword.trim()) {
-      addToast('warning', 'Thiếu thông tin!', 'Vui lòng điền đầy đủ Họ tên, Tên đăng nhập và Mật khẩu.');
-      return;
-    }
-
-    const lower = adminUsername.trim().toLowerCase();
-    const duplicate = users.find(u => (u.username || '').toLowerCase() === lower && u.id !== editingAdminUser?.id);
-    if (duplicate) {
-      addToast('error', 'Trùng tên đăng nhập', 'Tên đăng nhập này đã được sử dụng bởi tài khoản khác.');
-      return;
-    }
-
-    if (editingAdminUser) {
-      onUpdateUser(editingAdminUser.id, {
-        fullName: adminFullName.trim(),
-        username: adminUsername.trim(),
-        password: adminPassword.trim(),
-        phone: adminPhone.trim(),
-        email: adminEmail.trim(),
-        role: 'ADMIN',
-      });
-      addToast('success', 'Thành công', `Đã cập nhật thông tin Quản trị viên ${adminUsername}.`);
-    } else {
-      onAddUser({
-        fullName: adminFullName.trim(),
-        username: adminUsername.trim(),
-        password: adminPassword.trim(),
-        phone: adminPhone.trim(),
-        email: adminEmail.trim(),
-        role: 'ADMIN',
-        department: 'Lãnh đạo',
-        position: 'Quản trị hệ thống',
-        workUnit: 'Thống kê tỉnh Hưng Yên',
-      });
-      addToast('success', 'Thành công', `Đã tạo tài khoản Quản trị viên ${adminUsername}.`);
-    }
-
-    setShowAddAdminForm(false);
-    setEditingAdminUser(null);
-  };
-
-  const handleDeleteAdmin = (admin: User) => {
-    if (adminUsers.length <= 1) {
-      addToast('error', 'Không thể xóa', 'Hệ thống phải duy trì ít nhất 1 tài khoản Quản trị viên để quản trị.');
-      return;
-    }
-    if (currentUser?.id === admin.id) {
-      addToast('warning', 'Cảnh báo', 'Bạn đang đăng nhập bằng tài khoản này, không thể tự xóa.');
-      return;
-    }
-    onDeleteUser(admin.id);
-    addToast('success', 'Đã xóa', `Đã xóa tài khoản Quản trị viên ${admin.username}.`);
-  };
-
-  const toggleShowPass = (id: string) => {
-    setShowAdminPassMap(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
   const confirmDeleteRow = () => {
     if (deleteConfirmUser) {
       onDeleteUser(deleteConfirmUser.id);
@@ -376,8 +279,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     setDeleteConfirmUser({ id, name });
   };
 
-  // Only display non-admin staff in the regular personnel list
-  const filteredUsers = staffUsers.filter((u) => {
+  const filteredUsers = (users || []).filter((u) => {
     const matchesDept = filterDepartment === 'ALL' || u.department === filterDepartment;
     const matchesSearch =
       u.fullName.toLowerCase().includes(searchKey.toLowerCase()) ||
@@ -462,22 +364,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                 <span>+ Thêm mới</span>
               </button>
             </>
-          )}
-
-          {/* Dedicated Admin Accounts Button - ONLY visible to Admin */}
-          {isCurrentAdmin && (
-            <button
-              onClick={() => {
-                setShowAddAdminForm(false);
-                setEditingAdminUser(null);
-                setShowAdminModal(true);
-              }}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-300 hover:text-amber-200 border border-amber-500/40 rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
-              title="Quản trị tài khoản Admin (Chỉ Quản trị viên mới có quyền)"
-            >
-              <Shield className="w-3.5 h-3.5 text-amber-400" />
-              <span>Tài khoản Admin ({adminUsers.length})</span>
-            </button>
           )}
         </div>
       </div>

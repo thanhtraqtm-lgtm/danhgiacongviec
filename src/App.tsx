@@ -41,6 +41,7 @@ import { UserManagement } from './components/UserManagement';
 import { LateRuleConfigComponent } from './components/LateRuleConfigComponent';
 import { TaskDataViewer } from './components/TaskDataViewer';
 import { LoginModal } from './components/LoginModal';
+import { LoginScreen } from './components/LoginScreen';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 
 import { DashboardOverview } from './components/DashboardOverview';
@@ -1206,6 +1207,19 @@ export default function App() {
   }, [users, tasks, lateConfig, periodConfig, docs, submissions, addToast]);
 
   const departmentsList = Array.from(DEPARTMENTS);
+
+  // Màn hình đăng nhập bắt buộc: khi chưa đăng nhập, người dùng không thể vào hệ thống
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-[#f0f5f1] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
+        <ToastContainer toasts={toasts} onDismiss={removeToast} />
+        <LoginScreen
+          onLogin={handleLoginUser}
+          users={users}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f0f5f1] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">

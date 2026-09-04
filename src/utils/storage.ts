@@ -79,6 +79,21 @@ export function getStoredUsers(): User[] {
     };
   });
 
+  const hasAdmin = normalized.some(u => u.role === 'ADMIN' || (u.username || '').toLowerCase() === 'admin');
+  if (!hasAdmin) {
+    normalized.unshift({
+      id: 'usr_system_admin',
+      fullName: 'Quản trị viên hệ thống',
+      username: 'admin',
+      password: 'admin',
+      role: 'ADMIN',
+      department: 'Lãnh đạo',
+      position: 'Quản trị hệ thống',
+      workUnit: 'Thống kê tỉnh Hưng Yên',
+      createdAt: new Date().toISOString()
+    });
+  }
+
   return normalized;
 }
 
