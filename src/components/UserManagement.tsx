@@ -620,6 +620,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({
           </div>
         </div>
       )}
+    </div>
+  );
+};
 
       {/* DEDICATED ADMIN ACCOUNTS MODAL - STRICTLY FOR LOGGED-IN ADMINS */}
       {showAdminModal && isCurrentAdmin && (
