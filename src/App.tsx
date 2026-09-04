@@ -65,8 +65,15 @@ import {
   fsWatchTasks,
   fsSaveLateConfig,
   fsSavePeriodConfig,
+  fsLoadMeetings,
+  fsSaveMeetings,
+  fsWatchMeetings,
+  fsLoadWeeklySchedules,
+  fsSaveWeeklySchedules,
+  fsWatchWeeklySchedules,
 } from './utils/firestoreSync';
-import { collection, addDoc, getDocs, doc, updateDoc, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, onSnapshot, query, where } from 'firebase/firestore';
+import { resolveCanonicalDepartment } from './utils/departmentClassification';
 
 export type UserRole = 'STAFF' | 'DEPT_HEAD' | 'PROVINCE_LEADER' | 'ADMIN';
 
@@ -230,13 +237,21 @@ export default function App() {
       const uPassword = getVal(r, 'mật khẩu', 'password', 'pass');
 
       // Phân quyền vai trò: Phó phòng không được gán Trưởng phòng mà để là Chuyên viên (STAFF)
+      // Q. Trưởng Thống kê cơ sở, Trưởng phòng, Trưởng Thống kê cơ sở -> DEPT_HEAD
       const normPos = (uPos || '').toLowerCase().trim();
       let derivedRole: UserRole = 'STAFF';
       if (normPos.includes('cục trưởng') || normPos.includes('phó cục trưởng') || (uDept || '').toLowerCase().includes('lãnh đạo')) {
         derivedRole = 'PROVINCE_LEADER';
-      } else if (normPos.includes('phó phòng') || normPos.includes('phó trưởng phòng') || normPos.includes('phó chi cục')) {
+      } else if (normPos.includes('phó') || normPos.includes('pho')) {
         derivedRole = 'STAFF';
-      } else if (normPos.includes('trưởng phòng') || normPos.includes('chi cục trưởng')) {
+      } else if (
+        normPos.includes('trưởng') || 
+        normPos.includes('chi cục') || 
+        normPos.includes('phụ trách') || 
+        normPos.includes('q.') || 
+        normPos.includes('quyền') ||
+        normPos.includes('đội trưởng')
+      ) {
         derivedRole = 'DEPT_HEAD';
       }
 
@@ -253,19 +268,29 @@ export default function App() {
       };
     });
     
-    const updated = [...newUsers, ...users];
+    // Replace list with newly imported unique users (or deduplicate)
+    const uniqueMap = new Map<string, User>();
+    newUsers.forEach(u => {
+      const k = (u.fullName || '').trim().toLowerCase();
+      if (k) uniqueMap.set(k, u);
+    });
+    // Keep existing admin accounts so admins are never wiped on Excel import
+    const existingAdmins = users.filter(u => u.role === 'ADMIN' || (u.username || '').toLowerCase() === 'admin');
+    const updated = [...existingAdmins, ...Array.from(uniqueMap.values())];
     setUsers(updated);
     saveUsers(updated);
     fsSaveUsers(updated);
-    addToast('success', 'Nhập dữ liệu thành công', `Đã thêm ${newUsers.length} nhân sự.`);
+    addToast('success', 'Nhập dữ liệu thành công', `Đã cập nhật danh sách gồm ${Array.from(uniqueMap.values()).length} nhân sự.`);
   }, [users, addToast]);
 
   const handleClearUsers = useCallback(() => {
-    setUsersState([]);  // bypass guard: intentional clear
-    saveUsers([]);
-    fsSaveUsers([]);
-    addToast('success', 'Thành công', 'Đã xoá toàn bộ danh sách nhân sự.');
-  }, [addToast]);
+    // Keep admin accounts so the administrator is not locked out
+    const adminAccounts = users.filter(u => u.role === 'ADMIN' || (u.username || '').toLowerCase() === 'admin');
+    setUsersState(adminAccounts);  // bypass guard: intentional clear
+    saveUsers(adminAccounts);
+    fsSaveUsers(adminAccounts);
+    addToast('success', 'Thành công', 'Đã xoá danh sách nhân sự (tài khoản Quản trị viên được bảo lưu an toàn).');
+  }, [users, addToast]);
 
   const handleSavePassword = useCallback((userId: string, newPass: string) => {
     const updatedUsers = users.map(u => u.id === userId ? { ...u, password: newPass, isFirstLogin: false } : u);
@@ -287,6 +312,9 @@ export default function App() {
 
   const handleLoginUser = useCallback((user: User) => {
     setCurrentUser(user);
+    try {
+      localStorage.setItem('kpi_current_user_v1', JSON.stringify(user));
+    } catch {}
     setGlobalRole(user.role as UserRole || 'STAFF');
     setSelectedDepartment(user.department || 'ALL');
     
@@ -304,9 +332,12 @@ export default function App() {
 
   const handleLogout = useCallback(() => {
     setCurrentUser(null);
-    setGlobalRole('ADMIN');
+    try {
+      localStorage.removeItem('kpi_current_user_v1');
+    } catch {}
+    setGlobalRole('STAFF');
     setSelectedDepartment('ALL');
-    addToast('info', 'Đã đăng xuất', 'Bạn đã quay về quyền Quản trị viên.');
+    addToast('info', 'Đã đăng xuất', 'Bạn đã đăng xuất khỏi hệ thống.');
   }, [addToast]);
 
   useEffect(() => {
@@ -367,14 +398,12 @@ export default function App() {
     };
   }, []);
 
-  // Listen for navigation to specific tabs from meeting screens
+  // Listen for navigation to specific tabs from anywhere in the app
   useEffect(() => {
     const handleNavigateToTab = (event: CustomEvent<string>) => {
       const tab = event.detail;
-      if (tab === 'meeting_register') {
-        setActiveTab('meeting_register');
-      } else if (tab === 'weekly_schedule') {
-        setActiveTab('weekly_schedule');
+      if (tab) {
+        setActiveTab(tab as ActiveTab);
       }
     };
     window.addEventListener('navigate-to-tab', handleNavigateToTab as EventListener);
@@ -392,6 +421,18 @@ export default function App() {
       if (u.role === 'DEPT_HEAD' && (posLower.includes('phó') || posLower.includes('pho'))) {
         usersUpdated = true;
         return { ...u, role: 'STAFF' as const };
+      }
+      // Q. Trưởng Thống kê cơ sở / Quyền Trưởng / Trưởng phòng -> DEPT_HEAD
+      if (
+        u.role !== 'PROVINCE_LEADER' && 
+        u.role !== 'ADMIN' && 
+        (posLower.includes('q.') || posLower.includes('quyền') || posLower.includes('trưởng') || posLower.includes('phụ trách')) && 
+        !posLower.includes('phó') && 
+        !posLower.includes('pho') &&
+        u.role !== 'DEPT_HEAD'
+      ) {
+        usersUpdated = true;
+        return { ...u, role: 'DEPT_HEAD' as const };
       }
       return u;
     });
@@ -430,8 +471,7 @@ export default function App() {
       if (matchingUser && matchingUser.department) {
         newDept = matchingUser.department;
       } else if (t.department) {
-        const nd = normDeptStr(t.department);
-        const canonical = DEPARTMENTS.find(d => normDeptStr(d) === nd);
+        const canonical = resolveCanonicalDepartment(t.department, t.userName, loadedUsers);
         if (canonical) newDept = canonical;
       }
       const newStatus = normalizeTaskStatus(t.status);
@@ -476,16 +516,22 @@ export default function App() {
   useEffect(() => {
     let unsubUsers: (() => void) | null = null;
     let unsubTasks: (() => void) | null = null;
+    let unsubMeetings: (() => void) | null = null;
+    let unsubWeekly: (() => void) | null = null;
     let active = true;
 
     (async () => {
       // Initial cloud load (merge: cloud wins if present, else keep localStorage)
       const cloudUsers = await fsLoadUsers();
       const cloudTasks = await fsLoadTasks();
+      const cloudMeetings = await fsLoadMeetings();
+      const cloudWeekly = await fsLoadWeeklySchedules();
       if (!active) return;
 
       const localUsers = getStoredUsers();
       const localTasks = getStoredTasks();
+      const localMeetings = getStoredMeetings();
+      const localWeekly = getStoredWeeklySchedules();
 
       // USERS: cloud wins only if localStorage is empty (first run on a new
       // device). Otherwise trust the local cache we already loaded — this
@@ -510,44 +556,59 @@ export default function App() {
         fsSaveTasks(localTasks);
       }
 
-      // Realtime subscriptions. IMPORTANT: we only mirror to React state +
-      // localStorage cache here. We must NOT call fsSave* inside the watcher,
-      // because that would write back to Firestore, which would trigger another
-      // onSnapshot event -> infinite loop (the "flicker" bug).
-      //
-      // firestoreSync drops echoes of our own writes (2.5s pause window).
-      //
-      // LOCAL-FIRST policy: the watcher only adopts cloud data when the local
-      // state is EMPTY. This is the key fix for the "tự nhiên xóa trắng hết /
-      // nạp 10s xong mất" bug: the cloud often holds a STALE doc (from a prior
-      // session / empty doc) that arrives a few seconds after we imported fresh
-      // data. If we blindly apply it, it wipes the just-imported list. Since
-      // this app is single-user and local is always the freshest source, we
-      // only pull from the cloud to bootstrap an empty local state. Whenever we
-      // have local data, we instead push it up so the cloud stays in sync.
-      // We read localStorage directly (the authoritative local source) to avoid
-      // any stale-closure / ref-timing race with React state.
+      // MEETINGS: sync with cloud
+      if (cloudMeetings && cloudMeetings.length > 0 && localMeetings.length === 0) {
+        setMeetings(cloudMeetings);
+        saveMeetings(cloudMeetings);
+      } else if (cloudMeetings && cloudMeetings.length === 0 && localMeetings.length > 0) {
+        fsSaveMeetings(localMeetings);
+      } else if (!cloudMeetings && localMeetings.length > 0) {
+        fsSaveMeetings(localMeetings);
+      }
+
+      // WEEKLY SCHEDULES: sync with cloud
+      if (cloudWeekly && cloudWeekly.length > 0 && localWeekly.length === 0) {
+        setWeeklySchedulesState(cloudWeekly);
+        saveWeeklySchedules(cloudWeekly);
+      } else if (cloudWeekly && cloudWeekly.length === 0 && localWeekly.length > 0) {
+        fsSaveWeeklySchedules(localWeekly);
+      } else if (!cloudWeekly && localWeekly.length > 0) {
+        fsSaveWeeklySchedules(localWeekly);
+      }
+
+      // Realtime subscriptions.
       unsubUsers = fsWatchUsers((u) => {
         const localUsers = getStoredUsers();
         if (localUsers.length > 0) {
-          // Keep local; re-sync cloud to local (paused echo avoids a loop).
           fsSaveUsers(localUsers);
           return;
         }
-        if (u.length === 0) return; // both empty -> nothing to do
+        if (u.length === 0) return;
         setUsers(u);
         saveUsers(u);
       });
       unsubTasks = fsWatchTasks((t) => {
         const localTasks = getStoredTasks();
         if (localTasks.length > 0) {
-          // LOCAL-FIRST: Chỉ đọc từ Firestore khi local rỗng.
-          // KHÔNG ghi ngược lên Firestore để tránh loop vô tận.
           return;
         }
-        if (t.length === 0) return; // both empty -> nothing to do
+        if (t.length === 0) return;
         setTasks(t);
         saveTasks(t);
+      });
+      unsubMeetings = fsWatchMeetings((m) => {
+        const localMeetings = getStoredMeetings();
+        if (localMeetings.length > 0) return;
+        if (m.length === 0) return;
+        setMeetings(m);
+        saveMeetings(m);
+      });
+      unsubWeekly = fsWatchWeeklySchedules((ws) => {
+        const localWeekly = getStoredWeeklySchedules();
+        if (localWeekly.length > 0) return;
+        if (ws.length === 0) return;
+        setWeeklySchedulesState(ws);
+        saveWeeklySchedules(ws);
       });
     })();
 
@@ -555,6 +616,8 @@ export default function App() {
       active = false;
       if (unsubUsers) unsubUsers();
       if (unsubTasks) unsubTasks();
+      if (unsubMeetings) unsubMeetings();
+      if (unsubWeekly) unsubWeekly();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey]);
@@ -594,8 +657,7 @@ export default function App() {
       if (matchingUser && matchingUser.department) {
         newDept = matchingUser.department;
       } else if (t.department) {
-        const nd = normDeptStr(t.department);
-        const canonical = DEPARTMENTS.find((d) => normDeptStr(d) === nd);
+        const canonical = resolveCanonicalDepartment(t.department, t.userName, users);
         if (canonical) newDept = canonical;
       }
       if (newDept !== t.department) {
@@ -647,6 +709,7 @@ export default function App() {
     const updated = [meeting, ...meetings];
     setMeetings(updated);
     saveMeetings(updated);
+    fsSaveMeetings(updated);
     addToast('success', 'Thành công', 'Đã tạo cuộc họp mới.');
     setActiveTab('meeting_calendar');
   }, [meetings, addToast]);
@@ -655,28 +718,68 @@ export default function App() {
     const updated = meetings.map(m => m.id === meeting.id ? meeting : m);
     setMeetings(updated);
     saveMeetings(updated);
+    fsSaveMeetings(updated);
   }, [meetings]);
 
   const handleDeleteMeeting = useCallback((meetingId: string) => {
     const updated = meetings.filter(m => m.id !== meetingId);
     setMeetings(updated);
     saveMeetings(updated);
+    fsSaveMeetings(updated);
   }, [meetings]);
 
   const handleAddWeeklySchedule = useCallback((schedule: WeeklySchedule) => {
-    setWeeklySchedulesState(prev => [schedule, ...prev]);
-    // saveWeeklySchedules will be called in the state setter effect or we can call it here
-    // For now, we'll rely on the localStorage sync effect
+    setWeeklySchedulesState(prev => {
+      const updated = [schedule, ...prev];
+      saveWeeklySchedules(updated);
+      fsSaveWeeklySchedules(updated);
+      return updated;
+    });
     addToast('success', 'Thành công', 'Đã thêm lịch công tác mới.');
     setActiveTab('weekly_schedule');
   }, [addToast]);
 
-  const handleUpdateWeeklySchedule = useCallback((schedule: WeeklySchedule) => {
-    setWeeklySchedulesState(prev => prev.map(s => s.id === schedule.id ? schedule : s));
+  const handleUpdateWeeklySchedule = useCallback((id: string, updatedSchedule: any) => {
+    setWeeklySchedulesState(prev => {
+      const updated = prev.map(s => s.id === id ? { ...s, ...updatedSchedule } : s);
+      saveWeeklySchedules(updated);
+      fsSaveWeeklySchedules(updated);
+      return updated;
+    });
   }, []);
 
   const handleDeleteWeeklySchedule = useCallback((scheduleId: string) => {
-    setWeeklySchedulesState(prev => prev.filter(s => s.id !== scheduleId));
+    setWeeklySchedulesState(prev => {
+      const updated = prev.filter(s => s.id !== scheduleId);
+      saveWeeklySchedules(updated);
+      fsSaveWeeklySchedules(updated);
+      return updated;
+    });
+  }, []);
+
+  const handleBatchSaveWeeklySchedules = useCallback((items: any[]) => {
+    setWeeklySchedulesState(prev => {
+      const newItems = items.map((item, idx) => ({
+        id: item.id || `ws_${Date.now()}_${idx}_${Math.random().toString(36).substr(2, 4)}`,
+        ...item
+      }));
+      // Filter out existing schedules that match same week, person, day, session if replaced
+      const newKeys = new Set(newItems.map(n => `${n.weekStartDate}_${n.personName}_${n.dayOfWeek}_${n.session}`));
+      const filteredOld = prev.filter(p => !newKeys.has(`${p.weekStartDate}_${(p as any).personName || p.userName}_${p.dayOfWeek}_${(p as any).session}`));
+      const combined = [...newItems, ...filteredOld];
+      saveWeeklySchedules(combined);
+      fsSaveWeeklySchedules(combined);
+      return combined;
+    });
+  }, []);
+
+  const handleClearWeekSchedules = useCallback((weekStartDate: string) => {
+    setWeeklySchedulesState(prev => {
+      const filtered = prev.filter(s => s.weekStartDate !== weekStartDate);
+      saveWeeklySchedules(filtered);
+      fsSaveWeeklySchedules(filtered);
+      return filtered;
+    });
   }, []);
 
   const handleSyncDepartments = useCallback(() => {
@@ -831,14 +934,7 @@ export default function App() {
       } else if (!deptStr) {
         deptStr = 'Chưa phân bổ';
       } else {
-        // deptStr came from Excel — try to match it to a canonical DEPARTMENTS
-        // entry using normalized (NFC, no-accent, lowercased, collapsed-space) comparison.
-        const normDept = (x: string) =>
-          (x || '').normalize('NFC').replace(/[\u00A0\u200B\u200C\u200D\uFEFF]/g, ' ')
-            .replace(/\s+/g, ' ').trim().toLowerCase()
-            .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\u0111/g, 'd');
-        const nd = normDept(deptStr);
-        const canonical = DEPARTMENTS.find(d => normDept(d) === nd);
+        const canonical = resolveCanonicalDepartment(deptStr, uName, users);
         if (canonical) deptStr = canonical;
       }
       
@@ -935,10 +1031,14 @@ export default function App() {
     setWeeklySchedulesState(getStoredWeeklySchedules());
 
     // Đồng bộ trạng thái reset lên Firebase để các thiết bị khác cũng nhận
+    const freshMeetings = getStoredMeetings();
+    const freshWeekly = getStoredWeeklySchedules();
     fsSaveUsers(freshUsers);
     fsSaveTasks(freshTasks);
     fsSaveLateConfig(freshLateConfig);
     fsSavePeriodConfig(freshPeriodConfig);
+    fsSaveMeetings(freshMeetings);
+    fsSaveWeeklySchedules(freshWeekly);
 
     addToast(
       'warning',
@@ -1031,6 +1131,48 @@ export default function App() {
     }
   }, [submissions]);
 
+  const handleDeleteSubmission = useCallback(async (id: string) => {
+    const updated = submissions.filter((s) => s.id !== id);
+    setSubmissions(updated);
+    saveSubmissions(updated);
+
+    // Delete in Firestore cloud
+    try {
+      const docRef = doc(db, 'workflow_submissions', id);
+      await deleteDoc(docRef);
+    } catch {
+      // Silently handle
+    }
+    addToast('success', 'Đã xóa phiếu đánh giá', 'Phiếu đánh giá đã được xóa hoàn toàn khỏi hệ thống.');
+  }, [submissions, addToast]);
+
+  const handleClearAllSubmissions = useCallback(async () => {
+    setSubmissions([]);
+    saveSubmissions([]);
+    setDocs([]);
+    saveDocs([]);
+
+    // Delete all from Firestore collection workflow_submissions
+    try {
+      const snap = await getDocs(collection(db, 'workflow_submissions'));
+      const batchPromises = snap.docs.map((d) => deleteDoc(d.ref));
+      await Promise.all(batchPromises);
+    } catch (err) {
+      console.warn('Error clearing workflow_submissions from Firestore:', err);
+    }
+
+    // Delete all from Firestore collection evaluation_docs
+    try {
+      const snapDocs = await getDocs(collection(db, 'evaluation_docs'));
+      const batchPromises = snapDocs.docs.map((d) => deleteDoc(d.ref));
+      await Promise.all(batchPromises);
+    } catch (err) {
+      console.warn('Error clearing evaluation_docs from Firestore:', err);
+    }
+
+    addToast('success', 'Đã xóa sạch toàn bộ dữ liệu đánh giá!', 'Toàn bộ phiếu tự chấm và kết quả phê duyệt đã được dọn sạch để bắt đầu kỳ mới.');
+  }, [addToast]);
+
   const handleUpdatePeriodConfig = useCallback((cfg: EvaluationPeriodConfig) => {
     setPeriodConfig(cfg);
     savePeriodConfig(cfg);
@@ -1103,6 +1245,9 @@ export default function App() {
             setSelectedDepartment={setSelectedDepartment}
             addToast={addToast}
             onNavigateToTasks={() => setActiveTab('kpi_assign')}
+            users={users}
+            submissions={submissions}
+            periodConfig={periodConfig}
           />
         )}
         {activeTab === 'users_list' && (
@@ -1114,12 +1259,16 @@ export default function App() {
             onImportUsers={handleImportUsers}
             onClearUsers={handleClearUsers}
             addToast={addToast}
+            globalRole={globalRole}
+            currentUser={currentUser}
           />
         )}
         {activeTab === 'org_chart' && (
           <OrgChartAndPersonnel
             users={users}
             addToast={addToast}
+            globalRole={globalRole}
+            currentUser={currentUser}
             onUsersUpdate={(newUsers) => {
               setUsers(newUsers);
               saveUsers(newUsers);
@@ -1170,6 +1319,8 @@ export default function App() {
             addToast={addToast}
             viewMode={activeTab === 'kpi_catalog_lookup' ? 'catalog' : 'assignment'}
             onNavigate={(tab) => setActiveTab(tab === 'catalog' ? 'kpi_catalog_lookup' : 'kpi_catalog')}
+            globalRole={globalRole}
+            currentUser={currentUser}
           />
         )}
         {activeTab === 'kpi_assign' && (
@@ -1188,6 +1339,8 @@ export default function App() {
             onNavigateTab={setActiveTab}
             periodConfig={periodConfig}
             onUpdatePeriodConfig={handleUpdatePeriodConfig}
+            globalRole={globalRole}
+            currentUser={currentUser}
           />
         )}
         {activeTab === 'kpi_late_rules' && (
@@ -1195,6 +1348,7 @@ export default function App() {
             config={lateConfig}
             onSaveConfig={handleSaveLateConfig}
             addToast={addToast}
+            globalRole={globalRole}
           />
         )}
         {activeTab === 'kpi_rules_doc' && (
@@ -1206,6 +1360,9 @@ export default function App() {
             currentUser={currentUser}
             selectedDepartment={selectedDepartment}
             periodConfig={periodConfig}
+            submissions={submissions}
+            tasks={tasks}
+            docs={docs}
             onSaveDoc={handleAddDoc}
             onSubmitWorkflow={handleSubmitWorkflow}
             addToast={addToast}
@@ -1217,7 +1374,9 @@ export default function App() {
             currentUser={currentUser}
             selectedDepartment={selectedDepartment}
             periodConfig={periodConfig}
-            generalCriteriaScore={27}
+            submissions={submissions}
+            docs={docs}
+            tasks={tasks}
             addToast={addToast}
             onSubmitWorkflow={handleSubmitWorkflow}
             onSaveDoc={handleAddDoc}
@@ -1228,6 +1387,8 @@ export default function App() {
             submissions={submissions}
             periodConfig={periodConfig}
             onUpdateSubmission={handleUpdateSubmission}
+            onDeleteSubmission={handleDeleteSubmission}
+            onClearAllSubmissions={handleClearAllSubmissions}
             onUpdatePeriodConfig={handleUpdatePeriodConfig}
             addToast={addToast}
             globalRole={globalRole}
@@ -1244,7 +1405,16 @@ export default function App() {
             docs={docs}
             periodConfig={periodConfig}
             selectedDepartment={selectedDepartment}
-            onNavigateToWorkflow={(userId) => setSelectedUserForWorkflow(userId)}
+            onNavigateToWorkflow={(userId) => {
+              setSelectedUserForWorkflow(userId);
+              setActiveTab('self_eval_workflow');
+            }}
+            currentUser={currentUser}
+            globalRole={globalRole}
+            onUpdateSubmission={handleUpdateSubmission}
+            onDeleteSubmission={handleDeleteSubmission}
+            onClearAllSubmissions={handleClearAllSubmissions}
+            addToast={addToast}
           />
         )}
         {activeTab === 'eval_results' && (
@@ -1267,6 +1437,7 @@ export default function App() {
         )}
         {activeTab === 'meeting_register' && (
           <MeetingRegistration 
+            users={users}
             onAddMeeting={handleAddMeeting}
             onCancel={() => setActiveTab('meeting_calendar')}
             addToast={addToast}
@@ -1275,18 +1446,25 @@ export default function App() {
         {activeTab === 'meeting_calendar' && (
           <MeetingCalendar 
             meetings={meetings}
+            users={users}
             onUpdateMeeting={handleUpdateMeeting}
             onDeleteMeeting={handleDeleteMeeting}
             addToast={addToast}
+            globalRole={globalRole}
+            currentUser={currentUser}
           />
         )}
         {activeTab === 'weekly_schedule' && (
           <WeeklyWorkSchedule 
             schedules={weeklySchedules}
             users={users}
+            currentUser={currentUser}
+            globalRole={globalRole}
             onAddSchedule={handleAddWeeklySchedule}
             onUpdateSchedule={handleUpdateWeeklySchedule}
             onDeleteSchedule={handleDeleteWeeklySchedule}
+            onBatchSaveSchedules={handleBatchSaveWeeklySchedules}
+            onClearWeekSchedules={handleClearWeekSchedules}
             addToast={addToast}
           />
         )}
@@ -1301,22 +1479,15 @@ export default function App() {
       />
 
       {/* Change Password Modal */}
-      <ChangePasswordModal
-        isOpen={showChangePassModal}
-        onClose={() => setShowChangePassModal(false)}
-        isFirstLogin={isFirstLoginChange}
-        currentUser={currentUser || {
-          id: 'usr_admin',
-          fullName: 'Quản trị viên Hệ thống',
-          position: 'Quản trị hệ thống',
-          department: 'Lãnh đạo',
-          username: 'admin',
-          role: 'ADMIN',
-          password: 'admin',
-          createdAt: new Date().toISOString()
-        }}
-        onSavePassword={handleSavePassword}
-      />
+      {currentUser && (
+        <ChangePasswordModal
+          isOpen={showChangePassModal}
+          onClose={() => setShowChangePassModal(false)}
+          isFirstLogin={isFirstLoginChange}
+          currentUser={currentUser}
+          onSavePassword={handleSavePassword}
+        />
+      )}
     
       <ConfirmModal
         isOpen={showResetConfirm}

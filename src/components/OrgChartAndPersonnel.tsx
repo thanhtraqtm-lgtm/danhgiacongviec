@@ -18,13 +18,18 @@ interface OrgChartAndPersonnelProps {
   onUsersUpdate?: (newUsers: User[]) => void;
   users: User[];
   addToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, description?: string) => void;
+  globalRole?: string;
+  currentUser?: User | null;
 }
 
 export const OrgChartAndPersonnel: React.FC<OrgChartAndPersonnelProps> = ({
   users = [],
   addToast,
-  onUsersUpdate
+  onUsersUpdate,
+  globalRole,
+  currentUser
 }) => {
+  const isStaff = globalRole === 'STAFF';
   const [activeSubTab, setActiveSubTab] = useState<'chart' | 'personnel'>('chart');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState('ALL');
@@ -107,10 +112,19 @@ export const OrgChartAndPersonnel: React.FC<OrgChartAndPersonnelProps> = ({
             const deptLower = department.toLowerCase();
             if (deptLower.includes('lãnh đạo') || posLower.includes('cục trưởng') || posLower.includes('phó cục trưởng') || posLower.includes('ban lãnh đạo')) {
                 role = 'PROVINCE_LEADER';
-            } else if ((posLower.includes('trưởng phòng') || posLower.includes('chi cục trưởng') || posLower.includes('phụ trách') || posLower.includes('trưởng')) && !posLower.includes('phó')) {
+            } else if (posLower.includes('phó') || posLower.includes('pho')) {
+                // Phó phòng, Phó trưởng phòng, Phó chi cục trưởng, Chuyên viên -> STAFF
+                role = 'STAFF';
+            } else if (
+                posLower.includes('trưởng') || 
+                posLower.includes('chi cục') || 
+                posLower.includes('phụ trách') || 
+                posLower.includes('q.') || 
+                posLower.includes('quyền') ||
+                posLower.includes('đội trưởng')
+            ) {
                 role = 'DEPT_HEAD';
             } else {
-                // Phó phòng, Phó trưởng phòng, Phó chi cục trưởng, Chuyên viên -> STAFF
                 role = 'STAFF';
             }
         }
@@ -176,6 +190,7 @@ export const OrgChartAndPersonnel: React.FC<OrgChartAndPersonnelProps> = ({
   };
 
   const filteredUsers = users.filter((u) => {
+    if (u.role === 'ADMIN' || (u.username && u.username.toLowerCase() === 'admin')) return false;
     const matchesDept = selectedDeptFilter === 'ALL' || u.department === selectedDeptFilter;
     const q = searchQuery.toLowerCase();
     const matchesQuery = 
@@ -376,16 +391,18 @@ export const OrgChartAndPersonnel: React.FC<OrgChartAndPersonnelProps> = ({
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] shadow-xs cursor-pointer whitespace-nowrap transition-colors">
-                <Upload className="w-3 h-3" />
-                <span>Tải File NS</span>
-                <input
-                  type="file"
-                  accept=".xlsx, .xls, .csv"
-                  onChange={handleUploadExcel}
-                  className="hidden"
-                />
-              </label>
+              {!isStaff && (
+                <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] shadow-xs cursor-pointer whitespace-nowrap transition-colors">
+                  <Upload className="w-3 h-3" />
+                  <span>Tải File NS</span>
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls, .csv"
+                    onChange={handleUploadExcel}
+                    className="hidden"
+                  />
+                </label>
+              )}
               <button
                 onClick={downloadSampleExcel}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[11px] rounded-lg transition-colors border border-slate-300 dark:border-slate-700 whitespace-nowrap"

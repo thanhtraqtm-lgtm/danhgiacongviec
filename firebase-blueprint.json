@@ -92,6 +92,10 @@
     "/users/{userId}": {
       "schema": "AppUser",
       "description": "Store user accounts and credentials"
+    },
+    "/kpi_data/{docId}": {
+      "schema": "AppUser",
+      "description": "Store application wide sync envelopes and configuration"
     }
   }
 }

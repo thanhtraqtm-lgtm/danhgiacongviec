@@ -19,13 +19,16 @@ interface LateRuleConfigComponentProps {
   config: LateRuleConfig;
   onSaveConfig: (newConfig: LateRuleConfig) => void;
   addToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, desc?: string) => void;
+  globalRole?: string;
 }
 
 export const LateRuleConfigComponent: React.FC<LateRuleConfigComponentProps> = ({
   config,
   onSaveConfig,
   addToast,
+  globalRole
 }) => {
+  const isStaff = globalRole === 'STAFF';
   const [nDays, setNDays] = useState<number>(config.nDaysThreshold || 5);
   const [deductPct, setDeductPct] = useState<number>(
     Math.round((config.deductRatioLate || 0.25) * 100)
@@ -94,14 +97,16 @@ export const LateRuleConfigComponent: React.FC<LateRuleConfigComponentProps> = (
             <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
               1. Bảng Cấu Hình Số Ngày Trễ Hạn n
             </h3>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="flex items-center justify-center px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold rounded shadow-sm hover:bg-slate-300 transition-colors"
-              title="Khôi phục mặc định"
-            >
-              Khôi phục mặc định
-            </button>
+            {!isStaff && (
+              <button
+                type="button"
+                onClick={handleReset}
+                className="flex items-center justify-center px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold rounded shadow-sm hover:bg-slate-300 transition-colors"
+                title="Khôi phục mặc định"
+              >
+                Khôi phục mặc định
+              </button>
+            )}
           </div>
 
           <div className="space-y-4 text-xs">
@@ -178,14 +183,16 @@ export const LateRuleConfigComponent: React.FC<LateRuleConfigComponentProps> = (
             </div>
           </div>
 
-          <div className="pt-3 flex items-center justify-end">
-            <button
-              type="submit"
-              className="flex items-center justify-center px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded shadow-sm hover:bg-indigo-700 transition-colors"
-            >
-              Cập Nhật & Tính Bảng Điểm Tự Động
-            </button>
-          </div>
+          {!isStaff && (
+            <div className="pt-3 flex items-center justify-end">
+              <button
+                type="submit"
+                className="flex items-center justify-center px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded shadow-sm hover:bg-indigo-700 transition-colors"
+              >
+                Cập Nhật & Tính Bảng Điểm Tự Động
+              </button>
+            </div>
+          )}
         </form>
 
         {/* Live Simulator & Rule Matrix */}

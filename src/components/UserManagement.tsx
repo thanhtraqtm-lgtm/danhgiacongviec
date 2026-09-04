@@ -7,9 +7,17 @@ import {
   Trash2, 
   Download, 
   Upload, 
-  Trash,
-  Building2,
-  X
+  Trash, 
+  Building2, 
+  X,
+  Shield,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Plus,
+  Lock,
+  CheckCircle2,
+  ShieldAlert
 } from 'lucide-react';
 import { User, Department, DEPARTMENTS } from '../types';
 import { parseExcelFile } from '../utils/excelParser';
@@ -23,6 +31,8 @@ interface UserManagementProps {
   onImportUsers?: (data: any[]) => void;
   onClearUsers?: () => void;
   addToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, description?: string) => void;
+  globalRole?: string;
+  currentUser?: User | null;
 }
 
 export const UserManagement: React.FC<UserManagementProps> = ({
@@ -32,11 +42,23 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   onUpdateUser,
   onImportUsers,
   onClearUsers,
-  addToast
+  addToast,
+  globalRole = 'ADMIN',
+  currentUser
 }) => {
+  // Helper to distinguish System Admin from provincial staff
+  const isUserAdmin = (u: User) => u.role === 'ADMIN' || (u.username && u.username.toLowerCase() === 'admin');
+  const staffUsers = (users || []).filter((u) => !isUserAdmin(u));
+  const adminUsers = (users || []).filter((u) => isUserAdmin(u));
+
+  const isCurrentAdmin = (currentUser && (currentUser.role === 'ADMIN' || currentUser.username?.toLowerCase() === 'admin')) || globalRole === 'ADMIN';
+  const canManage = isCurrentAdmin || globalRole === 'PROVINCE_LEADER';
+  const isStaff = !canManage;
+
   const [searchKey, setSearchKey] = useState('');
   const [filterDepartment, setFilterDepartment] = useState('ALL');
   
+  // Regular Staff Add/Edit Modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   
@@ -52,10 +74,21 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   const [jobDescription, setJobDescription] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'ADMIN' | 'PROVINCE_LEADER' | 'DEPT_HEAD' | 'STAFF'>('STAFF');
+  const [role, setRole] = useState<'PROVINCE_LEADER' | 'DEPT_HEAD' | 'STAFF'>('STAFF');
 
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<{id: string, name: string} | null>(null);
   const [showClearConfirmUser, setShowClearConfirmUser] = useState(false);
+
+  // Dedicated Admin Accounts Management State (ONLY accessible by Admin)
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showAddAdminForm, setShowAddAdminForm] = useState(false);
+  const [editingAdminUser, setEditingAdminUser] = useState<User | null>(null);
+  const [adminFullName, setAdminFullName] = useState('');
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminPhone, setAdminPhone] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [showAdminPassMap, setShowAdminPassMap] = useState<Record<string, boolean>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -90,7 +123,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   };
 
   const handleExportExcel = () => {
-    const wsData = [
+    const wsData: (string | number)[][] = [
       [
         'STT', 'Họ và tên', 'Năm sinh', 'Ngày vào ngành', 'Chức vụ', 
         'Đơn vị công tác', 'Phòng ban', 'Mô tả công việc được giao',
@@ -176,7 +209,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     if (normPos.includes('phó phòng') || normPos.includes('phó trưởng phòng') || normPos.includes('phó chi cục')) {
       setRole('STAFF');
     } else {
-      setRole(user.role || (user.department === 'Lãnh đạo' ? 'PROVINCE_LEADER' : 'STAFF'));
+      const initialRole = user.role === 'ADMIN' ? 'STAFF' : (user.role || (user.department === 'Lãnh đạo' ? 'PROVINCE_LEADER' : 'STAFF'));
+      setRole(initialRole as any);
     }
     setShowAddModal(true);
   };
@@ -184,12 +218,19 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   const handlePositionChange = (val: string) => {
     setPosition(val);
     const norm = val.toLowerCase().trim();
-    if (norm.includes('phó phòng') || norm.includes('phó trưởng phòng') || norm.includes('phó chi cục') || (norm.includes('phó') && !norm.includes('cục trưởng'))) {
+    if (norm.includes('phó') && !norm.includes('cục trưởng')) {
       setRole('STAFF');
-    } else if (norm.includes('trưởng phòng') || norm.includes('chi cục trưởng')) {
-      setRole('DEPT_HEAD');
     } else if (norm.includes('cục trưởng')) {
       setRole('PROVINCE_LEADER');
+    } else if (
+      norm.includes('trưởng') || 
+      norm.includes('chi cục') || 
+      norm.includes('phụ trách') || 
+      norm.includes('q.') || 
+      norm.includes('quyền') ||
+      norm.includes('đội trưởng')
+    ) {
+      setRole('DEPT_HEAD');
     }
   };
 
@@ -201,10 +242,21 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     }
     
     // Rule: Phó phòng không được gán Trưởng phòng mà để là Chuyên viên (STAFF)
+    // Q. Trưởng Thống kê cơ sở / Trưởng phòng -> DEPT_HEAD
     let assignedRole = role;
     const normPos = position.toLowerCase().trim();
-    if (normPos.includes('phó phòng') || normPos.includes('phó trưởng phòng') || normPos.includes('phó chi cục') || (normPos.includes('phó') && !normPos.includes('cục trưởng'))) {
+    if (normPos.includes('phó') && !normPos.includes('cục trưởng')) {
       assignedRole = 'STAFF';
+    } else if (
+      (normPos.includes('trưởng') || 
+       normPos.includes('chi cục') || 
+       normPos.includes('phụ trách') || 
+       normPos.includes('q.') || 
+       normPos.includes('quyền') ||
+       normPos.includes('đội trưởng')) && 
+      assignedRole !== 'PROVINCE_LEADER'
+    ) {
+      assignedRole = 'DEPT_HEAD';
     }
 
     const userData = {
@@ -232,6 +284,87 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     setShowAddModal(false);
   };
 
+  // Dedicated Admin Account Management Handlers (ONLY accessible by Admin)
+  const handleOpenAddAdmin = () => {
+    setEditingAdminUser(null);
+    setAdminFullName('');
+    setAdminUsername('');
+    setAdminPassword('');
+    setAdminPhone('');
+    setAdminEmail('');
+    setShowAddAdminForm(true);
+  };
+
+  const handleOpenEditAdmin = (admin: User) => {
+    setEditingAdminUser(admin);
+    setAdminFullName(admin.fullName || '');
+    setAdminUsername(admin.username || '');
+    setAdminPassword(admin.password || '123456');
+    setAdminPhone(admin.phone || '');
+    setAdminEmail(admin.email || '');
+    setShowAddAdminForm(true);
+  };
+
+  const handleSaveAdmin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminUsername.trim() || !adminFullName.trim() || !adminPassword.trim()) {
+      addToast('warning', 'Thiếu thông tin!', 'Vui lòng điền đầy đủ Họ tên, Tên đăng nhập và Mật khẩu.');
+      return;
+    }
+
+    const lower = adminUsername.trim().toLowerCase();
+    const duplicate = users.find(u => (u.username || '').toLowerCase() === lower && u.id !== editingAdminUser?.id);
+    if (duplicate) {
+      addToast('error', 'Trùng tên đăng nhập', 'Tên đăng nhập này đã được sử dụng bởi tài khoản khác.');
+      return;
+    }
+
+    if (editingAdminUser) {
+      onUpdateUser(editingAdminUser.id, {
+        fullName: adminFullName.trim(),
+        username: adminUsername.trim(),
+        password: adminPassword.trim(),
+        phone: adminPhone.trim(),
+        email: adminEmail.trim(),
+        role: 'ADMIN',
+      });
+      addToast('success', 'Thành công', `Đã cập nhật thông tin Quản trị viên ${adminUsername}.`);
+    } else {
+      onAddUser({
+        fullName: adminFullName.trim(),
+        username: adminUsername.trim(),
+        password: adminPassword.trim(),
+        phone: adminPhone.trim(),
+        email: adminEmail.trim(),
+        role: 'ADMIN',
+        department: 'Lãnh đạo',
+        position: 'Quản trị hệ thống',
+        workUnit: 'Thống kê tỉnh Hưng Yên',
+      });
+      addToast('success', 'Thành công', `Đã tạo tài khoản Quản trị viên ${adminUsername}.`);
+    }
+
+    setShowAddAdminForm(false);
+    setEditingAdminUser(null);
+  };
+
+  const handleDeleteAdmin = (admin: User) => {
+    if (adminUsers.length <= 1) {
+      addToast('error', 'Không thể xóa', 'Hệ thống phải duy trì ít nhất 1 tài khoản Quản trị viên để quản trị.');
+      return;
+    }
+    if (currentUser?.id === admin.id) {
+      addToast('warning', 'Cảnh báo', 'Bạn đang đăng nhập bằng tài khoản này, không thể tự xóa.');
+      return;
+    }
+    onDeleteUser(admin.id);
+    addToast('success', 'Đã xóa', `Đã xóa tài khoản Quản trị viên ${admin.username}.`);
+  };
+
+  const toggleShowPass = (id: string) => {
+    setShowAdminPassMap(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
   const confirmDeleteRow = () => {
     if (deleteConfirmUser) {
       onDeleteUser(deleteConfirmUser.id);
@@ -243,7 +376,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     setDeleteConfirmUser({ id, name });
   };
 
-  const filteredUsers = (users || []).filter((u) => {
+  // Only display non-admin staff in the regular personnel list
+  const filteredUsers = staffUsers.filter((u) => {
     const matchesDept = filterDepartment === 'ALL' || u.department === filterDepartment;
     const matchesSearch =
       u.fullName.toLowerCase().includes(searchKey.toLowerCase()) ||
@@ -298,33 +432,53 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             <span>Tải xuống</span>
           </button>
 
-          <input type="file" accept=".xlsx, .xls, .csv" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#fd7e14] hover:bg-[#e36a09] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
-            title="Tải lên file Excel"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Tải lên</span>
-          </button>
+          {!isStaff && (
+            <>
+              <input type="file" accept=".xlsx, .xls, .csv" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#fd7e14] hover:bg-[#e36a09] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
+                title="Tải lên file Excel"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Tải lên</span>
+              </button>
 
-          <button
-            onClick={handleClearData}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#dc3545] hover:bg-[#bb2d3b] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
-            title="Xóa toàn bộ dữ liệu"
-          >
-            <Trash className="w-3.5 h-3.5" />
-            <span>Xóa tất cả</span>
-          </button>
+              <button
+                onClick={handleClearData}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#dc3545] hover:bg-[#bb2d3b] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
+                title="Xóa toàn bộ dữ liệu"
+              >
+                <Trash className="w-3.5 h-3.5" />
+                <span>Xóa tất cả</span>
+              </button>
 
-          <button
-            onClick={handleOpenAdd}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#6610f2] hover:bg-[#5b0ed9] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
-            title="Thêm nhân sự mới"
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            <span>+ Thêm mới</span>
-          </button>
+              <button
+                onClick={handleOpenAdd}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#6610f2] hover:bg-[#5b0ed9] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
+                title="Thêm nhân sự mới"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>+ Thêm mới</span>
+              </button>
+            </>
+          )}
+
+          {/* Dedicated Admin Accounts Button - ONLY visible to Admin */}
+          {isCurrentAdmin && (
+            <button
+              onClick={() => {
+                setShowAddAdminForm(false);
+                setEditingAdminUser(null);
+                setShowAdminModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-amber-300 hover:text-amber-200 border border-amber-500/40 rounded-lg text-xs font-bold shadow-xs transition-colors whitespace-nowrap"
+              title="Quản trị tài khoản Admin (Chỉ Quản trị viên mới có quyền)"
+            >
+              <Shield className="w-3.5 h-3.5 text-amber-400" />
+              <span>Tài khoản Admin ({adminUsers.length})</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -357,67 +511,88 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((u, idx) => (
-                  <tr 
-                    key={u.id} 
-                    className="bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors border-b border-slate-300 dark:border-slate-700"
-                  >
-                    <td className="px-3 py-2.5 text-center text-slate-800 dark:text-slate-200 font-medium whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
-                      {idx + 1}
-                    </td>
-                    <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-slate-100 border-r border-slate-300 dark:border-slate-700 whitespace-nowrap">
-                      {u.fullName}
-                    </td>
-                    <td className="px-3 py-2.5 text-center text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
-                      {u.birthYear || ''}
-                    </td>
-                    <td className="px-3 py-2.5 text-center text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
-                      {u.joinDate || ''}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
-                      {u.position || ''}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
-                      {u.workUnit || 'Thống kê tỉnh Hưng yên'}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
-                      {u.department}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 border-r border-slate-300 dark:border-slate-700">
-                      {u.jobDescription || ''}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
-                      {u.phone || ''}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
-                      {u.email || ''}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
-                      {u.username}
-                    </td>
-                    <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
-                      {u.password || '123654'}
-                    </td>
-                    <td className="px-3 py-2.5 text-center whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-2">
-                        <button 
-                          onClick={() => handleOpenEdit(u)} 
-                          className="text-sky-600 hover:text-sky-800 transition-colors p-1" 
-                          title="Sửa thông tin"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(u.id, u.fullName)} 
-                          className="text-rose-600 hover:text-rose-800 transition-colors p-1" 
-                          title="Xóa"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                filteredUsers.map((u, idx) => {
+                  const isSelf = currentUser && (u.id === currentUser.id || u.username === currentUser.username);
+                  return (
+                    <tr 
+                      key={u.id} 
+                      className={`transition-colors border-b border-slate-300 dark:border-slate-700 ${
+                        isSelf 
+                          ? 'bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-50 dark:hover:bg-emerald-950/30' 
+                          : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                      }`}
+                    >
+                      <td className="px-3 py-2.5 text-center text-slate-800 dark:text-slate-200 font-medium whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
+                        {idx + 1}
+                      </td>
+                      <td className="px-3 py-2.5 font-bold text-slate-900 dark:text-slate-100 border-r border-slate-300 dark:border-slate-700 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span>{u.fullName}</span>
+                          {isSelf && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-bold">
+                              Bạn
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2.5 text-center text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
+                        {u.birthYear || ''}
+                      </td>
+                      <td className="px-3 py-2.5 text-center text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
+                        {u.joinDate || ''}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
+                        {u.position || ''}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
+                        {u.workUnit || 'Thống kê tỉnh Hưng yên'}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
+                        {u.department}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 border-r border-slate-300 dark:border-slate-700">
+                        {u.jobDescription || ''}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
+                        {u.phone || ''}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
+                        {u.email || ''}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
+                        {u.username}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-300 dark:border-slate-700">
+                        {u.password || '123456'}
+                      </td>
+                      <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-2">
+                          {(!isStaff || isSelf) && (
+                            <button 
+                              onClick={() => handleOpenEdit(u)} 
+                              className="text-sky-600 hover:text-sky-800 transition-colors p-1" 
+                              title={isSelf ? "Sửa thông tin cá nhân của bạn" : "Sửa thông tin"}
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {!isStaff && (
+                            <button 
+                              onClick={() => handleDelete(u.id, u.fullName)} 
+                              className="text-rose-600 hover:text-rose-800 transition-colors p-1" 
+                              title="Xóa"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {isStaff && !isSelf && (
+                            <span className="text-slate-300 dark:text-slate-600 text-xs font-mono">-</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -486,7 +661,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                     <option value="PROVINCE_LEADER">🏛️ Lãnh đạo Cục (Cục trưởng, Phó Cục trưởng)</option>
                     <option value="DEPT_HEAD">🏢 Trưởng phòng / Chi cục trưởng (Phê duyệt cấp 1)</option>
                     <option value="STAFF">👤 Chuyên viên (Bao gồm Phó phòng, Thống kê viên - Tự đánh giá)</option>
-                    <option value="ADMIN">🛡️ Quản trị viên hệ thống (Admin)</option>
                   </select>
                   <p className="text-[11px] text-slate-500 mt-1 italic">* Lưu ý: Phó phòng không gán quyền Trưởng phòng mà để vai trò là Chuyên viên.</p>
                 </div>
@@ -556,6 +730,279 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             <div className="flex justify-end gap-3">
               <button onClick={() => setDeleteConfirmUser(null)} className="px-4 py-2 text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">Hủy</button>
               <button onClick={confirmDeleteRow} className="px-4 py-2 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-colors">Xóa Người Dùng</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DEDICATED ADMIN ACCOUNTS MODAL - STRICTLY FOR LOGGED-IN ADMINS */}
+      {showAdminModal && isCurrentAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl shadow-2xl border border-amber-500/40 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between border-b border-amber-500/30">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                  <Shield className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-amber-300 flex items-center gap-2">
+                    QUẢN TRỊ TÀI KHOẢN ADMIN HỆ THỐNG
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      Bảo mật cao
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Chỉ Quản trị viên mới có quyền tạo và quản lý tài khoản Admin. Không hiển thị trong danh sách nhân sự.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAdminModal(false);
+                  setShowAddAdminForm(false);
+                  setEditingAdminUser(null);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+              {/* Security info banner */}
+              <div className="flex items-start gap-3 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs text-amber-900 dark:text-amber-200">
+                <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-semibold">Phân tách tài khoản Admin độc lập:</p>
+                  <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Tài khoản Admin đã được đưa ra khỏi danh sách nhân sự của đơn vị để tránh nhầm lẫn khi chấm điểm KPI và bảo mật thông tin phân quyền.
+                    Chỉ có tài khoản Admin hiện tại mới có quyền tạo thêm tài khoản Admin mới hoặc chỉnh sửa mật khẩu.
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Toolbar */}
+              <div className="flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                  <span>Danh sách tài khoản Admin ({adminUsers.length})</span>
+                </div>
+                {!showAddAdminForm && (
+                  <button
+                    onClick={handleOpenAddAdmin}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold shadow-xs transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Tạo Admin mới</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Embedded Admin Add/Edit Form */}
+              {showAddAdminForm && (
+                <form onSubmit={handleSaveAdmin} className="p-4 bg-slate-50 dark:bg-slate-800/80 border border-amber-300 dark:border-amber-700/60 rounded-xl space-y-3 animate-in fade-in">
+                  <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                    <span className="text-xs font-bold text-amber-800 dark:text-amber-300 uppercase">
+                      {editingAdminUser ? 'Chỉnh sửa Quản trị viên' : 'Thêm Quản trị viên mới'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddAdminForm(false);
+                        setEditingAdminUser(null);
+                      }}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
+                    >
+                      Đóng form
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Họ và tên Quản trị viên (*)
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={adminFullName}
+                        onChange={(e) => setAdminFullName(e.target.value)}
+                        placeholder="Ví dụ: Quản trị viên hệ thống"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Tên đăng nhập (Username) (*)
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={adminUsername}
+                        onChange={(e) => setAdminUsername(e.target.value)}
+                        placeholder="Ví dụ: admin, admin2"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Mật khẩu đăng nhập (*)
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        placeholder="Nhập mật khẩu an toàn..."
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Số điện thoại liên hệ
+                      </label>
+                      <input
+                        type="text"
+                        value={adminPhone}
+                        onChange={(e) => setAdminPhone(e.target.value)}
+                        placeholder="0988xxxxxx"
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <p className="text-[11px] text-slate-500 italic">
+                      * Vai trò tự động gán là ADMIN tối cao, có toàn quyền quản trị ứng dụng.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowAddAdminForm(false);
+                          setEditingAdminUser(null);
+                        }}
+                        className="px-3 py-1.5 text-xs text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 rounded-lg font-semibold hover:bg-slate-300 transition-colors"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-1.5 text-xs text-white bg-amber-600 hover:bg-amber-700 rounded-lg font-bold shadow-xs transition-colors"
+                      >
+                        {editingAdminUser ? 'Lưu cập nhật' : 'Xác nhận tạo Admin'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              )}
+
+              {/* Admin Users Table */}
+              <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-xs">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-200 dark:border-slate-700 uppercase tracking-wider">
+                    <tr>
+                      <th className="py-2.5 px-3 w-12 text-center">STT</th>
+                      <th className="py-2.5 px-3">Họ và tên</th>
+                      <th className="py-2.5 px-3">Tên đăng nhập</th>
+                      <th className="py-2.5 px-3">Mật khẩu</th>
+                      <th className="py-2.5 px-3">Liên hệ</th>
+                      <th className="py-2.5 px-3 text-center">Quyền hạn</th>
+                      <th className="py-2.5 px-3 text-center w-24">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                    {adminUsers.map((admin, idx) => {
+                      const isShowingPass = !!showAdminPassMap[admin.id];
+                      const isCurrent = currentUser?.id === admin.id;
+                      return (
+                        <tr key={admin.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                          <td className="py-2.5 px-3 text-center text-slate-500 font-mono">{idx + 1}</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-slate-100">
+                            {admin.fullName}
+                            {isCurrent && (
+                              <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+                                Đang đăng nhập
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                            {admin.username}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono">
+                            <div className="flex items-center gap-1.5">
+                              <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-700 dark:text-slate-300">
+                                {isShowingPass ? (admin.password || '123456') : '••••••••'}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => toggleShowPass(admin.id)}
+                                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded"
+                                title={isShowingPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                              >
+                                {isShowingPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400">
+                            {admin.phone || admin.email || '—'}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                              <Shield className="w-3 h-3 text-amber-500" />
+                              ADMIN TỐI CAO
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => handleOpenEditAdmin(admin)}
+                                className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-colors"
+                                title="Chỉnh sửa thông tin / mật khẩu"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteAdmin(admin)}
+                                disabled={adminUsers.length <= 1 || isCurrent}
+                                className={`p-1.5 rounded-md transition-colors ${
+                                  adminUsers.length <= 1 || isCurrent
+                                    ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                                    : 'text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30'
+                                }`}
+                                title={
+                                  adminUsers.length <= 1
+                                    ? 'Cần duy trì ít nhất 1 tài khoản Admin'
+                                    : isCurrent
+                                    ? 'Không thể xóa tài khoản đang đăng nhập'
+                                    : 'Xóa tài khoản Admin này'
+                                }
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+              <button
+                onClick={() => {
+                  setShowAdminModal(false);
+                  setShowAddAdminForm(false);
+                  setEditingAdminUser(null);
+                }}
+                className="px-4 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+              >
+                Đóng
+              </button>
             </div>
           </div>
         </div>

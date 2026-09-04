@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   BarChart4, 
   Search, 
@@ -14,6 +14,7 @@ import {
   Lock
 } from 'lucide-react';
 import { WorkflowSubmission, User, KpiTask, EvaluationPeriodConfig, DEPARTMENTS } from '../types';
+import { computeUserScorecardList, computeClassificationStats } from '../utils/evaluationClassification';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 
@@ -35,6 +36,18 @@ export const EvaluationResults: React.FC<EvaluationResultsProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState<string>(selectedDepartment);
   const [ratingFilter, setRatingFilter] = useState<string>('ALL');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Lắng nghe cập nhật thực tế từ Menu "Điểm thực hiện nhiệm vụ"
+  useEffect(() => {
+    const handleUpdate = () => setRefreshTrigger(prev => prev + 1);
+    window.addEventListener('storage', handleUpdate);
+    window.addEventListener('kpi_data_updated', handleUpdate);
+    return () => {
+      window.removeEventListener('storage', handleUpdate);
+      window.removeEventListener('kpi_data_updated', handleUpdate);
+    };
+  }, []);
 
   // Handle row click to navigate to workflow with pre-selected user
   const handleRowClick = (userId: string) => {
@@ -44,104 +57,8 @@ export const EvaluationResults: React.FC<EvaluationResultsProps> = ({
 
   // Compute evaluation scorecard for all users
   const scorecardList = useMemo(() => {
-    return users.map((user, idx) => {
-      // Find submission
-      const userSubs = submissions.filter(s => 
-        s.userId === user.id || 
-        s.userName?.normalize('NFC').trim().toLowerCase() === user.fullName?.normalize('NFC').trim().toLowerCase()
-      );
-      const sub = userSubs[0];
-
-      // User tasks KPI
-      const userTasks = tasks.filter(t => 
-        t.userName?.normalize('NFC').trim().toLowerCase() === user.fullName?.normalize('NFC').trim().toLowerCase()
-      );
-      
-      let kpiScore70 = 0;
-      if (userTasks.length > 0) {
-        const totalTaskScores = userTasks.reduce((acc, t) => acc + (t.scoreCalculated ?? (t.weight || 0)), 0);
-        // Normalize to 70
-        const rawKpiScore = Math.min(100, Math.max(0, totalTaskScores));
-        kpiScore70 = Math.round((rawKpiScore * 0.7) * 10) / 10;
-      }
-
-      // If user submitted criteria, extract general score (max 30)
-      let generalScore30 = 0;
-      if (sub && sub.criteria && sub.criteria.length > 0) {
-        // Sum general criteria
-        const generalCriteria = sub.criteria.filter(c => 
-          c.id.startsWith('crit_I') || c.id.startsWith('crit_II') || c.id.startsWith('crit_III')
-        );
-        if (generalCriteria.length > 0) {
-          generalScore30 = generalCriteria.reduce((acc, c) => acc + (c.selfScore || 0), 0);
-        } else {
-          generalScore30 = Math.min(30, Math.max(0, sub.selfScoreTotal - kpiScore70));
-        }
-      } else if (sub && sub.selfScoreTotal > 0) {
-        generalScore30 = Math.min(30, sub.selfScoreTotal >= 30 ? 28 : sub.selfScoreTotal);
-      }
-
-      // Total self score
-      const totalScore100 = sub?.selfScoreTotal ? sub.selfScoreTotal : Math.round((generalScore30 + kpiScore70) * 10) / 10;
-
-      // Final score by leadership
-      const isLeaderApproved = sub?.status === 'APPROVED_FINAL';
-      const isDeptApproved = sub?.status === 'APPROVED_DEPT';
-      
-      const approvedScore = isLeaderApproved && sub?.finalScore !== undefined && sub?.finalScore !== null
-        ? Number(sub.finalScore)
-        : (isDeptApproved && sub?.deptHeadScore !== undefined && sub?.deptHeadScore !== null
-            ? Number(sub.deptHeadScore)
-            : null);
-
-      // Score used for ranking
-      const effectiveScore = approvedScore !== null 
-        ? approvedScore 
-        : (sub && totalScore100 > 0 ? totalScore100 : 0);
-
-      // Rating classification
-      let ratingLabel = 'Chưa xếp loại';
-      let ratingClass = 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
-      let ratingKey = 'UNCLASSIFIED';
-
-      if (effectiveScore > 0 || sub) {
-        if (effectiveScore >= 90) {
-          ratingLabel = 'Hoàn thành xuất sắc';
-          ratingClass = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300';
-          ratingKey = 'EXCELLENT';
-        } else if (effectiveScore >= 70) {
-          ratingLabel = 'Hoàn thành tốt';
-          ratingClass = 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300';
-          ratingKey = 'GOOD';
-        } else if (effectiveScore >= 50) {
-          ratingLabel = 'Hoàn thành';
-          ratingClass = 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
-          ratingKey = 'COMPLETED';
-        } else {
-          ratingLabel = 'Không hoàn thành';
-          ratingClass = 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300';
-          ratingKey = 'FAILED';
-        }
-      }
-
-      return {
-        stt: idx + 1,
-        user,
-        period: sub?.period || periodConfig.periodName,
-        taskCount: userTasks.length,
-        generalScore30: Math.round(generalScore30 * 10) / 10,
-        kpiScore70: Math.round(kpiScore70 * 10) / 10,
-        totalScore100: Math.round(totalScore100 * 10) / 10,
-        approvedScore,
-        effectiveScore,
-        ratingLabel,
-        ratingClass,
-        ratingKey,
-        isApproved: sub?.status === 'APPROVED_FINAL',
-        submission: sub
-      };
-    });
-  }, [users, submissions, tasks, periodConfig]);
+    return computeUserScorecardList(users, submissions, tasks, periodConfig);
+  }, [users, submissions, tasks, periodConfig, refreshTrigger]);
 
   // Filtered scorecard
   const filteredScorecard = useMemo(() => {
@@ -164,27 +81,7 @@ export const EvaluationResults: React.FC<EvaluationResultsProps> = ({
 
   // Statistical calculations
   const stats = useMemo(() => {
-    const total = scorecardList.length;
-    const excellent = scorecardList.filter(s => s.ratingKey === 'EXCELLENT').length;
-    const good = scorecardList.filter(s => s.ratingKey === 'GOOD').length;
-    const completed = scorecardList.filter(s => s.ratingKey === 'COMPLETED').length;
-    const failed = scorecardList.filter(s => s.ratingKey === 'FAILED').length;
-
-    const evaluatedCount = scorecardList.filter(s => s.effectiveScore > 0).length;
-    const avgScore = evaluatedCount > 0 
-      ? (scorecardList.reduce((a, b) => a + (b.effectiveScore || 0), 0) / evaluatedCount).toFixed(1)
-      : 0;
-
-    return {
-      total,
-      excellent,
-      good,
-      completed,
-      failed,
-      avgScore,
-      excellentPct: total > 0 ? Math.round((excellent / total) * 100) : 0,
-      goodPct: total > 0 ? Math.round((good / total) * 100) : 0,
-    };
+    return computeClassificationStats(scorecardList);
   }, [scorecardList]);
 
   // Export to Excel
@@ -344,10 +241,11 @@ export const EvaluationResults: React.FC<EvaluationResultsProps> = ({
               className="bg-slate-50 dark:bg-slate-800/60 border border-slate-300 dark:border-slate-700 rounded-xl text-xs p-2 focus:outline-none focus:ring-2 focus:ring-red-600"
             >
               <option value="ALL">Tất cả Mức Xếp Loại</option>
-              <option value="EXCELLENT">Hoàn thành xuất sắc (&gt;= 90)</option>
-              <option value="GOOD">Hoàn thành tốt (70 - 89)</option>
-              <option value="COMPLETED">Hoàn thành (50 - 69)</option>
-              <option value="FAILED">Không hoàn thành (&lt; 50)</option>
+              <option value="EXCELLENT">1. Hoàn thành xuất sắc nhiệm vụ</option>
+              <option value="GOOD">2. Hoàn thành tốt nhiệm vụ</option>
+              <option value="COMPLETED">3. Hoàn thành nhiệm vụ</option>
+              <option value="PENDING">4. Chưa hoàn thành nhiệm vụ</option>
+              <option value="FAILED">5. Không hoàn thành nhiệm vụ</option>
             </select>
           </div>
         </div>

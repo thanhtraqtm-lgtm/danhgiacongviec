@@ -28,7 +28,7 @@ import {
   WidthType, 
   BorderStyle 
 } from 'docx';
-import { User, SelfAssessmentDoc, SelfEvalCriterion, EvaluationPeriodConfig } from '../types';
+import { User, SelfAssessmentDoc, SelfEvalCriterion, EvaluationPeriodConfig, CLASSIFICATION_OPTIONS } from '../types';
 import { evaluateOverallKPI, EvaluationResult } from '../utils/kpiLogic';
 
 interface OfficialWordAssessmentFormProps {
@@ -36,6 +36,9 @@ interface OfficialWordAssessmentFormProps {
   currentUser?: User | null;
   selectedDepartment?: string;
   periodConfig?: EvaluationPeriodConfig;
+  submissions?: any[];
+  tasks?: any[];
+  docs?: SelfAssessmentDoc[];
   onSaveDoc?: (doc: Omit<SelfAssessmentDoc, 'id'>) => void;
   onSubmitWorkflow?: (sub: any) => void;
   addToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, description?: string) => void;
@@ -46,6 +49,9 @@ export const OfficialWordAssessmentForm: React.FC<OfficialWordAssessmentFormProp
   currentUser,
   selectedDepartment,
   periodConfig,
+  submissions = [],
+  tasks = [],
+  docs = [],
   onSaveDoc,
   onSubmitWorkflow,
   addToast
@@ -81,14 +87,24 @@ export const OfficialWordAssessmentForm: React.FC<OfficialWordAssessmentFormProp
   const approverInfo = useMemo(() => {
     const targetDept = workUnit || currentUser?.department || (selectedDept !== 'ALL' ? selectedDept : '');
     
+    const isHeadOfUnit = (u?: User | null) => {
+      if (!u) return false;
+      const pos = (u.position || '').toLowerCase().trim();
+      if (pos.includes('phó') || pos.includes('pho')) return false;
+      return (
+        u.role === 'DEPT_HEAD' ||
+        pos.includes('trưởng') ||
+        pos.includes('chi cục trưởng') ||
+        pos.includes('phụ trách') ||
+        pos.includes('đội trưởng') ||
+        pos.includes('q.') ||
+        pos.includes('quyền')
+      );
+    };
+
     // Check if the current user being evaluated is a Dept Head or Province Leader
     const currentStaffObj = (users || []).find((u) => u.fullName === fullName) || currentUser;
-    const isDeptHead = currentStaffObj?.role === 'DEPT_HEAD' || 
-      (currentStaffObj?.position && (
-        currentStaffObj.position.toLowerCase().includes('trưởng phòng') ||
-        currentStaffObj.position.toLowerCase().includes('chi cục trưởng') ||
-        currentStaffObj.position.toLowerCase().includes('phụ trách phòng')
-      ));
+    const isDeptHead = isHeadOfUnit(currentStaffObj);
 
     if (isDeptHead || currentStaffObj?.role === 'PROVINCE_LEADER') {
       const leader = (users || []).find((u) => u.role === 'PROVINCE_LEADER' || u.department === 'Lãnh đạo');
@@ -100,22 +116,19 @@ export const OfficialWordAssessmentForm: React.FC<OfficialWordAssessmentFormProp
       };
     }
 
-    // Normal staff: Look up the Department Head in that specific department
+    const isCoSo = (targetDept || '').toLowerCase().includes('thống kê cơ sở') || (targetDept || '').toLowerCase().includes('cơ sở');
+    const defaultTitle = isCoSo ? 'TRƯỞNG THỐNG KÊ CƠ SỞ PHÊ DUYỆT' : 'TRƯỞNG PHÒNG PHÊ DUYỆT';
+    const defaultRoleLabel = isCoSo ? 'Trưởng Thống kê cơ sở' : 'Trưởng phòng';
+
+    // Normal staff: Look up the Department Head in that specific department (including Q. Trưởng Thống kê cơ sở)
     const deptHead = (users || []).find((u) => 
-      u.department === targetDept && 
-      (u.role === 'DEPT_HEAD' || 
-       (u.position && (
-         u.position.toLowerCase().includes('trưởng phòng') ||
-         u.position.toLowerCase().includes('chi cục trưởng') ||
-         u.position.toLowerCase().includes('phụ trách') ||
-         u.position.toLowerCase().includes('đội trưởng')
-       )))
+      u.department === targetDept && isHeadOfUnit(u)
     );
 
     if (deptHead) {
       return {
-        title: 'TRƯỞNG PHÒNG PHÊ DUYỆT',
-        roleLabel: 'Trưởng phòng',
+        title: isCoSo ? 'TRƯỞNG THỐNG KÊ CƠ SỞ PHÊ DUYỆT' : (deptHead.position ? `${deptHead.position.toUpperCase()} PHÊ DUYỆT` : defaultTitle),
+        roleLabel: deptHead.position || defaultRoleLabel,
         name: deptHead.fullName,
         isLeader: false
       };
@@ -125,17 +138,17 @@ export const OfficialWordAssessmentForm: React.FC<OfficialWordAssessmentFormProp
     const fallbackUser = (users || []).find((u) => u.department === targetDept && u.fullName !== fullName);
     if (fallbackUser) {
       return {
-        title: 'TRƯỞNG PHÒNG PHÊ DUYỆT',
-        roleLabel: 'Trưởng phòng',
+        title: defaultTitle,
+        roleLabel: defaultRoleLabel,
         name: fallbackUser.fullName,
         isLeader: false
       };
     }
 
     return {
-      title: 'TRƯỞNG PHÒNG PHÊ DUYỆT',
-      roleLabel: 'Trưởng phòng',
-      name: targetDept ? 'Trưởng phòng ' + targetDept : '(Chưa có thông tin Trưởng phòng)',
+      title: defaultTitle,
+      roleLabel: defaultRoleLabel,
+      name: targetDept ? (isCoSo ? `Trưởng ${targetDept}` : `Trưởng phòng ${targetDept}`) : `(Chưa có thông tin ${defaultRoleLabel})`,
       isLeader: false
     };
   }, [users, workUnit, currentUser, selectedDept, fullName]);
@@ -235,15 +248,74 @@ export const OfficialWordAssessmentForm: React.FC<OfficialWordAssessmentFormProp
   const taskWeightedScore = useMemo(() => Number(((kpiTaskScore / 100) * 70).toFixed(1)), [kpiTaskScore]);
   const grandTotalScore = useMemo(() => Number((totalGeneralScore + taskWeightedScore).toFixed(1)), [totalGeneralScore, taskWeightedScore]);
 
-  // Classification based on quy định Nghị định 335/2025/NĐ-CP
-  // Note: Detailed KPI breakdown (quantity/quality/timeline) needed for accurate classification
-  // Using grandTotalScore as approximation; user should verify with Excel 3-Sheet form
+  // Classification suggestion based on quy định
   const classificationResult = useMemo(() => {
-    // We don't have individual KPI components here, so use overall score
-    // For accurate classification per Điều 7, use Excel 3-Sheet form
     const isLeader = currentUser?.role === 'PROVINCE_LEADER' || currentUser?.role === 'DEPT_HEAD';
     return evaluateOverallKPI(100, 100, 100, totalGeneralScore, isLeader);
   }, [totalGeneralScore, kpiTaskScore, currentUser]);
+
+  // Self-selected classification by the user (Không tự động gán cứng - cho phép người dùng tự chọn mức thi đua)
+  const [selfClassification, setSelfClassification] = useState<string>('Hoàn thành tốt nhiệm vụ');
+
+  // Auto-sync or restore user scores from localStorage / existing submission / 3-Sheet KPI
+  useEffect(() => {
+    if (!fullName) return;
+    try {
+      const savedKey = `kpi_general_scores_${fullName.trim()}`;
+      const savedDataStr = localStorage.getItem(savedKey);
+      if (savedDataStr) {
+        const d = JSON.parse(savedDataStr);
+        if (d.scoreI1 !== undefined) setScoreI1(d.scoreI1);
+        if (d.scoreI2 !== undefined) setScoreI2(d.scoreI2);
+        if (d.scoreII1 !== undefined) setScoreII1(d.scoreII1);
+        if (d.scoreII2 !== undefined) setScoreII2(d.scoreII2);
+        if (d.scoreII3 !== undefined) setScoreII3(d.scoreII3);
+        if (d.scoreII4 !== undefined) setScoreII4(d.scoreII4);
+        if (d.scoreIII1 !== undefined) setScoreIII1(d.scoreIII1);
+        if (d.scoreIII2 !== undefined) setScoreIII2(d.scoreIII2);
+        if (d.scoreIII3 !== undefined) setScoreIII3(d.scoreIII3);
+        if (d.scoreIII4 !== undefined) setScoreIII4(d.scoreIII4);
+        if (d.kpiTaskScore !== undefined && d.kpiTaskScore > 0) setKpiTaskScore(d.kpiTaskScore);
+        if (d.strengthsText) setStrengthsText(d.strengthsText);
+        if (d.weaknessesText) setWeaknessesText(d.weaknessesText);
+        if (d.selfClassification) setSelfClassification(d.selfClassification);
+      }
+    } catch {
+      // ignore
+    }
+
+    // Look for KPI task score from submissions or sheet summary
+    const matchedSub = (submissions || []).find((s: any) => 
+      s.userName?.normalize('NFC').trim().toLowerCase() === fullName.normalize('NFC').trim().toLowerCase()
+    );
+    if (matchedSub && matchedSub.criteria && matchedSub.criteria.length > 0) {
+      const kpiCrit = matchedSub.criteria.find((c: any) => c.id === 'crit_IV_kpi' || c.id === 'crit_IV_KPI' || c.categoryName?.includes('KPI') || c.categoryName?.includes('IV.'));
+      if (kpiCrit && kpiCrit.selfScore !== undefined) {
+        const raw100 = kpiCrit.maxScore === 70 ? Number(((kpiCrit.selfScore / 70) * 100).toFixed(1)) : Number(kpiCrit.selfScore);
+        if (raw100 > 0) setKpiTaskScore(raw100);
+      }
+    }
+  }, [fullName, submissions]);
+
+  // Auto-save general criteria scores to localStorage
+  useEffect(() => {
+    if (!fullName) return;
+    try {
+      const savedKey = `kpi_general_scores_${fullName.trim()}`;
+      localStorage.setItem(savedKey, JSON.stringify({
+        scoreI1, scoreI2,
+        scoreII1, scoreII2, scoreII3, scoreII4,
+        scoreIII1, scoreIII2, scoreIII3, scoreIII4,
+        kpiTaskScore,
+        totalGeneralScore,
+        strengthsText,
+        weaknessesText,
+        selfClassification
+      }));
+    } catch {
+      // ignore
+    }
+  }, [fullName, scoreI1, scoreI2, scoreII1, scoreII2, scoreII3, scoreII4, scoreIII1, scoreIII2, scoreIII3, scoreIII4, kpiTaskScore, totalGeneralScore, strengthsText, weaknessesText, selfClassification]);
 
   // Handle user select auto-fill
   const handleSelectUser = (userName: string) => {
@@ -576,37 +648,55 @@ export const OfficialWordAssessmentForm: React.FC<OfficialWordAssessmentFormProp
               // Items 1-6
               new Paragraph({
                 children: [
-                  new TextRun({ text: '1. Điểm tiêu chí chung: ', size: 22 }),
-                  new TextRun({ text: totalGeneralScore.toString(), bold: true, size: 22 }),
+                  new TextRun({ text: '1. Điểm tiêu chí chung: ', bold: true, size: 22 }),
+                  new TextRun({ text: `${totalGeneralScore} / 30 điểm`, bold: true, size: 22 }),
+                ],
+                spacing: { after: 80 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: `   - Tiêu chí 1 (Phẩm chất chính trị, đạo đức, lối sống, kỷ luật): ${sumCat1} / 10 điểm`, size: 20 }),
+                ],
+                spacing: { after: 40 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: `   - Tiêu chí 2 (Năng lực chuyên môn, trách nhiệm, tác phong): ${sumCat2} / 10 điểm`, size: 20 }),
+                ],
+                spacing: { after: 40 },
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: `   - Tiêu chí 3 (Đổi mới, sáng tạo, dám nghĩ dám làm): ${sumCat3} / 10 điểm`, size: 20 }),
                 ],
                 spacing: { after: 100 },
               }),
               new Paragraph({
                 children: [
-                  new TextRun({ text: '2. Điểm tiêu chí kết quả thực hiện nhiệm vụ (Tổng điểm KPI/100 x 70): ', size: 22 }),
-                  new TextRun({ text: taskWeightedScore.toString(), bold: true, size: 22 }),
+                  new TextRun({ text: '2. Điểm tiêu chí kết quả thực hiện nhiệm vụ (Tổng điểm KPI/100 x 70): ', bold: true, size: 22 }),
+                  new TextRun({ text: `${taskWeightedScore} / 70 điểm (Điểm gốc: ${kpiTaskScore}/100)`, bold: true, size: 22 }),
                 ],
                 spacing: { after: 100 },
               }),
               new Paragraph({
                 children: [
-                  new TextRun({ text: '3. Tổng điểm theo dõi, đánh giá công chức, lao động: ', size: 22 }),
-                  new TextRun({ text: grandTotalScore.toString(), bold: true, size: 22 }),
+                  new TextRun({ text: '3. Tổng điểm theo dõi, đánh giá công chức, lao động: ', bold: true, size: 22 }),
+                  new TextRun({ text: `${grandTotalScore} / 100 điểm`, bold: true, size: 22, color: '166534' }),
+                  new TextRun({ text: ` (Tiêu chí chung: ${totalGeneralScore}đ + Điểm thực hiện nhiệm vụ: ${taskWeightedScore}đ)`, size: 20, color: '64748B' }),
                 ],
                 spacing: { after: 100 },
               }),
               new Paragraph({
                 children: [
-                  new TextRun({ text: '3.1. Xếp loại chất lượng (theo Nghị định 335/2025/NĐ-CP): ', bold: true, size: 22, color: '2563EB' }),
-                  new TextRun({ text: classificationResult.classificationLabel, bold: true, size: 22, color: '2563EB' }),
-                  new TextRun({ text: ` (${classificationResult.totalScore}đ)`, size: 22, color: '2563EB' }),
+                  new TextRun({ text: '3.1. Mức tự xếp loại đề xuất (Công chức tự chọn): ', bold: true, size: 22, color: '2563EB' }),
+                  new TextRun({ text: selfClassification, bold: true, size: 22, color: '2563EB' }),
+                  new TextRun({ text: ` (Điểm tự chấm: ${grandTotalScore}đ)`, size: 22, color: '2563EB' }),
                 ],
                 spacing: { after: 100 },
               }),
               new Paragraph({
                 children: [
-                  new TextRun({ text: '   * Lưu ý: Xếp loại chính xác cần dùng Biểu mẫu KPI 3 Sheet để có phân tích Số lượng/Chất lượng/Tiến độ chi tiết. ', italics: true, size: 18, color: 'EF4444' }),
-                  new TextRun({ text: 'Nếu hoàn thành <100% nhiệm vụ → "Không hoàn thành nhiệm vụ" (Điều 7).', italics: true, size: 18, color: 'EF4444' }),
+                  new TextRun({ text: '   * Lưu ý: Mức xếp loại do người dùng và cấp quản lý chủ động đánh giá & lựa chọn, điểm số mang tính chất tham chiếu.', italics: true, size: 18, color: '64748B' }),
                 ],
                 spacing: { after: 160 },
               }),
@@ -703,6 +793,16 @@ export const OfficialWordAssessmentForm: React.FC<OfficialWordAssessmentFormProp
     }
     if (!fullName.trim()) {
       addToast('warning', 'Thiếu thông tin!', 'Vui lòng nhập họ tên cán bộ trước khi gửi.');
+      return;
+    }
+
+    // Strict validation: Both "Điểm Tiêu chí chung" (Section I - 30đ) and "Điểm thực hiện nhiệm vụ" (Section IV/KPI - 70đ) must be completed
+    if (totalGeneralScore <= 0 || (taskWeightedScore <= 0 && kpiTaskScore <= 0)) {
+      addToast(
+        'error',
+        'Chưa Hoàn Thành Đủ 2 Bản Đánh Giá!',
+        'Để gửi phê duyệt, bạn phải hoàn thành đủ cả 2 phần: (1) "Điểm Tiêu chí chung" (tối đa 30đ) và (2) "Điểm thực hiện nhiệm vụ" (tối đa 70đ).'
+      );
       return;
     }
     // Generate full criteria list with benchmark points and self scores
@@ -813,7 +913,7 @@ export const OfficialWordAssessmentForm: React.FC<OfficialWordAssessmentFormProp
         fileName: `Phieu_Danh_Gia_${fullName}_${quarterName}.docx`,
         userName: fullName,
         uploadDate: new Date().toISOString().split('T')[0],
-        extractedContent: `PHIẾU THEO DÕI, ĐÁNH GIÁ CÔNG CHỨC - ${quarterName}\nCán bộ: ${fullName} (${positionTitle})\nPhòng ban: ${workUnit}\nTổng điểm tiêu chí chung: ${totalGeneralScore}/30\nTổng điểm KPI: ${taskWeightedScore}/70\nTổng điểm đánh giá: ${grandTotalScore}/100\nXếp loại: ${classificationResult.classificationLabel} (${classificationResult.totalScore}đ)${classificationResult.isUnder100Percent ? '\n⚠ Điều 7: Hoàn thành <100% nhiệm vụ = Không hoàn thành nhiệm vụ' : ''}\nNgười ký duyệt: ${approverInfo.name} (${approverInfo.roleLabel})\nƯu điểm: ${strengthsText}\nHạn chế: ${weaknessesText}`,
+        extractedContent: `PHIẾU THEO DÕI, ĐÁNH GIÁ CÔNG CHỨC - ${quarterName}\nCán bộ: ${fullName} (${positionTitle})\nPhòng ban: ${workUnit}\nTổng điểm tiêu chí chung: ${totalGeneralScore}/30\nTổng điểm KPI: ${taskWeightedScore}/70\nTổng điểm đánh giá: ${grandTotalScore}/100\nĐề xuất xếp loại: ${selfClassification} (Điểm: ${grandTotalScore}đ)\nNgười ký duyệt: ${approverInfo.name} (${approverInfo.roleLabel})\nƯu điểm: ${strengthsText}\nHạn chế: ${weaknessesText}`,
         wordCount: 250,
       });
     }
@@ -826,8 +926,17 @@ export const OfficialWordAssessmentForm: React.FC<OfficialWordAssessmentFormProp
         department: workUnit,
         period: quarterName,
         selfScoreTotal: grandTotalScore,
+        selfClassification: selfClassification,
+        generalScore: totalGeneralScore,
+        taskWeightedScore: taskWeightedScore,
+        kpiTaskScore: kpiTaskScore,
+        strengthsText: strengthsText,
+        weaknessesText: weaknessesText,
+        managerOpinionText: managerOpinionText,
+        provinceUnit: provinceUnit,
+        departmentUnit: departmentUnit,
         criteria: criteriaList,
-        selfExplanation: `Ưu điểm: ${strengthsText}\n\nHạn chế: ${weaknessesText}\n\nXếp loại: ${classificationResult.classificationLabel} (${classificationResult.totalScore}đ)${classificationResult.isUnder100Percent ? '. ⚠ Điều 7: Hoàn thành <100% = Không hoàn thành nhiệm vụ' : ''}`,
+        selfExplanation: `Ưu điểm: ${strengthsText}\n\nHạn chế: ${weaknessesText}\n\nĐề xuất xếp loại: ${selfClassification} (Điểm: ${grandTotalScore}đ)`,
         status: 'PENDING_DEPT',
         submittedAt: new Date().toLocaleString('vi-VN'),
         approverName: approverInfo.name,
@@ -838,7 +947,7 @@ export const OfficialWordAssessmentForm: React.FC<OfficialWordAssessmentFormProp
     addToast(
       'success',
       'Đã Lưu & Gửi Phê Duyệt Thành Công!',
-      `Phiếu đánh giá của ${fullName} (${workUnit}) - Tổng điểm: ${grandTotalScore}đ (${classificationResult.classificationLabel}) đã được chuyển đến ${approverInfo.roleLabel} ${approverInfo.name} để ký duyệt.`
+      `Phiếu đánh giá của ${fullName} (${workUnit}) - Tổng điểm: ${grandTotalScore}đ - Đề xuất: ${selfClassification} đã được chuyển đến ${approverInfo.roleLabel} ${approverInfo.name} để ký duyệt.`
     );
   };
 
@@ -1260,16 +1369,52 @@ export const OfficialWordAssessmentForm: React.FC<OfficialWordAssessmentFormProp
               II. TỔNG HỢP KẾT QUẢ THEO DÕI, ĐÁNH GIÁ CÔNG CHỨC, LAO ĐỘNG
             </h2>
 
-            <div className="space-y-2 text-sm pl-2">
-              <p>
-                <strong>1. Điểm tiêu chí chung:</strong>{' '}
-                <span className="font-bold text-indigo-700">{totalGeneralScore} / 30</span>
-              </p>
+            <div className="space-y-3 text-sm pl-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <strong>1. Điểm tiêu chí chung:</strong>{' '}
+                  <span className="font-bold text-indigo-700 text-base">{totalGeneralScore} / 30 điểm</span>
+                </div>
+                {/* Bổ sung điểm đã chấm vào 3 tiêu chí chung */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2 pt-0.5">
+                  <div className="p-2.5 rounded-lg bg-indigo-50/60 dark:bg-slate-800 border border-indigo-200 dark:border-slate-700">
+                    <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block">
+                      Tiêu chí 1: Phẩm chất chính trị, đạo đức, lối sống, kỷ luật
+                    </span>
+                    <div className="mt-1 flex items-baseline justify-between">
+                      <span className="font-mono font-bold text-sm text-indigo-700 dark:text-indigo-400">{sumCat1}đ</span>
+                      <span className="text-[11px] text-slate-400">/ 10đ</span>
+                    </div>
+                  </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <strong>2. Điểm tiêu chí kết quả thực hiện nhiệm vụ (Tổng điểm KPI/100 x 70):</strong>
-                <div className="inline-flex items-center gap-1.5 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
-                  <span>KPI Gốc:</span>
+                  <div className="p-2.5 rounded-lg bg-indigo-50/60 dark:bg-slate-800 border border-indigo-200 dark:border-slate-700">
+                    <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block">
+                      Tiêu chí 2: Năng lực chuyên môn, trách nhiệm, tác phong
+                    </span>
+                    <div className="mt-1 flex items-baseline justify-between">
+                      <span className="font-mono font-bold text-sm text-indigo-700 dark:text-indigo-400">{sumCat2}đ</span>
+                      <span className="text-[11px] text-slate-400">/ 10đ</span>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-indigo-50/60 dark:bg-slate-800 border border-indigo-200 dark:border-slate-700">
+                    <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 block">
+                      Tiêu chí 3: Đổi mới, sáng tạo, dám nghĩ dám làm
+                    </span>
+                    <div className="mt-1 flex items-baseline justify-between">
+                      <span className="font-mono font-bold text-sm text-indigo-700 dark:text-indigo-400">{sumCat3}đ</span>
+                      <span className="text-[11px] text-slate-400">/ 10đ</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <strong>2. Điểm tiêu chí kết quả thực hiện nhiệm vụ (Tổng điểm KPI/100 x 70):</strong>
+                </div>
+                <div className="inline-flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg border border-slate-300 dark:border-slate-700">
+                  <span className="text-xs text-slate-500">KPI Gốc:</span>
                   <input
                     type="number"
                     min="0"
@@ -1277,36 +1422,78 @@ export const OfficialWordAssessmentForm: React.FC<OfficialWordAssessmentFormProp
                     placeholder="0"
                     value={kpiTaskScore === 0 ? '' : kpiTaskScore}
                     onChange={(e) => setKpiTaskScore(clampScoreValue(e.target.value, 100))}
-                    className="w-14 text-center font-bold bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-14 text-center font-bold font-mono text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded p-1 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
-                  <span>=&gt;</span>
-                  <span className="font-bold text-indigo-700">{taskWeightedScore} / 70</span>
+                  <span className="text-xs text-slate-400">=&gt;</span>
+                  <span className="font-extrabold font-mono text-sm text-indigo-700 dark:text-indigo-400">
+                    {taskWeightedScore} / 70đ
+                  </span>
                 </div>
               </div>
 
-              <p>
-                <strong>3. Tổng điểm theo dõi, đánh giá công chức, lao động:</strong>{' '}
-                <span className="font-bold text-base text-emerald-700 underline decoration-2">
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <strong className="text-slate-900 dark:text-slate-100 block">
+                    3. Tổng điểm theo dõi, đánh giá công chức, lao động:
+                  </strong>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">
+                    (Tiêu chí chung: <strong>{totalGeneralScore}đ</strong> + Điểm thực hiện nhiệm vụ: <strong>{taskWeightedScore}đ</strong>)
+                  </span>
+                </div>
+                <span className="font-extrabold text-lg text-emerald-700 dark:text-emerald-400 font-mono">
                   {grandTotalScore} / 100 điểm
                 </span>
-              </p>
+              </div>
 
-              {/* Classification Badge - Xếp loại chất lượng */}
-              <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border font-semibold text-sm mt-2 ${
-                classificationResult.classification === 'KhongHoanThanh'
-                  ? 'bg-red-50 dark:bg-red-950/30 border-red-200 text-red-700 dark:text-red-300'
-                  : classificationResult.classification === 'HoanThanh'
-                    ? 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 text-yellow-700 dark:text-yellow-300'
-                    : classificationResult.classification === 'Tot'
-                      ? 'bg-green-50 dark:bg-green-950/30 border-green-200 text-green-700 dark:text-green-300'
-                      : 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 text-purple-700 dark:text-purple-300'
-              }`}>
-                <span>Xếp loại:</span>
-                <span className="font-black">{classificationResult.classificationLabel}</span>
-                <span className="text-[11px]">({classificationResult.totalScore}đ)</span>
-                {classificationResult.isUnder100Percent && (
-                  <span className="text-red-600 dark:text-red-400 font-bold">{'⚠ Điều 7: <100%'}</span>
-                )}
+              {/* Classification Selector - Không tự động gán cứng mà cho người dùng chủ động chọn */}
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2 mt-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="block font-bold text-xs text-slate-800 dark:text-slate-200">
+                    3.1. Tự nhận xét & chọn mức xếp loại thi đua (Người dùng tự chọn):
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setSelfClassification(classificationResult.classificationLabel)}
+                    className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold flex items-center gap-1"
+                    title="Gợi ý mức theo điểm tổng hợp"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>Gợi ý theo điểm ({classificationResult.classificationLabel})</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1">
+                  {CLASSIFICATION_OPTIONS.map((opt, idx) => {
+                    const isSelected = selfClassification === opt;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => setSelfClassification(opt)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-left text-xs font-semibold transition-all ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-indigo-300'
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] shrink-0 font-bold ${
+                          isSelected ? 'bg-white text-indigo-700' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                        }`}>
+                          {idx + 1}
+                        </span>
+                        <span className="truncate">{opt}</span>
+                        {isSelected && <CheckCircle2 className="w-3.5 h-3.5 ml-auto shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center gap-2 pt-1 text-xs">
+                  <span className="text-slate-500">Mức đề xuất hiện tại:</span>
+                  <span className="font-extrabold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
+                    {selfClassification}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -1349,24 +1536,16 @@ export const OfficialWordAssessmentForm: React.FC<OfficialWordAssessmentFormProp
             <div className="grid grid-cols-2 gap-8 pt-8 text-center font-serif text-xs">
               <div>
                 <p className="font-bold uppercase tracking-wide">CÔNG CHỨC TỰ ĐÁNH GIÁ</p>
-                <div className="h-20 flex items-center justify-center">
-                  <span className="text-emerald-700 dark:text-emerald-400 font-sans font-medium text-xs bg-emerald-50 dark:bg-emerald-950/40 px-3 py-1.5 rounded-full border border-emerald-200 dark:border-emerald-800 shadow-2xs">
-                    ✓ Đã ký số điện tử
-                  </span>
-                </div>
+                <p className="italic text-slate-500 font-serif text-[11px] mt-0.5">(Ký và ghi rõ họ tên)</p>
+                <div className="h-20" />
                 <p className="font-bold text-sm text-slate-900">{fullName}</p>
-                <p className="text-[11px] text-slate-500 font-sans mt-0.5">{workUnit}</p>
               </div>
 
               <div>
                 <p className="font-bold uppercase tracking-wide">{approverInfo.title}</p>
-                <div className="h-20 flex items-center justify-center">
-                  <span className="text-indigo-700 dark:text-indigo-400 font-sans font-medium text-xs bg-indigo-50 dark:bg-indigo-950/40 px-3 py-1.5 rounded-full border border-indigo-200 dark:border-indigo-800 shadow-2xs">
-                    Chờ duyệt theo luồng
-                  </span>
-                </div>
+                <p className="italic text-slate-500 font-serif text-[11px] mt-0.5">(Ký và ghi rõ họ tên)</p>
+                <div className="h-20" />
                 <p className="font-bold text-sm text-slate-900">{approverInfo.name}</p>
-                <p className="text-[11px] text-indigo-600 dark:text-indigo-400 font-sans font-medium mt-0.5">{approverInfo.roleLabel}</p>
               </div>
             </div>
           </div>

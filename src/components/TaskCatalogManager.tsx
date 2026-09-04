@@ -32,6 +32,8 @@ interface TaskCatalogManagerProps {
   addToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, description?: string) => void;
   viewMode?: 'catalog' | 'assignment';
   onNavigate?: (tab: 'catalog' | 'assignment') => void;
+  globalRole?: string;
+  currentUser?: User | null;
 }
 
 export const TaskCatalogManager: React.FC<TaskCatalogManagerProps> = ({
@@ -43,7 +45,12 @@ export const TaskCatalogManager: React.FC<TaskCatalogManagerProps> = ({
   addToast,
   viewMode,
   onNavigate,
+  globalRole = 'ADMIN',
+  currentUser
 }) => {
+  const isStaff = globalRole === 'STAFF';
+  const canManage = globalRole === 'ADMIN' || globalRole === 'PROVINCE_LEADER' || globalRole === 'DEPT_HEAD';
+
   const [internalTab, setInternalTab] = useState<'catalog' | 'assignment'>('assignment');
   const activeTab = viewMode || internalTab;
   const setActiveTab = onNavigate || setInternalTab;
@@ -90,7 +97,7 @@ export const TaskCatalogManager: React.FC<TaskCatalogManagerProps> = ({
   
   
   const handleExportExcel = () => {
-    const wsData = [
+    const wsData: (string | number)[][] = [
       ['STT', 'Nhiệm vụ', 'Công việc chi tiết', 'Sản phẩm đầu ra', 'Phân nhóm', 'Khung điểm tối đa', 'Điểm chấm', 'Hệ số quy đổi', 'Ghi chú']
     ];
     filteredCatalog.forEach((item, idx) => {
@@ -411,25 +418,29 @@ export const TaskCatalogManager: React.FC<TaskCatalogManagerProps> = ({
               <span>Tải xuống</span>
             </button>
 
-            <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#fd7e14] hover:bg-[#e36a09] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer whitespace-nowrap">
-              <Upload className="w-3.5 h-3.5" />
-              <span>Tải lên</span>
-              <input
-                type="file"
-                accept=".xlsx, .xls, .csv"
-                onChange={handleUploadCatalogExcel}
-                className="hidden"
-              />
-            </label>
+            {!isStaff && (
+              <>
+                <label className="flex items-center gap-1.5 px-3 py-1.5 bg-[#fd7e14] hover:bg-[#e36a09] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer whitespace-nowrap">
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Tải lên</span>
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls, .csv"
+                    onChange={handleUploadCatalogExcel}
+                    className="hidden"
+                  />
+                </label>
 
-            <button
-              onClick={handleClearCatalog}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#dc3545] hover:bg-[#bb2d3b] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
-              title="Xóa dữ liệu danh mục"
-            >
-              <Trash className="w-3.5 h-3.5" />
-              <span>Xóa tất cả</span>
-            </button>
+                <button
+                  onClick={handleClearCatalog}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#dc3545] hover:bg-[#bb2d3b] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
+                  title="Xóa dữ liệu danh mục"
+                >
+                  <Trash className="w-3.5 h-3.5" />
+                  <span>Xóa tất cả</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -538,13 +549,13 @@ export const TaskCatalogManager: React.FC<TaskCatalogManagerProps> = ({
                     <th className="px-4 py-3 w-[30%] text-center border-r border-white/20">TÊN CÔNG VIỆC / BÁO CÁO</th>
                     <th className="px-4 py-3 w-[15%] text-center whitespace-nowrap border-r border-white/20">LOẠI CÔNG VIỆC</th>
                     <th className="px-4 py-3 w-[15%] text-center whitespace-nowrap border-r border-white/20">HẠN HOÀN THÀNH</th>
-                    <th className="px-4 py-3 w-[15%] text-center whitespace-nowrap">PHÂN NHÓM & LIÊN KẾT KPI</th>
+                    {!isStaff && <th className="px-4 py-3 w-[15%] text-center whitespace-nowrap">PHÂN NHÓM & LIÊN KẾT KPI</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-300 dark:divide-slate-700 font-normal">
                   {tasks.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-slate-400">
+                      <td colSpan={isStaff ? 5 : 6} className="p-8 text-center text-slate-400">
                         Chưa có dữ liệu công việc trong đơn vị. Vui lòng thêm nhiệm vụ mới hoặc tải lên file Excel.
                       </td>
                     </tr>
@@ -579,14 +590,16 @@ export const TaskCatalogManager: React.FC<TaskCatalogManagerProps> = ({
                           <td className="px-4 py-2 text-center text-slate-900 dark:text-slate-100 font-bold border-r border-slate-300 dark:border-slate-700 text-xs">
                             {formatDate(t.planDeadline)}
                           </td>
-                          <td className="px-4 py-2 text-center whitespace-nowrap">
-                            <button
-                              onClick={() => handleOpenLinkFromTask(t)}
-                              className="px-3 py-1 bg-[#6610f2] hover:bg-[#5b0ed9] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
-                            >
-                              Phân Nhóm Danh Mục
-                            </button>
-                          </td>
+                          {!isStaff && (
+                            <td className="px-4 py-2 text-center whitespace-nowrap">
+                              <button
+                                onClick={() => handleOpenLinkFromTask(t)}
+                                className="px-3 py-1 bg-[#6610f2] hover:bg-[#5b0ed9] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
+                              >
+                                Phân Nhóm Danh Mục
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       );
                     })

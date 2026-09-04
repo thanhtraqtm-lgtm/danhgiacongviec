@@ -25,7 +25,7 @@ interface TaskDataViewerProps {
   users?: User[];
   tasks: KpiTask[];
   onDeleteTask: (id: string) => void;
-  onAddTask: (task: Omit<KpiTask, 'id' | 'status' | 'scoreCalculated' | 'daysLate'>) => void;
+  onAddTask: (task: any) => void;
   onUpdateTask: (id: string, updated: Partial<KpiTask>) => void;
   onImportTasks?: (data: any[]) => void;
   onClearTasks?: () => void;
@@ -33,6 +33,8 @@ interface TaskDataViewerProps {
   selectedDepartment: string;
   setSelectedDepartment?: (dept: string) => void;
   addToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, desc?: string) => void;
+  globalRole?: string;
+  currentUser?: User | null;
 }
 
 export const TaskDataViewer: React.FC<TaskDataViewerProps> = ({
@@ -47,8 +49,11 @@ export const TaskDataViewer: React.FC<TaskDataViewerProps> = ({
   selectedDepartment,
   setSelectedDepartment,
   addToast,
+  globalRole = 'ADMIN',
+  currentUser
 }) => {
-
+  const isStaff = globalRole === 'STAFF';
+  const canManage = globalRole === 'ADMIN' || globalRole === 'PROVINCE_LEADER' || globalRole === 'DEPT_HEAD';
 
   const [searchKey, setSearchKey] = useState('');
   const [showClearConfirmTask, setShowClearConfirmTask] = useState(false);
@@ -351,33 +356,37 @@ export const TaskDataViewer: React.FC<TaskDataViewerProps> = ({
             <span>Tải xuống</span>
           </button>
 
-          <input type="file" accept=".xlsx, .xls, .csv" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#fd7e14] hover:bg-[#e36a09] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
-            title="Tải lên file Excel"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Tải lên</span>
-          </button>
+          {!isStaff && (
+            <>
+              <input type="file" accept=".xlsx, .xls, .csv" className="hidden" ref={fileInputRef} onChange={handleFileUpload} />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#fd7e14] hover:bg-[#e36a09] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
+                title="Tải lên file Excel"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Tải lên</span>
+              </button>
 
-          <button
-            onClick={() => setShowClearConfirmTask(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#dc3545] hover:bg-[#bb2d3b] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
-            title="Xóa dữ liệu"
-          >
-            <Trash className="w-3.5 h-3.5" />
-            <span>Xóa tất cả</span>
-          </button>
+              <button
+                onClick={() => setShowClearConfirmTask(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#dc3545] hover:bg-[#bb2d3b] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
+                title="Xóa dữ liệu"
+              >
+                <Trash className="w-3.5 h-3.5" />
+                <span>Xóa tất cả</span>
+              </button>
 
-          <button
-            onClick={handleOpenAdd}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#6610f2] hover:bg-[#5b0ed9] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
-            title="Thêm & Giao việc mới"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>+ Thêm mới</span>
-          </button>
+              <button
+                onClick={handleOpenAdd}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#6610f2] hover:bg-[#5b0ed9] text-white rounded-lg text-xs font-semibold shadow-xs transition-colors whitespace-nowrap"
+                title="Thêm & Giao việc mới"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Thêm mới</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -397,13 +406,13 @@ export const TaskDataViewer: React.FC<TaskDataViewerProps> = ({
                 <th className="px-3 py-3 w-24 text-center whitespace-nowrap border-r border-white/20">Hạn H.Thành</th>
                 <th className="px-3 py-3 w-40 text-center whitespace-nowrap border-r border-white/20">Tình trạng</th>
                 <th className="px-3 py-3 w-[10%] text-center border-r border-white/20">Lý do trễ hạn</th>
-                <th className="px-2 py-3 w-16 text-center whitespace-nowrap">Thao tác</th>
+                {!isStaff && <th className="px-2 py-3 w-16 text-center whitespace-nowrap">Thao tác</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-300 dark:divide-slate-700 font-normal">
               {filteredTasks.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="p-8 text-center text-slate-400">
+                  <td colSpan={isStaff ? 10 : 11} className="p-8 text-center text-slate-400">
                     Không tìm thấy dữ liệu công việc nào phù hợp.
                   </td>
                 </tr>
@@ -417,9 +426,9 @@ export const TaskDataViewer: React.FC<TaskDataViewerProps> = ({
                       {(currentPage - 1) * rowsPerPage + idx + 1}
                     </td>
                     <td 
-                      className="px-3 py-2 text-slate-900 dark:text-slate-100 font-bold leading-snug border-r border-slate-300 dark:border-slate-700 break-words cursor-pointer hover:text-sky-600 transition-colors"
-                      onDoubleClick={() => setSelectingCatalogForTask(t)}
-                      title="Nháy đúp để chọn nhóm danh mục cho công việc này"
+                      className={`px-3 py-2 text-slate-900 dark:text-slate-100 font-bold leading-snug border-r border-slate-300 dark:border-slate-700 break-words ${!isStaff ? 'cursor-pointer hover:text-sky-600 transition-colors' : ''}`}
+                      onDoubleClick={() => !isStaff && setSelectingCatalogForTask(t)}
+                      title={!isStaff ? "Nháy đúp để chọn nhóm danh mục cho công việc này" : ""}
                     >
                       {t.taskName}
                       {t.categoryGroup ? (
@@ -452,24 +461,26 @@ export const TaskDataViewer: React.FC<TaskDataViewerProps> = ({
                     <td className="px-3 py-2 text-slate-800 dark:text-slate-200 border-r border-slate-300 dark:border-slate-700 break-words">
                       {t.lateReason || '—'}
                     </td>
-                    <td className="px-2 py-2 text-center whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => handleOpenEdit(t)}
-                          className="text-sky-600 hover:text-sky-800 transition-colors p-1"
-                          title="Chỉnh sửa nhiệm vụ"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(t.id, t.taskName)}
-                          className="text-rose-600 hover:text-rose-800 transition-colors p-1"
-                          title="Xóa nhiệm vụ"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
+                    {!isStaff && (
+                      <td className="px-2 py-2 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => handleOpenEdit(t)}
+                            className="text-sky-600 hover:text-sky-800 transition-colors p-1"
+                            title="Chỉnh sửa nhiệm vụ"
+                          >
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(t.id, t.taskName)}
+                            className="text-rose-600 hover:text-rose-800 transition-colors p-1"
+                            title="Xóa nhiệm vụ"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -668,7 +679,7 @@ export const TaskDataViewer: React.FC<TaskDataViewerProps> = ({
                     className="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
                   />
                   <datalist id="user-list">
-                    {users.map(u => (
+                    {users.filter(u => u.role !== 'ADMIN' && (u.username || '').toLowerCase() !== 'admin').map(u => (
                       <option key={u.id} value={u.fullName}>{u.fullName} - {u.department}</option>
                     ))}
                   </datalist>

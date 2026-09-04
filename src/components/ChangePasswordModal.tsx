@@ -40,7 +40,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     setError(null);
     setSuccess(null);
 
-    const actualOldPass = currentUser.password || (currentUser.role === 'ADMIN' ? 'admin123' : '123456');
+    const actualOldPass = currentUser.password || '123456';
 
     if (oldPassword.trim() !== actualOldPass) {
       setError('Mật khẩu hiện tại không chính xác.');

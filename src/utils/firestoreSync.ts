@@ -37,6 +37,8 @@ import {
   KpiTask,
   LateRuleConfig,
   EvaluationPeriodConfig,
+  Meeting,
+  WeeklySchedule,
 } from '../types';
 
 const ROOT = 'kpi_data';
@@ -45,6 +47,8 @@ const TASKS_DOC = 'tasks_doc';
 const LATE_CONFIG_DOC = 'late_config_doc';
 const PERIOD_CONFIG_DOC = 'period_config_doc';
 const LOGO_DOC = 'logo_doc';
+const MEETINGS_DOC = 'meetings_doc';
+const WEEKLY_SCHEDULES_DOC = 'weekly_schedules_doc';
 
 // How long (ms) to ignore onSnapshot echoes after we write. Firestore typically
 // echoes within a few hundred ms; 2.5s is a safe, conservative window.
@@ -301,3 +305,60 @@ export async function fsLoadLogo(): Promise<string | null> {
 export async function fsSaveLogo(logoDataUrl: string): Promise<void> {
   await writeEnvelope(LOGO_DOC, logoDataUrl);
 }
+
+/* --------------------------- MEETINGS ---------------------------- */
+
+export async function fsLoadMeetings(): Promise<Meeting[] | null> {
+  const env = await readEnvelope<Meeting[]>(MEETINGS_DOC);
+  return env ? env.value : null;
+}
+
+export async function fsSaveMeetings(meetings: Meeting[]): Promise<void> {
+  await writeEnvelope(MEETINGS_DOC, meetings);
+}
+
+export function fsWatchMeetings(onData: (meetings: Meeting[], updatedAt: string) => void): Unsubscribe {
+  const ref = doc(db, ROOT, MEETINGS_DOC);
+  return onSnapshot(
+    ref,
+    (snap) => {
+      if (isPaused(MEETINGS_DOC)) return;
+      if (!snap.exists()) return;
+      const data = snap.data() as any;
+      if (!Array.isArray(data?.value)) return;
+      onData(data.value as Meeting[], data?.updatedAt ?? '');
+    },
+    () => {
+      // Silently ignore
+    },
+  );
+}
+
+/* ----------------------- WEEKLY SCHEDULES ------------------------ */
+
+export async function fsLoadWeeklySchedules(): Promise<WeeklySchedule[] | null> {
+  const env = await readEnvelope<WeeklySchedule[]>(WEEKLY_SCHEDULES_DOC);
+  return env ? env.value : null;
+}
+
+export async function fsSaveWeeklySchedules(schedules: WeeklySchedule[]): Promise<void> {
+  await writeEnvelope(WEEKLY_SCHEDULES_DOC, schedules);
+}
+
+export function fsWatchWeeklySchedules(onData: (schedules: WeeklySchedule[], updatedAt: string) => void): Unsubscribe {
+  const ref = doc(db, ROOT, WEEKLY_SCHEDULES_DOC);
+  return onSnapshot(
+    ref,
+    (snap) => {
+      if (isPaused(WEEKLY_SCHEDULES_DOC)) return;
+      if (!snap.exists()) return;
+      const data = snap.data() as any;
+      if (!Array.isArray(data?.value)) return;
+      onData(data.value as WeeklySchedule[], data?.updatedAt ?? '');
+    },
+    () => {
+      // Silently ignore
+    },
+  );
+}
+

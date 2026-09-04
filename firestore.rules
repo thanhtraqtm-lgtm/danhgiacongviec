@@ -30,6 +30,11 @@ service cloud.firestore {
       allow read, list: if isSignedIn();
       allow create, update, delete: if isSignedIn() && isValidId(userId);
     }
+
+    match /kpi_data/{docId} {
+      allow read, list: if isSignedIn();
+      allow create, update, delete: if isSignedIn() && isValidId(docId);
+    }
   }
 }
 

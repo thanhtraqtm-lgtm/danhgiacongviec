@@ -29,6 +29,7 @@ export interface User {
   birthYear?: string;
   joinDate?: string;
   position: string;
+  title?: string;
   workUnit?: string;
   department: Department | string;
   jobDescription?: string;
@@ -99,7 +100,7 @@ export interface SelfAssessmentDoc {
 
 export type UserRole = 'STAFF' | 'DEPT_HEAD' | 'PROVINCE_LEADER';
 
-export type SubmissionStatus = 'DRAFT' | 'PENDING_DEPT' | 'APPROVED_DEPT' | 'PENDING_PROVINCE' | 'APPROVED_FINAL' | 'REJECTED' | 'RECALLED';
+export type SubmissionStatus = 'DRAFT' | 'PENDING_DEPT' | 'APPROVED_DEPT' | 'PENDING_PROVINCE' | 'APPROVED_FINAL' | 'REJECTED' | 'RECALLED' | 'DELETED';
 
 export interface SelfEvalCriterion {
   id: string;
@@ -111,6 +112,16 @@ export interface SelfEvalCriterion {
   maxScore: number;
 }
 
+export const CLASSIFICATION_OPTIONS = [
+  'Hoàn thành xuất sắc nhiệm vụ',
+  'Hoàn thành tốt nhiệm vụ',
+  'Hoàn thành nhiệm vụ',
+  'Chưa hoàn thành nhiệm vụ',
+  'Không hoàn thành nhiệm vụ',
+] as const;
+
+export type ClassificationType = typeof CLASSIFICATION_OPTIONS[number];
+
 export interface WorkflowSubmission {
   id: string;
   userId: string;
@@ -119,6 +130,7 @@ export interface WorkflowSubmission {
   department: string;
   period: string; // e.g. "Kỳ đánh giá Quý IV/2025"
   selfScoreTotal: number;
+  selfClassification?: string; // Mức công chức tự chọn/đề xuất
   criteria: SelfEvalCriterion[];
   selfExplanation?: string;
   status: SubmissionStatus;
@@ -127,12 +139,14 @@ export interface WorkflowSubmission {
   deptHeadName?: string;
   deptHeadComment?: string;
   deptHeadScore?: number;
+  deptHeadClassification?: string; // Mức Trưởng phòng đánh giá & xếp loại
   deptApprovedAt?: string;
   deptHeadId?: string;
   // Province Leader review
   provinceLeaderName?: string;
   provinceLeaderComment?: string;
   finalScore?: number;
+  finalClassification?: string; // Mức Trưởng Thống kê Tỉnh quyết định xếp loại
   finalApprovedAt?: string;
   provinceLeaderId?: string;
   // Attachments
@@ -142,9 +156,24 @@ export interface WorkflowSubmission {
   // Recall/Retract
   recalledAt?: string;
   recalledBy?: string;
+  deletedAt?: string;
+  deletedBy?: string;
   // Recalculation
   recalculatedAt?: string;
   recalculatedBy?: string;
+  approverName?: string;
+  approverTitle?: string;
+  generalScore?: number;
+  taskWeightedScore?: number;
+  kpiTaskScore?: number;
+  strengthsText?: string;
+  weaknessesText?: string;
+  managerOpinionText?: string;
+  provinceUnit?: string;
+  departmentUnit?: string;
+  taskCount?: number;
+  completedTaskCount?: number;
+  kpiRows?: any[];
   // Version for tracking
   version?: number;
 }
@@ -179,6 +208,8 @@ export interface Meeting {
   endDate: string; // ISO string
   repeat: boolean;
   googleMeetLink?: string;
+  organizer?: string;
+  location?: string;
   attendees: string[]; // emails
   reminders: { type: 'notification' | 'email'; minutesBefore: number }[];
   attachments: { name: string; url: string }[];

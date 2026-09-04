@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   FileSpreadsheet, 
   Download, 
@@ -38,21 +38,11 @@ export interface TaskKpiRow {
   actualTimelineCompleted: number; // Thực tế hoàn thành KPI tiến độ
 }
 
-const DEFAULT_KPI_ROWS: TaskKpiRow[] = [
-  { id: '1', taskName: 'Báo cáo kiểm kê tài sản cố định', approvalLevel: 'Lãnh đạo đơn vị', productName: 'Báo cáo', quantity: 3, progressNote: 'Hằng tháng', note: 'Công việc chuẩn', maxScore: 100, evalScore: 90, actualQtyCompleted: 3, actualQualityCompleted: 3, actualTimelineCompleted: 3 },
-  { id: '2', taskName: 'Báo cáo thống kê định kỳ 6 tháng', approvalLevel: 'Lãnh đạo đơn vị', productName: 'Báo cáo', quantity: 1, progressNote: '6 tháng', note: '', maxScore: 100, evalScore: 90, actualQtyCompleted: 1, actualQualityCompleted: 1, actualTimelineCompleted: 1 },
-  { id: '3', taskName: 'Tờ trình ban hành quy chế nội bộ', approvalLevel: 'Lãnh đạo đơn vị', productName: 'Tờ trình/Quyết định', quantity: 20, progressNote: 'Theo yêu cầu cấp có thẩm quyền', note: '', maxScore: 100, evalScore: 90, actualQtyCompleted: 20, actualQualityCompleted: 20, actualTimelineCompleted: 20 },
-  { id: '4', taskName: 'Tờ trình thẩm định dự toán', approvalLevel: 'Lãnh đạo đơn vị', productName: 'Tờ trình', quantity: 50, progressNote: 'Theo yêu cầu cấp có thẩm quyền', note: '', maxScore: 100, evalScore: 90, actualQtyCompleted: 50, actualQualityCompleted: 50, actualTimelineCompleted: 49 },
-  { id: '5', taskName: 'Báo cáo tổng kết năm', approvalLevel: 'Lãnh đạo đơn vị', productName: 'Báo cáo', quantity: 1, progressNote: 'Năm', note: '', maxScore: 200, evalScore: 180, actualQtyCompleted: 1, actualQualityCompleted: 1, actualTimelineCompleted: 1 },
-  { id: '6', taskName: 'Tờ trình/Công văn chỉ đạo chuyên môn', approvalLevel: 'Lãnh đạo đơn vị', productName: 'Tờ trình/Công văn', quantity: 1, progressNote: 'Theo yêu cầu cấp có thẩm quyền', note: '', maxScore: 200, evalScore: 180, actualQtyCompleted: 1, actualQualityCompleted: 1, actualTimelineCompleted: 1 },
-  { id: '7', taskName: 'Báo cáo chuyên đề thống kê vĩ mô', approvalLevel: 'Lãnh đạo đơn vị', productName: 'Báo cáo', quantity: 1, progressNote: 'Năm', note: '', maxScore: 200, evalScore: 180, actualQtyCompleted: 1, actualQualityCompleted: 1, actualTimelineCompleted: 1 },
-  { id: '8', taskName: 'Tờ trình/Danh mục sản phẩm thống kê', approvalLevel: 'Lãnh đạo đơn vị', productName: 'Tờ trình/Danh mục sản phẩm', quantity: 1, progressNote: 'Theo yêu cầu cấp có thẩm quyền', note: '', maxScore: 400, evalScore: 360, actualQtyCompleted: 1, actualQualityCompleted: 1, actualTimelineCompleted: 1 },
-  { id: '9', taskName: 'Tờ trình/Công văn hướng dẫn cơ sở', approvalLevel: 'Lãnh đạo đơn vị', productName: 'Tờ trình/Công văn', quantity: 1, progressNote: 'Hằng Quý', note: '', maxScore: 400, evalScore: 360, actualQtyCompleted: 1, actualQualityCompleted: 1, actualTimelineCompleted: 1 },
-  { id: '10', taskName: 'Tờ trình/Công văn công tác Đảng', approvalLevel: 'Bí thư chi bộ', productName: 'Tờ trình/Công văn', quantity: 1, progressNote: 'Hằng Quý', note: '', maxScore: 400, evalScore: 360, actualQtyCompleted: 1, actualQualityCompleted: 1, actualTimelineCompleted: 1 },
-];
-
 interface ExcelThreeSheetKpiFormProps {
-  generalCriteriaScore?: number; // From Word form (0 - 30)
+  generalCriteriaScore?: number; // Optional initial score (0 - 30)
+  submissions?: any[];
+  docs?: any[];
+  tasks?: any[];
   users?: User[];
   currentUser?: User | null;
   selectedDepartment?: string;
@@ -63,7 +53,10 @@ interface ExcelThreeSheetKpiFormProps {
 }
 
 export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
-  generalCriteriaScore = 27,
+  generalCriteriaScore,
+  submissions = [],
+  docs = [],
+  tasks = [],
   users = [],
   currentUser,
   selectedDepartment,
@@ -80,18 +73,26 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
   // Time Period Title
   const [evalPeriodTitle, setEvalPeriodTitle] = useState(`Tháng ${new Date().getMonth() + 1} năm ${new Date().getFullYear()}`);
 
+  // Dynamic self assessment score from Mẫu Tự nhận xét (0 - 30 điểm)
+  const [selfAssessmentScore, setSelfAssessmentScore] = useState<number>(() => {
+    if (generalCriteriaScore !== undefined && generalCriteriaScore !== null) {
+      return Number(generalCriteriaScore);
+    }
+    return 0;
+  });
+
   // Staff & Department Selection
   const [selectedDept, setSelectedDept] = useState<string>(
     currentUser ? (currentUser.department || 'ALL') : (selectedDepartment && selectedDepartment !== 'ALL' ? selectedDepartment : 'ALL')
   );
   
   const [fullName, setFullName] = useState(currentUser?.fullName || '');
-  const [positionTitle, setPositionTitle] = useState(currentUser?.title || '');
+  const [positionTitle, setPositionTitle] = useState(currentUser?.position || currentUser?.title || '');
   
   useEffect(() => {
     if (currentUser) {
       setFullName(currentUser.fullName || '');
-      setPositionTitle(currentUser.title || '');
+      setPositionTitle(currentUser.position || currentUser.title || '');
       setSelectedDept(currentUser.department || 'ALL');
     } else if (selectedDepartment) {
       setSelectedDept(selectedDepartment);
@@ -99,7 +100,7 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
         const matches = (users || []).filter((u) => u.department === selectedDepartment);
         if (matches.length > 0) {
           setFullName(matches[0].fullName);
-          setPositionTitle(matches[0].title || 'Thống kê viên');
+          setPositionTitle(matches[0].position || matches[0].title || 'Thống kê viên');
         }
       }
     }
@@ -142,47 +143,220 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
     return (users || []).find((u) => u.fullName === selectedUserName);
   }, [users, selectedUserName]);
 
+  // Auto-detect self-assessment score for selected staff from localStorage, submissions or docs
+  useEffect(() => {
+    if (!selectedUserName) return;
+
+    // Check localStorage first
+    try {
+      const savedGeneral = localStorage.getItem(`kpi_general_scores_${selectedUserName.trim()}`);
+      if (savedGeneral) {
+        const d = JSON.parse(savedGeneral);
+        if (d.totalGeneralScore !== undefined && d.totalGeneralScore > 0) {
+          setSelfAssessmentScore(Number(d.totalGeneralScore));
+          return;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    const userSub = (submissions || []).find((s) => 
+      s.userId === currentStaff?.id || 
+      s.userName?.normalize('NFC').trim().toLowerCase() === selectedUserName.normalize('NFC').trim().toLowerCase()
+    );
+    if (userSub) {
+      // If submission contains criteria from Mẫu tự nhận xét
+      if (userSub.criteria && userSub.criteria.length > 0) {
+        const generalCrits = userSub.criteria.filter(
+          (c: any) => c.id?.startsWith('crit_I') || c.id?.startsWith('crit_II') || c.id?.startsWith('crit_III')
+        );
+        if (generalCrits.length > 0) {
+          const sum = generalCrits.reduce((acc: number, c: any) => acc + (Number(c.selfScore) || 0), 0);
+          if (sum > 0) {
+            setSelfAssessmentScore(Number(Math.min(30, sum).toFixed(1)));
+            return;
+          }
+        }
+      }
+      if (userSub.selfScoreTotal !== undefined && userSub.selfScoreTotal !== null) {
+        const total = Number(userSub.selfScoreTotal);
+        if (total > 0 && total <= 30) {
+          setSelfAssessmentScore(Number(total.toFixed(1)));
+          return;
+        }
+      }
+    }
+    if (generalCriteriaScore !== undefined && generalCriteriaScore !== null) {
+      setSelfAssessmentScore(Number(generalCriteriaScore));
+    }
+  }, [selectedUserName, currentStaff, submissions, generalCriteriaScore]);
+
+  // Load and synchronize KPI 3-Sheet tasks for selectedUserName
+  useEffect(() => {
+    if (!selectedUserName) return;
+    try {
+      const savedKey = `kpi_3sheet_rows_${selectedUserName.trim()}`;
+      const saved = localStorage.getItem(savedKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRows(parsed);
+          return;
+        }
+      }
+      
+      // Check if submission contains saved kpiRows
+      const userSub = (submissions || []).find((s) => 
+        s.userId === currentStaff?.id || 
+        s.userName?.normalize('NFC').trim().toLowerCase() === selectedUserName.normalize('NFC').trim().toLowerCase()
+      );
+      if (userSub?.kpiRows && Array.isArray(userSub.kpiRows) && userSub.kpiRows.length > 0) {
+        setRows(userSub.kpiRows);
+        return;
+      }
+
+      // Check if user has assigned tasks from Task Management
+      const userAssigned = (tasks || []).filter((t: any) =>
+        t.userName && t.userName.normalize('NFC').trim().toLowerCase() === selectedUserName.normalize('NFC').trim().toLowerCase()
+      );
+      if (userAssigned.length > 0) {
+        const mappedRows: TaskKpiRow[] = userAssigned.map((t: any, idx: number) => ({
+          id: String(idx + 1),
+          taskName: t.title || t.name || `Nhiệm vụ ${idx + 1}`,
+          approvalLevel: 'Lãnh đạo đơn vị',
+          productName: t.targetOutput || 'Báo cáo/Sản phẩm',
+          quantity: t.weight || 1,
+          progressNote: t.planDeadline || 'Hằng tháng',
+          note: t.note || '',
+          maxScore: 100,
+          evalScore: t.status === 'COMPLETED' ? 95 : 85,
+          actualQtyCompleted: t.weight || 1,
+          actualQualityCompleted: t.weight || 1,
+          actualTimelineCompleted: t.status === 'COMPLETED' ? (t.weight || 1) : Math.max(0, (t.weight || 1) - 1)
+        }));
+        setRows(mappedRows);
+        return;
+      }
+
+      // Default: No pre-assigned tasks, start with empty list
+      setRows([]);
+    } catch {
+      setRows([]);
+    }
+  }, [selectedUserName, currentStaff, submissions, tasks]);
+
+  // Save rows to localStorage whenever rows change for the selected user
+  const handleRowsChange = useCallback((newRows: TaskKpiRow[]) => {
+    setRows(newRows);
+    if (selectedUserName) {
+      try {
+        localStorage.setItem(`kpi_3sheet_rows_${selectedUserName.trim()}`, JSON.stringify(newRows));
+        window.dispatchEvent(new Event('kpi_data_updated'));
+      } catch {}
+    }
+  }, [selectedUserName]);
+
   const handleSaveAndSubmitForApproval = () => {
     // Khóa sổ kỳ đánh giá → không cho gửi mới
     if (periodConfig?.isLocked) {
       addToast('error', 'Kỳ Đã Khóa Sổ!', `Kỳ "${periodConfig.periodName}" đã bị khóa bởi ${periodConfig.lockedBy || 'lãnh đạo'}. Không thể gửi báo cáo KPI mới. Vui lòng liên hệ quản trị viên.`);
       return;
     }
+
+    // Strict validation: Must complete BOTH forms before submitting
+    if (sheet3Summary.generalScore30 <= 0 || (sheet3Summary.weightedTask70 <= 0 && sheet3Summary.taskExecutionScore <= 0)) {
+      addToast(
+        'error',
+        'Chưa Hoàn Thành Đủ 2 Bản Đánh Giá!',
+        'Để gửi phê duyệt, bạn phải hoàn thành đủ cả 2 phần: (1) "Điểm Tiêu chí chung" (tối đa 30đ) và (2) "Điểm thực hiện nhiệm vụ" (tối đa 70đ).'
+      );
+      return;
+    }
     const staffDept = currentStaff?.department || (selectedDept !== 'ALL' ? selectedDept : (currentUser?.department || ''));
     const staffPosition = currentStaff?.position || 'Chuyên viên';
+    const normDept = (staffDept || '').normalize('NFC').trim().toLowerCase();
+    const isCoSo = normDept.includes('thống kê cơ sở') || normDept.includes('cơ sở');
+    const defaultTitle = isCoSo ? 'TRƯỞNG THỐNG KÊ CƠ SỞ PHÊ DUYỆT' : 'TRƯỞNG PHÒNG PHÊ DUYỆT';
+
+    const isHeadOfUnit = (u?: User | null) => {
+      if (!u) return false;
+      const pos = (u.position || '').toLowerCase().trim();
+      if (pos.includes('phó') || pos.includes('pho')) return false;
+      return (
+        u.role === 'DEPT_HEAD' ||
+        pos.includes('trưởng') ||
+        pos.includes('chi cục trưởng') ||
+        pos.includes('phụ trách') ||
+        pos.includes('đội trưởng') ||
+        pos.includes('q.') ||
+        pos.includes('quyền')
+      );
+    };
+
+    // Dynamically find Department Head or Province Leader
+    const isStaffHead = isHeadOfUnit(currentStaff);
+
+    let approverName = isCoSo ? 'Trưởng Thống kê cơ sở' : 'Trưởng phòng';
+    let approverTitle = defaultTitle;
+
+    if (isStaffHead || currentStaff?.role === 'PROVINCE_LEADER') {
+      const leader = (users || []).find((u) => 
+        u.role === 'PROVINCE_LEADER' || 
+        u.department === 'Lãnh đạo' || 
+        (u.position && (u.position.toLowerCase().includes('cục trưởng') || u.position.toLowerCase().includes('phó cục trưởng')))
+      );
+      approverName = leader ? leader.fullName : 'Lãnh đạo Cục Thống kê';
+      approverTitle = 'LÃNH ĐẠO CƠ QUAN PHÊ DUYỆT';
+    } else {
+      const deptHead = (users || []).find((u) => {
+        const uDept = (u.department || '').normalize('NFC').trim().toLowerCase();
+        if (uDept !== normDept) return false;
+        return isHeadOfUnit(u);
+      });
+
+      if (deptHead && deptHead.fullName) {
+        approverName = deptHead.fullName;
+        approverTitle = isCoSo ? 'TRƯỞNG THỐNG KÊ CƠ SỞ PHÊ DUYỆT' : (deptHead.position ? `${deptHead.position.toUpperCase()} PHÊ DUYỆT` : defaultTitle);
+      } else {
+        const deputyHead = (users || []).find((u) => {
+          const uDept = (u.department || '').normalize('NFC').trim().toLowerCase();
+          if (uDept !== normDept) return false;
+          const pos = (u.position || '').toLowerCase();
+          return pos.includes('phó trưởng phòng') || pos.includes('phó chi cục trưởng') || pos.includes('phó trưởng thống kê cơ sở');
+        });
+        if (deputyHead && deputyHead.fullName) {
+          approverName = deputyHead.fullName;
+          approverTitle = isCoSo ? 'PHÓ TRƯỞNG THỐNG KÊ CƠ SỞ PHÊ DUYỆT' : 'PHÓ TRƯỞNG PHÒNG PHÊ DUYỆT';
+        } else if (staffDept) {
+          approverName = isCoSo ? `Trưởng ${staffDept}` : `Trưởng ${staffDept}`;
+        }
+      }
+    }
 
     const criteriaList: SelfEvalCriterion[] = [
       {
-        id: 'crit_kpi_qty',
-        categoryName: 'KPI Số lượng thực hiện',
-        targetDescription: `Tỷ lệ hoàn thành khối lượng: ${sheet3Summary.kpiQuantityPct}% (Quy đổi: ${sheet3Summary.convertedQtyCompleted}/${sheet3Summary.convertedQtyTarget})`,
+        id: 'crit_I_general',
+        categoryName: 'I, II, III. Tiêu chí chung (Mẫu tự nhận xét)',
+        targetDescription: `Điểm tự nhận xét các tiêu chí chung (Phẩm chất chính trị, Đạo đức lối sống, Tác phong công tác, Kỷ luật kỷ cương): ${sheet3Summary.generalScore30}/30đ`,
         plannedDeadline: evalPeriodTitle,
         actualStatus: 'Hoàn thành',
-        selfScore: Number((sheet3Summary.kpiQuantityPct * 0.35).toFixed(1)),
-        maxScore: 35.0,
-      },
-      {
-        id: 'crit_kpi_qual',
-        categoryName: 'KPI Chất lượng thực hiện',
-        targetDescription: `Tỷ lệ hoàn thành chất lượng: ${sheet3Summary.kpiQualityPct}%`,
-        plannedDeadline: evalPeriodTitle,
-        actualStatus: 'Hoàn thành',
-        selfScore: Number((sheet3Summary.kpiQualityPct * 0.35).toFixed(1)),
-        maxScore: 35.0,
-      },
-      {
-        id: 'crit_kpi_time',
-        categoryName: 'KPI Tiến độ thực hiện',
-        targetDescription: `Tỷ lệ hoàn thành tiến độ: ${sheet3Summary.kpiTimelinePct}%`,
-        plannedDeadline: evalPeriodTitle,
-        actualStatus: 'Hoàn thành',
-        selfScore: Number((sheet3Summary.kpiTimelinePct * 0.30).toFixed(1)),
+        selfScore: sheet3Summary.generalScore30,
         maxScore: 30.0,
       },
       {
-        id: 'crit_classification',
-        categoryName: 'Xếp loại chất lượng',
-        targetDescription: `Xếp loại: ${sheet3Summary.classificationLabel} - ${sheet3Summary.isUnder100Percent ? 'Dưới 100% nhiệm vụ (Điều 7)' : 'Đủ 100% nhiệm vụ'}`,
+        id: 'crit_IV_kpi',
+        categoryName: 'IV. Điểm kết quả thực hiện nhiệm vụ (KPI 70%)',
+        targetDescription: `Tỷ lệ hoàn thành: KPI Số lượng ${sheet3Summary.kpiQuantityPct}%, KPI Chất lượng ${sheet3Summary.kpiQualityPct}%, KPI Tiến độ ${sheet3Summary.kpiTimelinePct}% | Điểm thực hiện nhiệm vụ = (${sheet3Summary.kpiQuantityPct}% + ${sheet3Summary.kpiQualityPct}% + ${sheet3Summary.kpiTimelinePct}%)/3 × 70/100 = ${sheet3Summary.weightedTask70}/70đ`,
+        plannedDeadline: evalPeriodTitle,
+        actualStatus: 'Hoàn thành',
+        selfScore: sheet3Summary.weightedTask70,
+        maxScore: 70.0,
+      },
+      {
+        id: 'crit_final_eval',
+        categoryName: 'Kết quả theo dõi đánh giá',
+        targetDescription: `Kết quả theo dõi đánh giá = Điểm thực hiện nhiệm vụ (${sheet3Summary.weightedTask70}đ) + Tiêu chí chung (${sheet3Summary.generalScore30}đ) = ${sheet3Summary.finalOverallScore}/100đ | Xếp loại: ${sheet3Summary.classificationLabel} ${sheet3Summary.isUnder100Percent ? '(Dưới 100% nhiệm vụ theo Điều 7)' : ''}`,
         plannedDeadline: evalPeriodTitle,
         actualStatus: sheet3Summary.classificationLabel,
         selfScore: sheet3Summary.finalOverallScore,
@@ -190,19 +364,31 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
       }
     ];
 
+    const userSub = (submissions || []).find((s) => 
+      s.userId === currentStaff?.id || 
+      s.userName?.normalize('NFC').trim().toLowerCase() === selectedUserName.normalize('NFC').trim().toLowerCase()
+    );
+    const effectiveClassification = userSub?.selfClassification || sheet3Summary.classificationLabel;
+
     if (onSubmitWorkflow) {
       onSubmitWorkflow({
         userId: currentStaff?.id || currentUser?.id || 'usr_' + Date.now(),
         userName: selectedUserName,
         userPosition: staffPosition,
         department: staffDept,
+        approverName,
+        approverTitle,
         period: evalPeriodTitle,
         selfScoreTotal: sheet3Summary.finalOverallScore,
+        selfClassification: effectiveClassification,
         criteria: criteriaList,
-        selfExplanation: `Tự động tính từ Bảng tổng hợp KPI 3 Sheet (${displayRowsWithSheet1.length} công việc). Điểm KPI: ${sheet3Summary.finalOverallScore}/100. Xếp loại: ${sheet3Summary.classificationLabel}. ${sheet3Summary.isUnder100Percent ? 'Áp dụng Điều 7: Hoàn thành <100% nhiệm vụ = Không hoàn thành nhiệm vụ.' : ''}`,
+        selfExplanation: `Tự động tính từ Bảng tổng hợp KPI 3 Sheet (${displayRowsWithSheet1.length} công việc). Điểm KPI: ${sheet3Summary.finalOverallScore}/100. Đề xuất xếp loại: ${effectiveClassification}. ${sheet3Summary.isUnder100Percent ? 'Áp dụng Điều 7: Hoàn thành <100% nhiệm vụ = Không hoàn thành nhiệm vụ.' : ''}`,
         status: 'PENDING_DEPT',
         submittedAt: new Date().toLocaleString('vi-VN'),
         attachedFileName: `Bao_Cao_KPI_3Sheet_${selectedUserName.replace(/\s+/g, '_')}_${evalPeriodTitle.replace(/\s+/g, '_')}.xlsx`,
+        taskCount: displayRowsWithSheet1.length,
+        completedTaskCount: displayRowsWithSheet1.filter(r => (r.evalScore || 0) >= 70).length,
+        kpiRows: displayRowsWithSheet1,
       });
     }
     if (onSaveDoc) {
@@ -210,14 +396,14 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
         fileName: `Bao_Cao_KPI_3Sheet_${selectedUserName.replace(/\s+/g, '_')}_${evalPeriodTitle.replace(/\s+/g, '_')}.xlsx`,
         userName: selectedUserName,
         uploadDate: new Date().toISOString().split('T')[0],
-        extractedContent: `BÁO CÁO CHẤM ĐIỂM KPI 3 SHEET AUTOMATIC - ${selectedUserName} (${staffDept}) - ${evalPeriodTitle}\nĐiểm tổng hợp: ${sheet3Summary.finalOverallScore}/100\nKPI Số lượng: ${sheet3Summary.kpiQuantityPct}%\nKPI Chất lượng: ${sheet3Summary.kpiQualityPct}%\nKPI Tiến độ: ${sheet3Summary.kpiTimelinePct}%\nXếp loại: ${sheet3Summary.classificationLabel}\n${sheet3Summary.isUnder100Percent ? 'Áp dụng Điều 7: Hoàn thành dưới 100% nhiệm vụ = Không hoàn thành nhiệm vụ' : ''}`,
+        extractedContent: `BÁO CÁO CHẤM ĐIỂM KPI 3 SHEET AUTOMATIC - ${selectedUserName} (${staffDept}) - ${evalPeriodTitle}\nĐiểm tổng hợp: ${sheet3Summary.finalOverallScore}/100\nKPI Số lượng: ${sheet3Summary.kpiQuantityPct}%\nKPI Chất lượng: ${sheet3Summary.kpiQualityPct}%\nKPI Tiến độ: ${sheet3Summary.kpiTimelinePct}%\nĐề xuất xếp loại: ${effectiveClassification}\n${sheet3Summary.isUnder100Percent ? 'Áp dụng Điều 7: Hoàn thành dưới 100% nhiệm vụ = Không hoàn thành nhiệm vụ' : ''}`,
         wordCount: 180,
       });
     }
     addToast(
       'success',
       'Đã Lưu & Gửi Phê Duyệt Thành Công!',
-      `Hồ sơ đánh giá KPI 3 Sheet của ${selectedUserName} - Điểm: ${sheet3Summary.finalOverallScore}đ (${sheet3Summary.classificationLabel}) đã được lưu và gửi đến Trưởng phòng.`
+      `Hồ sơ đánh giá KPI 3 Sheet của ${selectedUserName} - Điểm: ${sheet3Summary.finalOverallScore}đ - Đề xuất: ${effectiveClassification} đã được lưu và gửi đến Trưởng phòng.`
     );
   };
 
@@ -309,7 +495,7 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
   // KPI SỐ LƯỢNG = (Cột 8 tổng / Cột 6 tổng) * 100
   // KPI CHẤT LƯỢNG = (Cột 10 tổng / Cột 6 tổng) * 100
   // KPI TIẾN ĐỘ = (Cột 12 tổng / Cột 6 tổng) * 100
-  // Tổng điểm theo quy định: (a+b+c)/3 * 70% + Điểm tiêu chí chung (30%)
+  // Tổng điểm theo quy định: (a+b+c)/3 * 70% + Điểm Mẫu Tự nhận xét (30%)
   // Quy định Điều 7: Nếu % số lượng < 100% → "Không hoàn thành nhiệm vụ" (<50đ)
   const sheet3Summary = useMemo(() => {
     const denom = sheet2Totals.totalConvertedQty || 1;
@@ -318,11 +504,13 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
     const kpiQualityPct = Number(((sheet2Totals.totalConvertedActualQuality / denom) * 100).toFixed(2));
     const kpiTimelinePct = Number(((sheet2Totals.totalConvertedActualTimeline / denom) * 100).toFixed(4));
 
+    const validGeneralScore = Math.min(30, Math.max(0, Number(selfAssessmentScore) || 0));
+
     const evaluation = evaluateOverallKPI(
       kpiQuantityPct,
       kpiQualityPct,
       kpiTimelinePct,
-      generalCriteriaScore,
+      validGeneralScore,
       false // isLeader - sẽ mở rộng sau
     );
 
@@ -332,12 +520,22 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
       kpiTimelinePct,
       taskExecutionScore: evaluation.taskExecutionScore,
       weightedTask70: Number(((evaluation.taskExecutionScore / 100) * 70).toFixed(2)),
+      generalScore30: validGeneralScore,
       finalOverallScore: evaluation.totalScore,
       classification: evaluation.classification,
       classificationLabel: evaluation.classificationLabel,
       isUnder100Percent: evaluation.isUnder100Percent,
     };
-  }, [sheet2Totals, generalCriteriaScore]);
+  }, [sheet2Totals, selfAssessmentScore]);
+
+  // Synchronize Sheet 3 summary to localStorage for Evaluation List and Results
+  useEffect(() => {
+    if (!selectedUserName) return;
+    try {
+      localStorage.setItem(`kpi_3sheet_summary_${selectedUserName.trim()}`, JSON.stringify(sheet3Summary));
+      window.dispatchEvent(new Event('kpi_data_updated'));
+    } catch {}
+  }, [selectedUserName, sheet3Summary]);
 
   // Table Row Add / Remove / Edit
   const handleAddRow = () => {
@@ -356,7 +554,7 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
       actualQualityCompleted: 1,
       actualTimelineCompleted: 1
     };
-    setRows([...rows, newRow]);
+    handleRowsChange([...rows, newRow]);
     addToast('info', 'Đã thêm dòng mới', 'Hãy nhập thông tin sản phẩm và điểm cá nhân tự chấm');
   };
 
@@ -365,25 +563,24 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
       addToast('warning', 'Không thể xóa', 'Bảng báo cáo cần ít nhất 1 dòng nhiệm vụ');
       return;
     }
-    setRows(rows.filter((r) => r.id !== id));
+    handleRowsChange(rows.filter((r) => r.id !== id));
   };
 
   const handleCellChange = (id: string, field: keyof TaskKpiRow, value: any) => {
-    setRows((prev) =>
-      prev.map((r) => {
-        if (r.id === id) {
-          const updated = { ...r, [field]: value };
-          // Auto sync actual quantities if quantity changes
-          if (field === 'quantity') {
-            updated.actualQtyCompleted = Number(value);
-            updated.actualQualityCompleted = Number(value);
-            updated.actualTimelineCompleted = Number(value);
-          }
-          return updated;
+    const updatedRows = rows.map((r) => {
+      if (r.id === id) {
+        const updated = { ...r, [field]: value };
+        // Auto sync actual quantities if quantity changes
+        if (field === 'quantity') {
+          updated.actualQtyCompleted = Number(value);
+          updated.actualQualityCompleted = Number(value);
+          updated.actualTimelineCompleted = Number(value);
         }
-        return r;
-      })
-    );
+        return updated;
+      }
+      return r;
+    });
+    handleRowsChange(updatedRows);
   };
 
   // Export 3-Sheet Excel File
@@ -527,8 +724,11 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Top Right Action Buttons */}
-      <div className="flex flex-wrap items-center justify-end gap-2 -mt-3 mb-2">
+      {/* Top Right Action Buttons - Cách tiêu đề trên 0.5 cm */}
+      <div 
+        className="flex flex-wrap items-center justify-end gap-2 mb-3"
+        style={{ marginTop: '0.5cm' }}
+      >
         <label className="flex items-center justify-center px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded shadow-sm hover:bg-emerald-700 transition-colors cursor-pointer">
           Nhập Excel
           <input type="file" accept=".xlsx,.xls" onChange={handleUploadExcel} className="hidden" />
@@ -578,7 +778,7 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
             <span className="text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">Cán bộ:</span>
             {currentUser ? (
                <span className="px-2.5 py-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-slate-200">
-                  {currentUser.fullName} - {currentUser.title}
+                  {currentUser.fullName} - {currentUser.position || currentUser.title || 'Chuyên viên'}
                </span>
             ) : (
                <select
@@ -588,7 +788,7 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
                >
                  {filteredUsers.map((u) => (
                    <option key={u.id} value={u.fullName}>
-                     {u.fullName} - {u.title}
+                     {u.fullName} - {u.position || u.title || 'Chuyên viên'}
                    </option>
                  ))}
                </select>
@@ -843,22 +1043,22 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
                     (12)=(11)*(5)<br />Quy đổi
                   </th>
                 </tr>
-                <tr className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 font-extrabold text-xs border-y-2 border-slate-300 dark:border-slate-700">
-                  <td colSpan={3} className="p-2 text-center uppercase tracking-wider text-white font-extrabold bg-[#006097]">
+                <tr className="bg-[#004d80] text-white font-extrabold text-xs border-y-2 border-[#003860]">
+                  <td colSpan={3} className="p-2 text-center uppercase tracking-wider text-white font-extrabold bg-[#00528a]">
                     TỔNG SỐ TÍNH ĐIỂM
                   </td>
-                  <td className="p-2 text-center text-slate-800 dark:text-slate-100 font-bold">{sheet2Totals.totalQty}</td>
-                  <td className="p-2 text-center text-slate-800 dark:text-slate-100 font-bold">{sheet2Totals.totalFactor}</td>
-                  <td className="p-2 text-center text-blue-700 dark:text-blue-300 font-bold">{sheet2Totals.totalConvertedQty}</td>
+                  <td className="p-2 text-center text-white font-bold">{sheet2Totals.totalQty}</td>
+                  <td className="p-2 text-center text-white font-bold">{sheet2Totals.totalFactor}</td>
+                  <td className="p-2 text-center text-white font-black bg-blue-900/60">{sheet2Totals.totalConvertedQty}</td>
 
-                  <td className="p-2 text-center text-slate-800 dark:text-slate-100 font-bold">{sheet2Totals.totalActualQty}</td>
-                  <td className="p-2 text-center text-emerald-700 dark:text-emerald-300 font-bold">{sheet2Totals.totalConvertedActualQty}</td>
+                  <td className="p-2 text-center text-white font-bold">{sheet2Totals.totalActualQty}</td>
+                  <td className="p-2 text-center text-white font-black bg-emerald-900/60">{sheet2Totals.totalConvertedActualQty}</td>
 
-                  <td className="p-2 text-center text-slate-800 dark:text-slate-100 font-bold">{sheet2Totals.totalActualQuality}</td>
-                  <td className="p-2 text-center text-teal-700 dark:text-teal-300 font-bold">{sheet2Totals.totalConvertedActualQuality}</td>
+                  <td className="p-2 text-center text-white font-bold">{sheet2Totals.totalActualQuality}</td>
+                  <td className="p-2 text-center text-white font-black bg-teal-900/60">{sheet2Totals.totalConvertedActualQuality}</td>
 
-                  <td className="p-2 text-center text-slate-800 dark:text-slate-100 font-bold">{sheet2Totals.totalActualTimeline}</td>
-                  <td className="p-2 text-center text-amber-700 dark:text-amber-300 font-bold">{sheet2Totals.totalConvertedActualTimeline}</td>
+                  <td className="p-2 text-center text-white font-bold">{sheet2Totals.totalActualTimeline}</td>
+                  <td className="p-2 text-center text-white font-black bg-amber-900/60">{sheet2Totals.totalConvertedActualTimeline}</td>
                 </tr>
               </thead>
 
@@ -925,14 +1125,31 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
         {/* SHEET 3 TABLE: KẾT QUẢ THEO DÕI, ĐÁNH GIÁ (SYNTHESIS SUMMARY) */}
         {/* ========================================================================= */}
         <div className="bg-white dark:bg-slate-900 rounded-lg overflow-hidden shadow-sm border border-slate-200 dark:border-slate-800">
-          <div className="bg-slate-100 dark:bg-slate-800 px-4 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-3">
+          <div className="bg-slate-100 dark:bg-slate-800 px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded uppercase font-sans">
                 SHEET 3
               </span>
               <h3 className="text-xs font-extrabold uppercase tracking-wide font-sans text-slate-800 dark:text-slate-100">
-                KẾT QUẢ THEO DÕI, ĐÁNH GIÁ TỔNG HỢP (KẾT NỐI WORD & EXCEL)
+                KẾT QUẢ THEO DÕI, ĐÁNH GIÁ TỔNG HỢP (KẾT NỐI MẪU TỰ CHẤM ĐIỂM & MẪU TỰ NHẬN XÉT)
               </h3>
+            </div>
+
+            {/* Quick adjust for Mẫu Tự nhận xét score */}
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-900 px-3 py-1 rounded-lg border border-slate-300 dark:border-slate-700 shadow-xs">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                Điểm Mẫu Tự nhận xét (Tiêu chí chung):
+              </span>
+              <input
+                type="number"
+                min="0"
+                max="30"
+                step="0.1"
+                value={selfAssessmentScore}
+                onChange={(e) => setSelfAssessmentScore(Math.min(30, Math.max(0, parseFloat(e.target.value) || 0)))}
+                className="w-16 px-1.5 py-0.5 text-center font-black text-xs text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-300 dark:border-indigo-700 rounded focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              <span className="text-xs font-bold text-slate-500">/ 30đ</span>
             </div>
           </div>
 
@@ -943,10 +1160,10 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
                 <tr className="bg-[#005ba1] text-white font-bold">
                   <th className="px-4 py-2.5 min-w-[180px] border-b-2 border-[#004499] border-r border-[#004499]">CHỈ TIÊU BẢNG</th>
                   <th className="px-3 py-2.5 w-32 text-center border-b-2 border-[#004499] border-r border-[#004499]">TỶ LỆ HOÀN THÀNH (%)</th>
-                  <th className="px-4 py-2.5 min-w-[200px] text-center border-b-2 border-[#004499] border-r border-[#004499] bg-amber-50/30 dark:bg-amber-950/30">
+                  <th className="px-4 py-2.5 min-w-[220px] text-center border-b-2 border-[#004499] border-r border-[#004499] bg-amber-50/30 dark:bg-amber-950/30">
                     ĐIỂM THỰC HIỆN NHIỆM VỤ (70%)
                   </th>
-                  <th className="px-4 py-2.5 min-w-[220px] text-center border-b-2 border-[#004499] bg-emerald-100/60 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-200 font-black">
+                  <th className="px-4 py-2.5 min-w-[260px] text-center border-b-2 border-[#004499] bg-emerald-100/60 dark:bg-emerald-950/60 text-emerald-950 dark:text-emerald-200 font-black">
                     KẾT QUẢ THEO DÕI, ĐÁNH GIÁ TỔNG HỢP (100%)
                   </th>
                 </tr>
@@ -957,16 +1174,37 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
                   <td className="px-3 py-3 w-32 text-center font-black text-indigo-600 dark:text-indigo-400 border-r border-slate-100 dark:border-slate-800">
                     {sheet3Summary.kpiQuantityPct}%
                   </td>
-                  <td rowSpan={4} className="px-4 py-4 min-w-[200px] text-center align-middle font-black text-xl text-amber-600 dark:text-amber-400 bg-amber-50/40 dark:bg-amber-950/10 border-r border-slate-100 dark:border-slate-800 border-b border-slate-100 dark:border-slate-800">
+                  <td rowSpan={4} className="px-4 py-4 min-w-[220px] text-center align-middle font-black text-xl text-amber-600 dark:text-amber-400 bg-amber-50/40 dark:bg-amber-950/10 border-r border-slate-100 dark:border-slate-800 border-b border-slate-100 dark:border-slate-800">
                     <div className="text-2xl font-black">{sheet3Summary.taskExecutionScore}</div>
+                    <div className="text-xs font-bold text-amber-700 dark:text-amber-300 mt-0.5">
+                      Quy đổi 70% = {sheet3Summary.weightedTask70} đ
+                    </div>
                     <div className="text-[11px] font-normal text-slate-500 mt-1">
                       (Trung bình KPI Số lượng, Chất lượng, Tiến độ)
                     </div>
                   </td>
-                  <td rowSpan={4} className="px-4 py-4 min-w-[220px] text-center align-middle font-black text-3xl text-emerald-600 dark:text-emerald-400 bg-emerald-50/60 dark:bg-emerald-950/30 border-slate-100 dark:border-slate-800 border-b border-slate-100 dark:border-slate-800">
-                    <div className="text-3xl font-black">{sheet3Summary.finalOverallScore}</div>
-                    <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 mt-1">
-                      = ({sheet3Summary.taskExecutionScore} / 100 * 70) + {generalCriteriaScore} (Tiêu chí chung)
+                  <td rowSpan={4} className="px-4 py-4 min-w-[260px] text-center align-middle font-black bg-emerald-50/60 dark:bg-emerald-950/30 border-slate-100 dark:border-slate-800 border-b border-slate-100 dark:border-slate-800">
+                    <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400">{sheet3Summary.finalOverallScore} <span className="text-sm font-semibold text-slate-500">/ 100đ</span></div>
+                    
+                    <div className="mt-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white/80 dark:bg-slate-800/80 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-0.5">Công thức tính điểm:</div>
+                      <div>
+                        = <span className="text-amber-700 dark:text-amber-300 font-bold">{sheet3Summary.weightedTask70}đ</span> (Tự chấm 70%) + <span className="text-indigo-700 dark:text-indigo-300 font-bold">{sheet3Summary.generalScore30}đ</span> (Tự nhận xét 30%)
+                      </div>
+                    </div>
+
+                    <div className="mt-2.5 flex items-center justify-center gap-1.5 text-xs">
+                      <span className="text-slate-600 dark:text-slate-300 font-medium">Mẫu Tự nhận xét:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="30"
+                        step="0.1"
+                        value={selfAssessmentScore}
+                        onChange={(e) => setSelfAssessmentScore(Math.min(30, Math.max(0, parseFloat(e.target.value) || 0)))}
+                        className="w-16 px-1.5 py-0.5 text-center font-bold text-indigo-700 dark:text-indigo-300 bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-600 rounded focus:ring-1 focus:ring-indigo-500 text-xs"
+                      />
+                      <span className="text-slate-500 font-bold">/ 30đ</span>
                     </div>
                   </td>
                 </tr>
@@ -993,10 +1231,10 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
                   <td className="px-3 py-3 w-32 text-center font-black text-emerald-800 dark:text-emerald-200 border-r border-slate-100 dark:border-slate-800">
                     {sheet3Summary.isUnder100Percent ? '⚠ Dưới 100%' : 'Đủ 100%'}
                   </td>
-                  <td className="px-4 py-3 min-w-[200px] text-center align-middle font-black text-xl text-emerald-600 dark:text-emerald-400 bg-emerald-100/50 dark:bg-emerald-950/50 border-r border-slate-100 dark:border-slate-800">
+                  <td className="px-4 py-3 min-w-[220px] text-center align-middle font-black text-xl text-emerald-600 dark:text-emerald-400 bg-emerald-100/50 dark:bg-emerald-950/50 border-r border-slate-100 dark:border-slate-800">
                     {sheet3Summary.classificationLabel}
                   </td>
-                  <td className="px-4 py-3 min-w-[220px] text-center align-middle font-black text-2xl text-emerald-600 dark:text-emerald-400 bg-emerald-100/50 dark:bg-emerald-950/50 border-slate-100 dark:border-slate-800">
+                  <td className="px-4 py-3 min-w-[260px] text-center align-middle font-black text-2xl text-emerald-600 dark:text-emerald-400 bg-emerald-100/50 dark:bg-emerald-950/50 border-slate-100 dark:border-slate-800">
                     {sheet3Summary.classification === 'KhongHoanThanh' ? '🔴' : sheet3Summary.classification === 'HoanThanh' ? '🟡' : sheet3Summary.classification === 'Tot' ? '🟢' : '🟣'}
                     <div className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 mt-1">
                       {sheet3Summary.isUnder100Percent && <span>{'Áp dụng Điều 7: <100% = Không hoàn thành'}</span>}
@@ -1008,9 +1246,9 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
           </div>
 
           {/* Manager Submission Action Bar */}
-          <div className="p-5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/80 flex flex-col md:flex-row items-center justify-between gap-4 mt-6">
-            <div className="flex items-center gap-3 flex-1">
-              <div className="p-2.5 rounded-xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 font-bold">
+          <div className="p-4 sm:p-5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700/80 flex flex-col sm:flex-row items-center justify-between gap-4 mt-6">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 font-bold shrink-0">
                 <UserCheck className="w-5 h-5" />
               </div>
               <div>
@@ -1018,34 +1256,17 @@ export const ExcelThreeSheetKpiForm: React.FC<ExcelThreeSheetKpiFormProps> = ({
                   Hoàn Tất Tự Chấm Điểm & Trình Duyệt
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Sau khi kiểm tra kết quả tính toán tự động ở 3 Sheet, bấm nút bên phải để lưu hồ sơ và chuyển Trưởng phòng phê duyệt.
+                  Kiểm tra kết quả tổng hợp KPI 3 Sheet, điểm tổng kết: <strong className="text-emerald-600 dark:text-emerald-400 font-mono">{sheet3Summary.finalOverallScore}/100đ</strong> ({sheet3Summary.classificationLabel}).
                 </p>
               </div>
             </div>
 
-            {/* Classification Summary Badge */}
-            <div className={`flex items-center gap-3 px-4 py-2 rounded-xl border font-semibold text-sm ${
-              sheet3Summary.classification === 'KhongHoanThanh' 
-                ? 'bg-red-50 dark:bg-red-950/30 border-red-200 text-red-700 dark:text-red-300' 
-                : sheet3Summary.classification === 'HoanThanh' 
-                  ? 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-200 text-yellow-700 dark:text-yellow-300'
-                  : sheet3Summary.classification === 'Tot' 
-                    ? 'bg-green-50 dark:bg-green-950/30 border-green-200 text-green-700 dark:text-green-300'
-                    : 'bg-purple-50 dark:bg-purple-950/30 border-purple-200 text-purple-700 dark:text-purple-300'
-            }`}>
-              <span>Xếp loại:</span>
-              <span className="font-black">{sheet3Summary.classificationLabel}</span>
-              <span className="text-[11px]">({sheet3Summary.finalOverallScore}đ)</span>
-              {sheet3Summary.isUnder100Percent && (
-                <span className="text-red-600 dark:text-red-400 font-bold">{'⚠ Điều 7: <100%'}</span>
-              )}
-            </div>
-
             <button
               onClick={handleSaveAndSubmitForApproval}
-              className="flex items-center justify-center px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded shadow-sm hover:bg-emerald-700 transition-colors w-full md:w-auto"
+              className="flex items-center justify-center px-5 py-2.5 bg-emerald-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-emerald-700 transition-colors w-full sm:w-auto shrink-0 cursor-pointer"
             >
-              Lưu & Gửi Phê Duyệt
+              <Send className="w-3.5 h-3.5 mr-1.5" />
+              <span>Lưu & Gửi Phê Duyệt</span>
             </button>
           </div>
         </div>

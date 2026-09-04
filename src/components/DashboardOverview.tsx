@@ -17,7 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  User,
+  User as UserIcon,
   Users
 } from 'lucide-react';
 import { 
@@ -36,24 +36,25 @@ import {
   Cell,
   RadialBarChart,
   RadialBar,
-  PolarAngleAxis
+  PolarAngleAxis,
+  LabelList
 , ComposedChart, Line } from 'recharts';
-import { KpiTask, DEPARTMENTS, WeeklySchedule } from '../types/index';
+import { User, KpiTask, DEPARTMENTS, WeeklySchedule, WorkflowSubmission, EvaluationPeriodConfig } from '../types/index';
 import { Award, ShieldAlert } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import {
+  getTaskBlockGroup,
+  isDepartmentMatch,
+  classifyTaskStatus,
+  resolveCanonicalDepartment,
+} from '../utils/departmentClassification';
+import { computeUserScorecardList, computeClassificationStats } from '../utils/evaluationClassification';
 
 // Constants for Weekly Schedule Matrix
 const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'];
 const DAY_LABELS_SHORT = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 const SESSIONS = ['MORNING', 'AFTERNOON'];
 const SESSION_LABELS = { MORNING: 'Sáng', AFTERNOON: 'Chiều' };
-
-const DEFAULT_LEADERS = [
-  { name: 'Đào Trọng Truyền', position: 'Trưởng Thống kê' },
-  { name: 'Đào Thị Hiếu', position: 'Phó Trưởng Thống kê' },
-  { name: 'Vũ Tuấn Hùng', position: 'Phó Trưởng Thống kê' },
-  { name: 'Phạm Văn Tự', position: 'Phó Trưởng Thống kê' },
-];
 
 interface DashboardOverviewProps {
   tasks: KpiTask[];
@@ -63,6 +64,9 @@ interface DashboardOverviewProps {
   addToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, description?: string) => void;
   onNavigateToTasks?: () => void;
   globalRole?: string;
+  users?: User[];
+  submissions?: WorkflowSubmission[];
+  periodConfig?: EvaluationPeriodConfig;
 }
 
 // Normalize a department/status string for robust matching:
@@ -77,18 +81,6 @@ const normStr = (s: string): string =>
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
-
-// Check if a task belongs to a department using fuzzy/normalized matching
-const deptMatches = (taskDept: string | undefined, targetDept: string): boolean =>
-  normStr(taskDept || 'Chưa phân bổ') === normStr(targetDept);
-
-// Normalize a task status string for robust matching (handles Vietnamese variants
-// like "Hoàn thành", "hoàn thành", "Hoan thanh", extra spaces, NFC/NFD differences)
-const normStatus = (s: string | undefined): string => normStr(s || '');
-
-// Check if a task status matches one of several expected statuses (fuzzy)
-const statusIn = (taskStatus: string | undefined, expected: string[]): boolean =>
-  expected.some(e => normStatus(taskStatus) === normStatus(e));
 
 // Custom tooltip that shows the full department name (fullName) when available,
 // so truncated X-axis labels don't hide information.
@@ -117,6 +109,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   addToast,
   onNavigateToTasks,
   globalRole,
+  users = [],
+  submissions = [],
+  periodConfig,
 }) => {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -135,144 +130,118 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   // (stats moved below — it now derives from phongStats + vung1Stats + vung2Stats
   //  so that Tổng chung EXACTLY equals the sum of the 3 region blocks.)
 
-  // Chart Data 1: Trend over months computed from REAL task deadlines (planDeadline)
-  // Groups tasks by month based on their planDeadline (DD/MM/YYYY or YYYY-MM-DD).
-  // hoanThanh = completed-on-time, treHan = late (either completed-late or unfinished-late).
-  const trendChartData = useMemo(() => {
-    const safeTasks = (tasks || []).filter(t =>
-      (selectedDepartment || '').toUpperCase() === 'ALL' || deptMatches(t.department, selectedDepartment)
-    );
-    const buckets: Record<string, { hoanThanh: number; treHan: number; chuaHoanThanh: number }> = {};
-    const monthLabel = (y: number, m: number) => `T${m + 1}/${String(y).slice(2)}`;
-    safeTasks.forEach(t => {
-      const raw = (t.planDeadline || '').trim();
-      if (!raw) return;
-      let d: Date | null = null;
-      if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
-        d = new Date(raw.slice(0, 10));
-      } else {
-        const parts = raw.split(/[\/\-.]/);
-        if (parts.length >= 3) {
-          const dd = parseInt(parts[0], 10);
-          const mm = parseInt(parts[1], 10) - 1;
-          const yyyy = parseInt(parts[2], 10);
-          if (!isNaN(dd) && !isNaN(mm) && !isNaN(yyyy)) d = new Date(yyyy, mm, dd);
-        }
-      }
-      if (!d || isNaN(d.getTime())) return;
-      const key = monthLabel(d.getFullYear(), d.getMonth());
-      if (!buckets[key]) buckets[key] = { hoanThanh: 0, treHan: 0, chuaHoanThanh: 0 };
-      const s = t.status || '';
-      if (statusIn(s, ['Hoàn thành', 'Đúng hạn'])) buckets[key].hoanThanh++;
-      else if (statusIn(s, ['Hoàn thành trễ hạn', 'Chưa hoàn thành trễ hạn', 'Trễ hạn'])) buckets[key].treHan++;
-      else if (statusIn(s, ['Chưa hoàn thành'])) buckets[key].chuaHoanThanh++;
-    });
-    const sortedKeys = Object.keys(buckets).sort((a, b) => {
-      const ma = parseInt(a.slice(1, a.indexOf('/')), 10);
-      const ya = parseInt(a.slice(a.indexOf('/') + 1), 10);
-      const mb = parseInt(b.slice(1, b.indexOf('/')), 10);
-      const yb = parseInt(b.slice(b.indexOf('/') + 1), 10);
-      return ya * 100 + ma - (yb * 100 + mb);
-    });
-    return sortedKeys.map(k => {
-      const total = buckets[k].hoanThanh + buckets[k].treHan + buckets[k].chuaHoanThanh;
-      const completionPct = total
-        ? Math.round(((buckets[k].hoanThanh + buckets[k].treHan) / total) * 100)
-        : 0;
-      return {
-        period: k,
-        hoanThanh: buckets[k].hoanThanh,
-        treHan: buckets[k].treHan,
-        chuaHoanThanh: buckets[k].chuaHoanThanh,
-        total,
-        completionPct,
-      };
-    });
-  }, [tasks, selectedDepartment]);
-
-  // Chart Data: Late tasks by 19 units (hoàn thành trễ hạn + chưa hoàn thành trễ hạn)
-  // Used by the single-green-bar + 2-line overlay chart replacing the monthly trend.
-
-  // Chart Data 2: Horizontal Bar Chart for Top 5 Departments
-  // MOCK DATA REMOVED: using real task arrays for charts
   // Split DEPARTMENTS into categories
   const phongList = DEPARTMENTS.slice(1, 6);
   const vung1List = DEPARTMENTS.slice(6, 13);
   const vung2List = DEPARTMENTS.slice(13, 20);
 
-  const calculateUnitData = (unitList, allTasks) => {
-    return unitList.map((d) => {
-      const deptTasks = allTasks.filter((t) => deptMatches(t.department, d));
-      const total = deptTasks.length;
-      const completed = deptTasks.filter((t) => statusIn(t.status, ['Hoàn thành', 'Đúng hạn'])).length;
-      const completedLate = deptTasks.filter((t) => statusIn(t.status, ['Hoàn thành trễ hạn'])).length;
-      const unfinished = deptTasks.filter((t) => statusIn(t.status, ['Chưa hoàn thành'])).length;
-      const unfinishedLate = deptTasks.filter((t) => statusIn(t.status, ['Chưa hoàn thành trễ hạn', 'Trễ hạn'])).length;
+  // Consolidated Single-Pass Metrics Calculation across all 4597 tasks
+  const {
+    allStats,
+    stats,
+    phongData,
+    vung1Data,
+    vung2Data,
+    phongStats,
+    vung1Stats,
+    vung2Stats,
+    blockData,
+    stats3Blocks
+  } = useMemo(() => {
+    const allTasks = tasks || [];
+    const total = allTasks.length;
 
+    // Fast unit counters map for all 19 units
+    type UnitCounter = {
+      completed: number;
+      completedLate: number;
+      unfinished: number;
+      unfinishedLate: number;
+      total: number;
+    };
+    const unitMap = new Map<string, UnitCounter>();
+    for (let i = 1; i <= 19; i++) {
+      unitMap.set(DEPARTMENTS[i], {
+        completed: 0,
+        completedLate: 0,
+        unfinished: 0,
+        unfinishedLate: 0,
+        total: 0
+      });
+    }
+
+    let completed = 0;
+    let completedLate = 0;
+    let unfinished = 0;
+    let late = 0;
+
+    for (let i = 0; i < allTasks.length; i++) {
+      const t = allTasks[i];
+      const cat = classifyTaskStatus(t.status);
+      if (cat === 'COMPLETED') completed++;
+      else if (cat === 'COMPLETED_LATE') completedLate++;
+      else if (cat === 'LATE') late++;
+      else unfinished++;
+
+      const canonical = resolveCanonicalDepartment(t.department, t.userName, users);
+      if (canonical) {
+        const u = unitMap.get(canonical);
+        if (u) {
+          u.total++;
+          if (cat === 'COMPLETED') u.completed++;
+          else if (cat === 'COMPLETED_LATE') u.completedLate++;
+          else if (cat === 'LATE') u.unfinishedLate++;
+          else u.unfinished++;
+        }
+      }
+    }
+
+    const completionRate = total ? Math.round(((completed + completedLate) / total) * 100) : 0;
+    const lateRate = total ? Math.round(((late + completedLate) / total) * 100) : 0;
+    const allStatsResult = { total, completed, completedLate, unfinished, late, completionRate, lateRate };
+    const statsResult = { total, completed, nearDeadline: 0, late, completedLate, unfinished, completionRate, lateRate };
+
+    const mapToUnitItem = (d: string) => {
+      const u = unitMap.get(d) || { completed: 0, completedLate: 0, unfinished: 0, unfinishedLate: 0, total: 0 };
       const shortName = d
         .replace('Phòng Thống kê ', 'P.TK ')
         .replace('Thống kê cơ sở ', 'CS ')
         .replace('Thống kê cở sở ', 'CS ');
-        
       return {
         name: shortName.length > 20 ? shortName.slice(0, 20) + '…' : shortName,
         fullName: d,
-        'Tổng việc': total,
-        'Hoàn thành': completed,
-        'Hoàn thành trễ hạn': completedLate,
-        'Chưa hoàn thành': unfinished,
-        'Chưa hoàn thành trễ hạn': unfinishedLate,
-        'Tổng hoàn thành': completed + completedLate,
-        'Tổng chưa hoàn thành': unfinished + unfinishedLate
+        'Tổng việc': u.total,
+        'Hoàn thành': u.completed,
+        'Hoàn thành trễ hạn': u.completedLate,
+        'Chưa hoàn thành': u.unfinished,
+        'Chưa hoàn thành trễ hạn': u.unfinishedLate,
+        'Tổng hoàn thành': u.completed + u.completedLate,
+        'Tổng chưa hoàn thành': u.unfinished + u.unfinishedLate
       };
-    });
-  };
+    };
 
-  
-  
-  const staffRatings = useMemo(() => {
-    const userTasks: Record<string, any> = {};
-    (tasks || []).forEach(t => {
-      if(!userTasks[t.userName]) userTasks[t.userName] = { total: 0, completed: 0, late: 0 };
-      userTasks[t.userName].total++;
-      if(statusIn(t.status, ['Hoàn thành', 'Đúng hạn'])) userTasks[t.userName].completed++;
-      if(statusIn(t.status, ['Trễ hạn', 'Chưa hoàn thành trễ hạn', 'Hoàn thành trễ hạn'])) userTasks[t.userName].late++;
-    });
+    const pData = phongList.map(mapToUnitItem);
+    const v1Data = vung1List.map(mapToUnitItem);
+    const v2Data = vung2List.map(mapToUnitItem);
 
-    let xuatSac = 0, tot = 0, hoanThanh = 0, khongHoanThanh = 0;
-    Object.values(userTasks).forEach(u => {
-      const rate = u.total > 0 ? u.completed / u.total : 0;
-      if (rate === 1 && u.late === 0) xuatSac++;
-      else if (rate >= 0.8) tot++;
-      else if (rate >= 0.5) hoanThanh++;
-      else khongHoanThanh++;
-    });
+    const calcGroupStats = (dataList: ReturnType<typeof mapToUnitItem>[]) => {
+      return dataList.reduce((acc, curr) => {
+        acc.total += curr['Tổng việc'];
+        acc.completed += curr['Hoàn thành'];
+        acc.completedLate += curr['Hoàn thành trễ hạn'];
+        acc.unfinished += curr['Chưa hoàn thành'];
+        acc.unfinishedLate += curr['Chưa hoàn thành trễ hạn'];
+        acc.totalCompleted += curr['Hoàn thành'] + curr['Hoàn thành trễ hạn'];
+        acc.totalUnfinished += curr['Chưa hoàn thành'] + curr['Chưa hoàn thành trễ hạn'];
+        return acc;
+      }, { total: 0, completed: 0, completedLate: 0, unfinished: 0, unfinishedLate: 0, totalCompleted: 0, totalUnfinished: 0 });
+    };
 
-    // Mock data if empty for visual
-    if (Object.keys(userTasks).length === 0) {
-      return [
-        { name: 'HT xuất sắc', value: 15, color: '#1a65ff' },
-        { name: 'HT tốt NV', value: 45, color: '#03c39a' },
-        { name: 'HT nhiệm vụ', value: 20, color: '#f59e0b' },
-        { name: 'Không HT', value: 5, color: '#fe275d' }
-      ];
-    }
+    const pStats = calcGroupStats(pData);
+    const v1Stats = calcGroupStats(v1Data);
+    const v2Stats = calcGroupStats(v2Data);
 
-    return [
-      { name: 'HT xuất sắc', value: xuatSac, color: '#1a65ff' },
-      { name: 'HT tốt NV', value: tot, color: '#03c39a' },
-      { name: 'HT nhiệm vụ', value: hoanThanh, color: '#f59e0b' },
-      { name: 'Không HT', value: khongHoanThanh, color: '#fe275d' }
-    ];
-  }, [tasks]);
-
-  const phongData = useMemo(() => calculateUnitData(phongList, tasks || []), [tasks]);
-  const vung1Data = useMemo(() => calculateUnitData(vung1List, tasks || []), [tasks]);
-  const vung2Data = useMemo(() => calculateUnitData(vung2List, tasks || []), [tasks]);
-  const deptBar19Data = useMemo(() => calculateUnitData(DEPARTMENTS.slice(1), tasks || []), [tasks]);
-
-  const blockData = useMemo(() => {
-    const sumUp = (dataList) => dataList.reduce((acc, curr) => ({
+    const sumUp = (dataList: ReturnType<typeof mapToUnitItem>[]) => dataList.reduce((acc, curr) => ({
       'Tổng việc': acc['Tổng việc'] + curr['Tổng việc'],
       'Hoàn thành': acc['Hoàn thành'] + curr['Hoàn thành'],
       'Hoàn thành trễ hạn': acc['Hoàn thành trễ hạn'] + curr['Hoàn thành trễ hạn'],
@@ -280,77 +249,70 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       'Chưa hoàn thành trễ hạn': acc['Chưa hoàn thành trễ hạn'] + curr['Chưa hoàn thành trễ hạn'],
       'Trễ hạn': acc['Trễ hạn'] + curr['Hoàn thành trễ hạn'] + curr['Chưa hoàn thành trễ hạn']
     }), { 'Tổng việc': 0, 'Hoàn thành': 0, 'Hoàn thành trễ hạn': 0, 'Chưa hoàn thành': 0, 'Chưa hoàn thành trễ hạn': 0, 'Trễ hạn': 0 });
-    
-    return [
-      { name: '5 Phòng', ...sumUp(phongData) },
-      { name: 'Vùng 1', ...sumUp(vung1Data) },
-      { name: 'Vùng 2', ...sumUp(vung2Data) }
+
+    const bData = [
+      { name: '5 Phòng', ...sumUp(pData) },
+      { name: 'Vùng 1', ...sumUp(v1Data) },
+      { name: 'Vùng 2', ...sumUp(v2Data) }
     ];
-  }, [phongData, vung1Data, vung2Data]);
 
-  const calcStatsForGroup = (dataList) => {
-    return dataList.reduce((acc, curr) => {
-      acc.total += curr['Tổng việc'];
-      acc.completed += curr['Hoàn thành'];
-      acc.completedLate += curr['Hoàn thành trễ hạn'];
-      acc.unfinished += curr['Chưa hoàn thành'];
-      acc.unfinishedLate += curr['Chưa hoàn thành trễ hạn'];
-      // Tổng đã hoàn thành (đúng hạn + trễ hạn)
-      acc.totalCompleted += curr['Hoàn thành'] + curr['Hoàn thành trễ hạn'];
-      // Tổng chưa hoàn thành (trong hạn + trễ hạn)
-      acc.totalUnfinished += curr['Chưa hoàn thành'] + curr['Chưa hoàn thành trễ hạn'];
-      return acc;
-    }, { total: 0, completed: 0, completedLate: 0, unfinished: 0, unfinishedLate: 0, totalCompleted: 0, totalUnfinished: 0 });
-  };
+    const s3Blocks = {
+      total: pStats.total + v1Stats.total + v2Stats.total,
+      completed: pStats.completed + v1Stats.completed + v2Stats.completed,
+      completedLate: pStats.completedLate + v1Stats.completedLate + v2Stats.completedLate,
+      unfinished: pStats.unfinished + v1Stats.unfinished + v2Stats.unfinished,
+      late: pStats.unfinishedLate + v1Stats.unfinishedLate + v2Stats.unfinishedLate,
+      completionRate: 0,
+    };
 
-  const phongStats = useMemo(() => calcStatsForGroup(phongData), [phongData]);
-  const vung1Stats = useMemo(() => calcStatsForGroup(vung1Data), [vung1Data]);
-  const vung2Stats = useMemo(() => calcStatsForGroup(vung2Data), [vung2Data]);
+    return {
+      allStats: allStatsResult,
+      stats: statsResult,
+      phongData: pData,
+      vung1Data: v1Data,
+      vung2Data: v2Data,
+      phongStats: pStats,
+      vung1Stats: v1Stats,
+      vung2Stats: v2Stats,
+      blockData: bData,
+      stats3Blocks: s3Blocks
+    };
+  }, [tasks, users]);
 
-  // Calculate 6 Stat Cards metrics ("Tổng chung") - sum of 3 blocks only
-  // Excludes 'Lãnh đạo' and 'Chưa phân bổ' to match sum of 5 Phòng + Vùng 1 + Vùng 2
-  const stats = useMemo(() => {
-    const total = phongStats.total + vung1Stats.total + vung2Stats.total;
-    const completed = phongStats.completed + vung1Stats.completed + vung2Stats.completed;
-    const completedLate = phongStats.completedLate + vung1Stats.completedLate + vung2Stats.completedLate;
-    const unfinished = phongStats.unfinished + vung1Stats.unfinished + vung2Stats.unfinished;
-    const late = phongStats.unfinishedLate + vung1Stats.unfinishedLate + vung2Stats.unfinishedLate;
-    const nearDeadline = 0;
-    const completionRate = total ? Math.round(((completed + completedLate) / total) * 100) : 0;
-    const lateRate = total ? Math.round(((late + completedLate) / total) * 100) : 0;
-    return { total, completed, nearDeadline, late, completedLate, unfinished, completionRate, lateRate };
-  }, [phongStats, vung1Stats, vung2Stats]);
+  // Scorecard list matching exactly column "Xếp loại thi đua" in EvaluationResults
+  const scorecardList = useMemo(() => {
+    // If a specific department is selected, filter users to that department
+    const targetUsers = (selectedDepartment && selectedDepartment.toUpperCase() !== 'ALL')
+      ? (users || []).filter(u => isDepartmentMatch(u.department, selectedDepartment, undefined, users))
+      : (users || []);
 
-  // ALL tasks stats (including Lãnh đạo and Chưa phân bổ) - for accurate total count
-  const allStats = useMemo(() => {
-    const allTasks = tasks || [];
-    const total = allTasks.length;
-    const completed = allTasks.filter((t) => statusIn(t.status, ['Hoàn thành', 'Đúng hạn'])).length;
-    const completedLate = allTasks.filter((t) => statusIn(t.status, ['Hoàn thành trễ hạn'])).length;
-    const unfinished = allTasks.filter((t) => statusIn(t.status, ['Chưa hoàn thành'])).length;
-    const late = allTasks.filter((t) => statusIn(t.status, ['Chưa hoàn thành trễ hạn', 'Trễ hạn'])).length;
-    const completionRate = total ? Math.round(((completed + completedLate) / total) * 100) : 0;
-    const lateRate = total ? Math.round(((late + completedLate) / total) * 100) : 0;
-    return { total, completed, completedLate, unfinished, late, completionRate, lateRate };
-  }, [tasks]);
+    return computeUserScorecardList(targetUsers, submissions || [], tasks || [], periodConfig);
+  }, [users, submissions, tasks, periodConfig, selectedDepartment]);
 
-  // Tổng cộng 3 khối (dùng riêng cho bảng so sánh 3 khối ở dưới) - same as stats now
-  const stats3Blocks = useMemo(() => ({
-    total: phongStats.total + vung1Stats.total + vung2Stats.total,
-    completed: phongStats.completed + vung1Stats.completed + vung2Stats.completed,
-    completedLate: phongStats.completedLate + vung1Stats.completedLate + vung2Stats.completedLate,
-    unfinished: phongStats.unfinished + vung1Stats.unfinished + vung2Stats.unfinished,
-    late: phongStats.unfinishedLate + vung1Stats.unfinishedLate + vung2Stats.unfinishedLate,
-    completionRate: 0,
-  }), [phongStats, vung1Stats, vung2Stats]);
+  const classificationStats = useMemo(() => {
+    return computeClassificationStats(scorecardList);
+  }, [scorecardList]);
 
-  // Fix completionRate for stats3Blocks
-  useEffect(() => {
-    const total = phongStats.total + vung1Stats.total + vung2Stats.total;
-    const completed = phongStats.completed + vung1Stats.completed + vung2Stats.completed;
-    const completedLate = phongStats.completedLate + vung1Stats.completedLate + vung2Stats.completedLate;
-    // Note: can't modify stats3Blocks directly, will compute inline where needed
-  }, [phongStats, vung1Stats, vung2Stats]);
+  // Chart data for "Đánh giá xếp loại cán bộ" based directly on column "Xếp loại thi đua"
+  const staffRatings = useMemo(() => {
+    const list = [
+      { name: 'HT xuất sắc', value: classificationStats.excellent, color: '#1a65ff', fullLabel: 'Hoàn thành xuất sắc nhiệm vụ' },
+      { name: 'HT tốt NV', value: classificationStats.good, color: '#03c39a', fullLabel: 'Hoàn thành tốt nhiệm vụ' },
+      { name: 'HT nhiệm vụ', value: classificationStats.completed, color: '#f59e0b', fullLabel: 'Hoàn thành nhiệm vụ' },
+      { name: 'Không HT', value: classificationStats.failed, color: '#fe275d', fullLabel: 'Không hoàn thành nhiệm vụ' }
+    ];
+
+    if (classificationStats.unclassified > 0) {
+      list.push({ 
+        name: 'Chưa xếp loại', 
+        value: classificationStats.unclassified, 
+        color: '#94a3b8', 
+        fullLabel: 'Chưa xếp loại thi đua' 
+      });
+    }
+
+    return list;
+  }, [classificationStats]);
 
   const completionDonutData = useMemo(() => {
     // Đã hoàn thành = đúng hạn + trễ hạn (đều là đã xong)
@@ -366,36 +328,39 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
 
   // Filtered tasks table
   const filteredTasks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const isAllDept = !selectedDepartment || selectedDepartment.toUpperCase() === 'ALL';
+    const activeFilter = activeCardFilter !== 'ALL' ? activeCardFilter : statusFilter;
+
     return (tasks || []).filter(t => {
       // Group Filter Logic
-      if (selectedGroup === 'PHONG' && !phongList.some(d => deptMatches(t.department, d))) return false;
-      if (selectedGroup === 'VUNG1' && !vung1List.some(d => deptMatches(t.department, d))) return false;
-      if (selectedGroup === 'VUNG2' && !vung2List.some(d => deptMatches(t.department, d))) return false;
-
-      // Department filter logic
-      const matchesDept =
-        (selectedDepartment || '').toUpperCase() === 'ALL' || deptMatches(t.department, selectedDepartment);
-
-      let matchesStatus = true;
-      const activeFilter = activeCardFilter !== 'ALL' ? activeCardFilter : statusFilter;
-
-      if (activeFilter === 'COMPLETED') {
-        matchesStatus = statusIn(t.status, ['Hoàn thành']);
-      } else if (activeFilter === 'LATE') {
-        matchesStatus = statusIn(t.status, ['Chưa hoàn thành trễ hạn', 'Trễ hạn']);
-      } else if (activeFilter === 'UNFINISHED') {
-        matchesStatus = statusIn(t.status, ['Chưa hoàn thành']);
-      } else if (activeFilter === 'COMPLETED_LATE') {
-        matchesStatus = statusIn(t.status, ['Hoàn thành trễ hạn']);
+      if (selectedGroup !== 'ALL') {
+        const taskGrp = getTaskBlockGroup(t.department, t.userName, users);
+        if (taskGrp !== selectedGroup) return false;
       }
 
-      const matchesSearch =
-        t.taskName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.userName.toLowerCase().includes(searchQuery.toLowerCase());
+      // Department filter logic (if a specific department is chosen)
+      if (!isAllDept) {
+        if (!isDepartmentMatch(t.department, selectedDepartment, t.userName, users)) return false;
+      }
 
-      return matchesDept && matchesStatus && matchesSearch;
+      // Status filter logic
+      if (activeFilter !== 'ALL') {
+        const cat = classifyTaskStatus(t.status);
+        if (cat !== activeFilter) return false;
+      }
+
+      // Search query filter
+      if (q) {
+        const matchesName = (t.taskName || '').toLowerCase().includes(q);
+        const matchesUser = (t.userName || '').toLowerCase().includes(q);
+        const matchesDept = (t.department || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesUser && !matchesDept) return false;
+      }
+
+      return true;
     });
-  }, [tasks, selectedDepartment, statusFilter, activeCardFilter, searchQuery, selectedGroup, phongList, vung1List, vung2List]);
+  }, [tasks, selectedDepartment, statusFilter, activeCardFilter, searchQuery, selectedGroup, users]);
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredTasks.length / itemsPerPage) || 1;
@@ -455,56 +420,73 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
 
         
-{/* MAIN LAYOUT: Left 40% (Quadrant 1 & 3), Right 60% (Quadrant 2 & 4) */}
-         <div className="flex flex-col lg:flex-row gap-2" style={{ flex: '0 0 100%' }}>
-           <div className="flex flex-col gap-2" style={{ flex: '0 0 40%', minWidth: '0' }}>
+{/* MAIN LAYOUT: Balanced Equal 2 Columns (50% - 50%) */}
+         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 w-full">
+           <div className="flex flex-col gap-2.5 min-w-0">
           
           
           {/* ================= QUADRANT 1: TỔNG QUAN CHUNG ================= */}
           <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden">
             <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide">
-              1. Tổng Chung 
+              1. TỔNG CHUNG (= KHỐI CÁC PHÒNG + KHỐI VÙNG 1 + KHỐI VÙNG 2)
             </div>
             
             {/* KPI Row - 5 Equal Width Cards using Flexbox */}
             <div className="flex flex-wrap gap-2 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]" style={{ width: '100%' }}>
               <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
-                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Tổng số việc</span>
-                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{allStats.total}</span>
-              </div>
-              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
-                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành</span>
-                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{allStats.unfinished}</span>
-              </div>
-              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
-                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa HT trễ hạn</span>
-                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{allStats.late}</span>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Tổng số</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{stats.total}</span>
               </div>
               <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2563eb] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
                 <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Hoàn thành</span>
-                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{allStats.completed}</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{stats.completed}</span>
               </div>
               <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#8b5cf6] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED_LATE'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
-                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">HT trễ hạn</span>
-                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{allStats.completedLate}</span>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Hoàn thành trễ hạn</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{stats.completedLate}</span>
+              </div>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{stats.unfinished}</span>
+              </div>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('ALL'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành trễ hạn</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{stats.late}</span>
               </div>
             </div>
             {/* Charts Area */}
             <div className="flex flex-col sm:flex-row h-[280px]">
               {/* Staff Rating Bar Chart */}
               <div className="w-full sm:w-[60%] pt-2 pb-2 pr-2 border-r border-[#e8efe9] flex flex-col">
-                 <span className="text-[11px] font-semibold text-[#4f6f56] text-center w-full block mt-2 mb-2 tracking-wide">ĐÁNH GIÁ XẾP LOẠI CÁN BỘ</span>
+                <div 
+                  className="flex items-center justify-center gap-1.5 cursor-pointer hover:text-emerald-700 transition-colors mt-2 mb-2 group"
+                  onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-tab', { detail: 'eval_results' }))}
+                  title="Nhấn để xem bảng chi tiết tại menu Kết quả đánh giá"
+                >
+                  <span className="text-[11px] font-semibold text-[#4f6f56] group-hover:text-emerald-700 tracking-wide text-center">
+                    ĐÁNH GIÁ XẾP LOẠI CÁN BỘ {selectedDepartment && selectedDepartment !== 'ALL' ? `(${selectedDepartment})` : ''}
+                  </span>
+                  <span className="text-[10px] text-slate-400 group-hover:text-emerald-600 font-bold">→</span>
+                </div>
                 <div className="flex-1 min-h-0 relative flex flex-col" style={{ backgroundColor: '#f0f7f2', backgroundImage: 'linear-gradient(to right, #d8e8df 1px, transparent 1px), linear-gradient(to bottom, #d8e8df 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={staffRatings} layout="vertical" margin={{ top: 0, right: 15, left: -10, bottom: 0 }}>
+                  <BarChart data={staffRatings} layout="vertical" margin={{ top: 5, right: 28, left: -5, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4ebe5" />
-                    <XAxis type="number" tick={{ fontSize: 9, fill: '#7a8c7f' }} axisLine={false} tickLine={false} />
-                    <YAxis dataKey="name" type="category" tick={{ fontSize: 9, fill: "#2d4a36", fontWeight: "600" }} axisLine={false} tickLine={false} width={130} />
-                    <Tooltip cursor={{ fill: 'rgba(241,245,242,0.7)' }} contentStyle={{ fontSize: '11px', padding: '4px', borderColor: '#c6d8c8' }} />
-                    <Bar dataKey="value" barSize={22} radius={[0, 3, 3, 0]}>
+                    <XAxis type="number" tick={{ fontSize: 9, fill: '#7a8c7f' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 9, fill: "#2d4a36", fontWeight: "600" }} axisLine={false} tickLine={false} width={100} />
+                    <Tooltip 
+                      cursor={{ fill: 'rgba(241,245,242,0.7)' }} 
+                      formatter={(value: any, name: any, item: any) => [
+                        `${value} cán bộ`,
+                        item?.payload?.fullLabel || name
+                      ]}
+                      contentStyle={{ fontSize: '11px', padding: '6px 10px', borderColor: '#c6d8c8', borderRadius: '4px' }} 
+                    />
+                    <Bar dataKey="value" barSize={18} radius={[0, 3, 3, 0]} isAnimationActive={false}>
+                       <LabelList dataKey="value" position="right" style={{ fontSize: '10px', fontWeight: 700, fill: '#2d4a36' }} />
                        {staffRatings.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                       ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -521,7 +503,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   </div>
                   <ResponsiveContainer width="100%" height="80%" className="z-10 mt-6">
                     <PieChart>
-                      <Pie data={completionDonutData} innerRadius="65%" outerRadius="90%" dataKey="value" stroke="none">
+                      <Pie data={completionDonutData} innerRadius="65%" outerRadius="90%" dataKey="value" stroke="none" isAnimationActive={false}>
                         <Cell fill="#2563eb" />
                         <Cell fill="#dae6db" />
                       </Pie>
@@ -540,64 +522,64 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
              <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide">
                3. KHỐI VÙNG 1
              </div>
-            {/* KPI Row - 5 Columns */}
-            <div className="grid grid-cols-5 gap-1.5 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]">
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Tổng số việc</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{phongStats.total}</span>
+            {/* KPI Row - 5 Equal Width Cards using Flexbox */}
+            <div className="flex flex-wrap gap-2 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]" style={{ width: '100%' }}>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Tổng số</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung1Stats.total}</span>
               </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Chưa hoàn thành</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{phongStats.unfinished}</span>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2563eb] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Hoàn thành</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung1Stats.completed}</span>
               </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Chưa HT trễ hạn</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{phongStats.unfinishedLate}</span>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#8b5cf6] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED_LATE'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Hoàn thành trễ hạn</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung1Stats.completedLate}</span>
               </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2563eb] text-white shadow-xs" onClick={() => { setActiveCardFilter('COMPLETED'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">Hoàn thành</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{phongStats.completed}</span>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung1Stats.unfinished}</span>
               </div>
-              <div className="py-1.5 px-2 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#8b5cf6] text-white shadow-xs" onClick={() => { setActiveCardFilter('COMPLETED_LATE'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }}>
-                <span className="text-[10.5px] font-medium truncate w-full text-center text-white/90">HT trễ hạn</span>
-                <span className="text-lg font-bold tracking-normal mt-0.5 leading-none w-full text-center">{phongStats.completedLate}</span>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('VUNG1'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành trễ hạn</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung1Stats.unfinishedLate}</span>
               </div>
             </div>
             {/* Charts Area */}
             <div className="flex flex-col sm:flex-row h-[280px]">
-              {/* Clustered Vertical Bar Chart */}
+              {/* Composed Chart for Vung 1 */}
               <div className="w-full sm:w-[60%] pt-2 pb-2 pr-2 border-r border-[#e8efe9] flex flex-col">
                  <span className="text-[11px] font-semibold text-[#4f6f56] text-center w-full block mt-2 mb-2 tracking-wide">CHI TIẾT ĐƠN VỊ</span>
                 <div className="flex-1 min-h-0 relative flex flex-col" style={{ backgroundColor: '#f0f7f2', backgroundImage: 'linear-gradient(to right, #d8e8df 1px, transparent 1px), linear-gradient(to bottom, #d8e8df 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={phongData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }} barCategoryGap="30%" barGap={2}>
+                  <ComposedChart data={vung1Data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4ebe5" />
                     <XAxis dataKey="name" tick={{ fontSize: 8, fill: "#2d4a36", fontWeight: "600" }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 9, fill: "#7a8c7f" }} axisLine={false} tickLine={false} />
                     <Tooltip cursor={{ fill: "rgba(241,245,242,0.7)" }} content={<DeptTooltip />} />
-                    <Legend verticalAlign="top" height={24} iconType="circle" wrapperStyle={{ fontSize: "10px", color: "#4f6f56" }} />
-                    <Bar dataKey="Tổng hoàn thành" name="Hoàn thành" fill="#2563eb" barSize={14} radius={[3, 3, 0, 0]} />
-                    <Bar dataKey="Tổng chưa hoàn thành" name="Chưa HT" fill="#e11d48" barSize={14} radius={[3, 3, 0, 0]} />
-                  </BarChart>
+                    <Legend verticalAlign="top" height={24} iconType="rect" wrapperStyle={{ fontSize: "10px", color: "#4f6f56" }} />
+                    <Bar dataKey="Tổng việc" name="Tổng CV" fill="#cbd5e1" barSize={20} radius={[2, 2, 0, 0]} isAnimationActive={false} />
+                    <Line type="monotone" dataKey="Tổng hoàn thành" name="Hoàn thành" stroke="#2563eb" strokeWidth={3.5} dot={{ r: 5, fill: "#2563eb" }} isAnimationActive={false} />
+                  </ComposedChart>
                 </ResponsiveContainer>
                 </div>
               </div>
               
-              {/* Half-Donut Gauge Chart */}
+              {/* Solid Pie Chart for Vung 1 */}
               <div className="w-full sm:w-[40%] flex flex-col">
                 <div className="h-[100%] p-2 relative flex flex-col items-center justify-center rounded" style={{ backgroundColor: '#f0f7f2', backgroundImage: 'linear-gradient(to right, #d8e8df 1px, transparent 1px), linear-gradient(to bottom, #d8e8df 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
                   <span className="text-[11px] font-semibold text-[#4f6f56] absolute top-4 text-center tracking-wide">TỶ LỆ HOÀN THÀNH<br/>TRÊN TỔNG SỐ</span>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0 mt-12">
-                     <span className="text-[20px] font-bold text-[#2563eb]">{phongStats.total ? Math.round(((phongStats.completed + phongStats.completedLate) / phongStats.total) * 100) : 0}%</span>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0">
+                     <span className="text-[20px] font-bold text-[#2563eb]">{vung1Stats.total ? Math.round(((vung1Stats.completed + vung1Stats.completedLate) / vung1Stats.total) * 100) : 0}%</span>
                   </div>
-                  <ResponsiveContainer width="100%" height="80%" className="z-10 mt-8">
+                  <ResponsiveContainer width="100%" height="80%" className="z-10 mt-6">
                     <PieChart>
                       <Pie data={[
-                        { name: "Đã hoàn thành", value: phongStats.completed + phongStats.completedLate, color: "#2d6e3e" },
-                        { name: "Chưa hoàn thành", value: phongStats.unfinished + phongStats.unfinishedLate, color: "#dae6db" }
-                      ]} startAngle={180} endAngle={0} cy="70%" innerRadius="65%" outerRadius="100%" dataKey="value" stroke="none">
+                        { name: "Đã hoàn thành", value: vung1Stats.completed + vung1Stats.completedLate },
+                        { name: "Chưa hoàn thành", value: vung1Stats.unfinished + vung1Stats.unfinishedLate }
+                      ]} innerRadius="65%" outerRadius="85%" dataKey="value" stroke="#fff" strokeWidth={2} isAnimationActive={false}>
                         <Cell fill="#2563eb" />
-                        <Cell fill="#dae6db" />
+                        <Cell fill="#e11d48" />
                       </Pie>
                       <Tooltip contentStyle={{ fontSize: "10px", padding: "2px 6px", borderColor: "#c6d8c8" }} />
                       <Legend verticalAlign="bottom" height={20} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '10px', color: '#4f6f56', paddingBottom: 2 }} formatter={(value) => <span style={{ color: '#4f6f56' }}>{value}</span>} />
@@ -608,68 +590,68 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             </div>
 </div>
            </div>
-           <div className="flex flex-col gap-2" style={{ flex: '0 0 60%', minWidth: '0' }}>
+           <div className="flex flex-col gap-2.5 min-w-0">
 {/* ================= QUADRANT 2: KHỐI CÁC PHÒNG ================= */}
             <div className="bg-white border border-[#c6d8c8] rounded-sm shadow-xs flex flex-col overflow-hidden">
               <div className="bg-[#87af89] text-white text-[12px] font-semibold text-center py-1.5 uppercase tracking-wide">
-                2. Khối Các Phòng
+                2. KHỐI CÁC PHÒNG
               </div>
               {/* KPI Row - 5 Equal Width Cards using Flexbox */}
               <div className="flex flex-wrap gap-2 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]" style={{ width: '100%' }}>
                 <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
-                  <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Tổng số việc</span>
+                  <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Tổng số</span>
                   <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{phongStats.total}</span>
-                </div>
-                <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
-                  <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành</span>
-                  <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{phongStats.unfinished}</span>
-                </div>
-                <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
-                  <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa HT trễ hạn</span>
-                  <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{phongStats.unfinishedLate}</span>
                 </div>
                 <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2563eb] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
                   <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Hoàn thành</span>
                   <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{phongStats.completed}</span>
                 </div>
                 <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#8b5cf6] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED_LATE'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
-                  <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">HT trễ hạn</span>
+                  <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Hoàn thành trễ hạn</span>
                   <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{phongStats.completedLate}</span>
+                </div>
+                <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                  <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành</span>
+                  <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{phongStats.unfinished}</span>
+                </div>
+                <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('PHONG'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                  <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành trễ hạn</span>
+                  <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{phongStats.unfinishedLate}</span>
                 </div>
               </div>
              {/* Charts Area */}
              <div className="flex flex-col sm:flex-row h-[280px]">
-               {/* Composed Chart */}
+               {/* Clustered Vertical Bar Chart for Phong */}
                <div className="w-full sm:w-[60%] pt-2 pb-2 pr-2 border-r border-[#e8efe9] flex flex-col">
                   <span className="text-[11px] font-semibold text-[#4f6f56] text-center w-full block mt-2 mb-2 tracking-wide">CHI TIẾT ĐƠN VỊ</span>
                  <div className="flex-1 min-h-0 relative flex flex-col" style={{ backgroundColor: '#f0f7f2', backgroundImage: 'linear-gradient(to right, #d8e8df 1px, transparent 1px), linear-gradient(to bottom, #d8e8df 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
                  <ResponsiveContainer width="100%" height="100%">
-                   <ComposedChart data={vung1Data} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                   <BarChart data={phongData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }} barCategoryGap="30%" barGap={2}>
                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4ebe5" />
                      <XAxis dataKey="name" tick={{ fontSize: 8, fill: "#2d4a36", fontWeight: "600" }} axisLine={false} tickLine={false} />
                      <YAxis tick={{ fontSize: 9, fill: "#7a8c7f" }} axisLine={false} tickLine={false} />
                      <Tooltip cursor={{ fill: "rgba(241,245,242,0.7)" }} content={<DeptTooltip />} />
-                     <Legend verticalAlign="top" height={24} iconType="rect" wrapperStyle={{ fontSize: "10px", color: "#4f6f56" }} />
-                     <Bar dataKey="Tổng việc" name="Tổng CV" fill="#cbd5e1" barSize={20} radius={[2, 2, 0, 0]} />
-                     <Line type="monotone" dataKey="Tổng hoàn thành" name="Hoàn thành" stroke="#2563eb" strokeWidth={3.5} dot={{ r: 5, fill: "#2563eb" }} />
-                   </ComposedChart>
+                     <Legend verticalAlign="top" height={24} iconType="circle" wrapperStyle={{ fontSize: "10px", color: "#4f6f56" }} />
+                     <Bar dataKey="Tổng hoàn thành" name="Hoàn thành" fill="#2563eb" barSize={14} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                     <Bar dataKey="Tổng chưa hoàn thành" name="Chưa HT" fill="#e11d48" barSize={14} radius={[3, 3, 0, 0]} isAnimationActive={false} />
+                   </BarChart>
                  </ResponsiveContainer>
                  </div>
                </div>
                
-               {/* Solid Pie Chart */}
+               {/* Solid Pie Chart for Phong */}
                <div className="w-full sm:w-[40%] flex flex-col">
                  <div className="h-[100%] p-2 relative flex flex-col items-center justify-center rounded" style={{ backgroundColor: '#f0f7f2', backgroundImage: 'linear-gradient(to right, #d8e8df 1px, transparent 1px), linear-gradient(to bottom, #d8e8df 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
                    <span className="text-[11px] font-semibold text-[#4f6f56] absolute top-4 text-center tracking-wide">TỶ LỆ HOÀN THÀNH<br/>TRÊN TỔNG SỐ</span>
                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-0">
-                      <span className="text-[20px] font-bold text-[#2563eb]">{vung1Stats.total ? Math.round(((vung1Stats.completed + vung1Stats.completedLate) / vung1Stats.total) * 100) : 0}%</span>
+                      <span className="text-[20px] font-bold text-[#2563eb]">{phongStats.total ? Math.round(((phongStats.completed + phongStats.completedLate) / phongStats.total) * 100) : 0}%</span>
                    </div>
                    <ResponsiveContainer width="100%" height="80%" className="z-10 mt-6">
                      <PieChart>
                        <Pie data={[
-                         { name: "Đã hoàn thành", value: vung1Stats.completed + vung1Stats.completedLate },
-                         { name: "Chưa hoàn thành", value: vung1Stats.unfinished + vung1Stats.unfinishedLate }
-                       ]} innerRadius="65%" outerRadius="85%" dataKey="value" stroke="#fff" strokeWidth={2}>
+                         { name: "Đã hoàn thành", value: phongStats.completed + phongStats.completedLate },
+                         { name: "Chưa hoàn thành", value: phongStats.unfinished + phongStats.unfinishedLate }
+                       ]} innerRadius="65%" outerRadius="85%" dataKey="value" stroke="#fff" strokeWidth={2} isAnimationActive={false}>
                          <Cell fill="#2563eb" />
                          <Cell fill="#e11d48" />
                        </Pie>
@@ -689,24 +671,24 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             {/* KPI Row - 5 Equal Width Cards using Flexbox */}
             <div className="flex flex-wrap gap-2 p-2 bg-[#f5f9f6] border-b border-[#c6d8c8]" style={{ width: '100%' }}>
               <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2d6e3e] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('ALL'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
-                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Tổng số việc</span>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Tổng số</span>
                 <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung2Stats.total}</span>
-              </div>
-              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
-                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành</span>
-                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung2Stats.unfinished}</span>
-              </div>
-              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
-                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa HT trễ hạn</span>
-                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung2Stats.unfinishedLate}</span>
               </div>
               <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#2563eb] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
                 <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Hoàn thành</span>
                 <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung2Stats.completed}</span>
               </div>
               <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#8b5cf6] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('COMPLETED_LATE'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
-                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">HT trễ hạn</span>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Hoàn thành trễ hạn</span>
                 <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung2Stats.completedLate}</span>
+              </div>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#e11d48] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('UNFINISHED'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung2Stats.unfinished}</span>
+              </div>
+              <div className="flex-1 min-w-0 cursor-pointer hover:opacity-90 transition-all active:scale-95 flex flex-col justify-center items-center text-center rounded bg-[#0d9488] text-white shadow-xs min-h-[60px]" onClick={() => { setActiveCardFilter('LATE'); setSelectedGroup('VUNG2'); setSelectedDepartment('ALL'); document.getElementById('dataTable')?.scrollIntoView({ behavior: 'smooth' }); }} style={{ flex: '1 1 calc(20% - 8px)' }}>
+                <span className="text-[10px] font-medium text-white/90 leading-tight text-center px-1 break-words">Chưa hoàn thành trễ hạn</span>
+                <span className="text-lg font-bold tracking-normal mt-1 leading-none text-center">{vung2Stats.unfinishedLate}</span>
               </div>
             </div>
             {/* Charts Area */}
@@ -732,8 +714,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                     <YAxis tick={{ fontSize: 9, fill: "#7a8c7f" }} axisLine={false} tickLine={false} />
                     <Tooltip cursor={{ fill: "#f1f5f2" }} content={<DeptTooltip />} />
                     <Legend verticalAlign="top" height={24} iconType="plainline" wrapperStyle={{ fontSize: "10px", color: "#4f6f56" }} />
-                    <Area type="monotone" strokeWidth={2.5} dataKey="Tổng hoàn thành" name="Hoàn thành" stroke="#2563eb" fillOpacity={1} fill="url(#colorHT)" />
-                    <Area type="monotone" strokeWidth={2.5} dataKey="Tổng chưa hoàn thành" name="Chưa HT" stroke="#e11d48" fillOpacity={1} fill="url(#colorCHT)" />
+                    <Area type="monotone" strokeWidth={2.5} dataKey="Tổng hoàn thành" name="Hoàn thành" stroke="#2563eb" fillOpacity={1} fill="url(#colorHT)" isAnimationActive={false} />
+                    <Area type="monotone" strokeWidth={2.5} dataKey="Tổng chưa hoàn thành" name="Chưa HT" stroke="#e11d48" fillOpacity={1} fill="url(#colorCHT)" isAnimationActive={false} />
                   </AreaChart>
                 </ResponsiveContainer>
                 </div>
@@ -751,7 +733,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                       <Pie data={[
                         { name: "Đã hoàn thành", value: vung2Stats.completed + vung2Stats.completedLate },
                         { name: "Chưa hoàn thành", value: vung2Stats.unfinished + vung2Stats.unfinishedLate }
-                      ]} innerRadius="65%" outerRadius="85%" dataKey="value" stroke="#fff" strokeWidth={2}>
+                      ]} innerRadius="65%" outerRadius="85%" dataKey="value" stroke="#fff" strokeWidth={2} isAnimationActive={false}>
                         <Cell fill="#2563eb" />
                         <Cell fill="#e11d48" />
                       </Pie>
@@ -775,13 +757,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               Xuất Excel
             </button>
           </div>
-          <div className="p-2 border-b border-[#c6d8c8] flex items-center justify-between bg-[#f5f9f6] gap-4">
-            <div className="flex gap-2 w-full max-w-lg">
-              <div className="relative flex-1">
+          <div className="p-2 border-b border-[#c6d8c8] flex flex-wrap items-center justify-between bg-[#f5f9f6] gap-3">
+            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
+              <div className="relative flex-1 min-w-[180px]">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-2 top-1.5 text-slate-400"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/></svg>
                 <input 
                   type="text"
-                  placeholder="Tìm kiếm..."
+                  placeholder="Tìm kiếm công việc, cán bộ, đơn vị..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-7 pr-2 py-1 border border-[#c6d8c8] rounded-sm text-[11px] bg-white text-[#31523b] outline-none focus:border-[#5fa070]"
@@ -789,15 +771,73 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               </div>
               <select 
                 className="border border-[#c6d8c8] rounded-sm text-[11px] px-2 py-1 bg-white text-[#31523b] outline-none focus:border-[#5fa070]"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                value={selectedGroup}
+                onChange={(e) => setSelectedGroup(e.target.value as any)}
               >
-                <option value="ALL">Tất cả trạng thái</option>
-                <option value="COMPLETED">Hoàn thành trong hạn</option>
+                <option value="ALL">Tất cả 3 khối</option>
+                <option value="PHONG">Khối các phòng</option>
+                <option value="VUNG1">Khối vùng 1</option>
+                <option value="VUNG2">Khối vùng 2</option>
+              </select>
+              <select 
+                className="border border-[#c6d8c8] rounded-sm text-[11px] px-2 py-1 bg-white text-[#31523b] outline-none focus:border-[#5fa070]"
+                value={activeCardFilter !== 'ALL' ? activeCardFilter : statusFilter}
+                onChange={(e) => {
+                  setActiveCardFilter('ALL');
+                  setStatusFilter(e.target.value);
+                }}
+              >
+                <option value="ALL">Tất cả tình trạng</option>
+                <option value="COMPLETED">Hoàn thành</option>
                 <option value="COMPLETED_LATE">Hoàn thành trễ hạn</option>
-                <option value="UNFINISHED">Chưa hoàn thành trong hạn</option>
+                <option value="UNFINISHED">Chưa hoàn thành</option>
                 <option value="LATE">Chưa hoàn thành trễ hạn</option>
               </select>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Active filter badge */}
+              {activeCardFilter !== 'ALL' && (
+                <span className="text-[10px] px-2 py-0.5 rounded font-medium border flex items-center gap-1 shadow-2xs"
+                  style={{
+                    backgroundColor: activeCardFilter === 'COMPLETED' ? '#eff6ff' : activeCardFilter === 'COMPLETED_LATE' ? '#f5f3ff' : activeCardFilter === 'LATE' ? '#f0fdfa' : '#fff1f2',
+                    borderColor: activeCardFilter === 'COMPLETED' ? '#93c5fd' : activeCardFilter === 'COMPLETED_LATE' ? '#c4b5fd' : activeCardFilter === 'LATE' ? '#99f6e4' : '#fecdd3',
+                    color: activeCardFilter === 'COMPLETED' ? '#1d4ed8' : activeCardFilter === 'COMPLETED_LATE' ? '#6d28d9' : activeCardFilter === 'LATE' ? '#0f766e' : '#be123c',
+                  }}
+                >
+                  Đang lọc thẻ: <strong>
+                    {activeCardFilter === 'COMPLETED' && 'Hoàn thành'}
+                    {activeCardFilter === 'COMPLETED_LATE' && 'Hoàn thành trễ hạn'}
+                    {activeCardFilter === 'LATE' && 'Chưa hoàn thành trễ hạn'}
+                    {activeCardFilter === 'UNFINISHED' && 'Chưa hoàn thành'}
+                  </strong>
+                </span>
+              )}
+              {statusFilter !== 'ALL' && activeCardFilter === 'ALL' && (
+                <span className="text-[10px] px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-medium">
+                  Trạng thái: <strong>
+                    {statusFilter === 'COMPLETED' && 'Hoàn thành'}
+                    {statusFilter === 'COMPLETED_LATE' && 'Hoàn thành trễ hạn'}
+                    {statusFilter === 'LATE' && 'Chưa hoàn thành trễ hạn'}
+                    {statusFilter === 'UNFINISHED' && 'Chưa hoàn thành'}
+                  </strong>
+                </span>
+              )}
+              <span className="text-[11px] text-[#4f6f56]">
+                Tìm thấy: <strong className="text-[#2d6e3e] font-bold">{filteredTasks.length}</strong> việc
+              </span>
+              {(selectedGroup !== 'ALL' || (activeCardFilter !== 'ALL' || statusFilter !== 'ALL') || searchQuery.trim() !== '') && (
+                <button
+                  onClick={() => {
+                    setSelectedGroup('ALL');
+                    setActiveCardFilter('ALL');
+                    setStatusFilter('ALL');
+                    setSearchQuery('');
+                  }}
+                  className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 font-medium transition-colors"
+                >
+                  Bỏ lọc
+                </button>
+              )}
             </div>
           </div>
           <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
@@ -812,22 +852,35 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   <th className="px-3 py-2.5 w-[15%] min-w-[150px] text-center border-b-2 border-[#004499]">TÌNH TRẠNG</th>
                 </tr>
               </thead>
-<tbody>
+              <tbody>
                 {paginatedTasks.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-4 text-center text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Khong co du lieu</td>
+                    <td colSpan={6} className="px-3 py-4 text-center text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">Không có dữ liệu phù hợp với bộ lọc</td>
                   </tr>
                 ) : (
-                  paginatedTasks.map((t, idx) => (
-                    <tr key={t.id} className={`${idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50/50 dark:bg-slate-800/50'} border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50/80 dark:hover:bg-slate-700/50 transition-colors`}>
-                      <td className="px-3 py-2 w-12 text-center font-mono text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800">{idx + 1 + (currentPage - 1) * itemsPerPage}</td>
-                      <td className="px-4 py-2 min-w-[400px] text-slate-900 dark:text-slate-100 font-medium border-r border-slate-100 dark:border-slate-800 truncate">{t.taskName}</td>
-                      <td className="px-3 py-2 min-w-[180px] text-slate-600 dark:text-slate-400 border-r border-slate-100 dark:border-slate-800 truncate">{t.department}</td>
-                      <td className="px-3 py-2 min-w-[180px] text-slate-900 dark:text-slate-100 font-medium border-r border-slate-100 dark:border-slate-800 truncate">{t.userName}</td>
-                      <td className="px-3 py-2 min-w-[150px] text-center text-slate-900 dark:text-slate-100 font-mono border-r border-slate-100 dark:border-slate-800">{formatDate(t.planDeadline)}</td>
-                      <td className="px-3 py-2 min-w-[150px] text-center text-[#1a65ff] font-medium truncate">{t.status}</td>
-                    </tr>
-                  ))
+                  paginatedTasks.map((t, idx) => {
+                    const cat = classifyTaskStatus(t.status);
+                    let badgeClass = 'text-slate-700 bg-slate-100';
+                    if (cat === 'COMPLETED') badgeClass = 'text-blue-700 bg-blue-50 border border-blue-200';
+                    else if (cat === 'COMPLETED_LATE') badgeClass = 'text-purple-700 bg-purple-50 border border-purple-200';
+                    else if (cat === 'LATE') badgeClass = 'text-teal-700 bg-teal-50 border border-teal-200';
+                    else if (cat === 'UNFINISHED') badgeClass = 'text-rose-700 bg-rose-50 border border-rose-200';
+
+                    return (
+                      <tr key={t.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} border-b border-slate-100 hover:bg-slate-50/80 transition-colors`}>
+                        <td className="px-3 py-2 w-12 text-center font-mono text-slate-600 border-r border-slate-100">{idx + 1 + (currentPage - 1) * itemsPerPage}</td>
+                        <td className="px-4 py-2 min-w-[400px] text-slate-900 font-medium border-r border-slate-100 truncate">{t.taskName}</td>
+                        <td className="px-3 py-2 min-w-[180px] text-slate-600 border-r border-slate-100 truncate">{t.department}</td>
+                        <td className="px-3 py-2 min-w-[180px] text-slate-900 font-medium border-r border-slate-100 truncate">{t.userName}</td>
+                        <td className="px-3 py-2 min-w-[150px] text-center text-slate-900 font-mono border-r border-slate-100">{formatDate(t.planDeadline)}</td>
+                        <td className="px-3 py-2 min-w-[150px] text-center border-r border-slate-100">
+                          <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-semibold ${badgeClass}`}>
+                            {t.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

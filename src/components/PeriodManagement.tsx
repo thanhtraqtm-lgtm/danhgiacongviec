@@ -23,6 +23,8 @@ interface PeriodManagementProps {
   onNavigateTab: (tab: any) => void;
   periodConfig: EvaluationPeriodConfig;
   onUpdatePeriodConfig: (cfg: EvaluationPeriodConfig) => void;
+  globalRole?: string;
+  currentUser?: User | null;
 }
 
 export const PeriodManagement: React.FC<PeriodManagementProps> = ({
@@ -40,7 +42,11 @@ export const PeriodManagement: React.FC<PeriodManagementProps> = ({
   onNavigateTab,
   periodConfig,
   onUpdatePeriodConfig,
+  globalRole = 'ADMIN',
+  currentUser
 }) => {
+  const isStaff = globalRole === 'STAFF';
+  const canManage = globalRole === 'ADMIN' || globalRole === 'PROVINCE_LEADER' || globalRole === 'DEPT_HEAD';
   // Kỳ hiện tại lấy từ periodConfig (toàn cục, lưu localStorage + Firestore)
   const selectedPeriod = periodConfig.periodName;
   const periods: string[] = periodConfig.periods || [];
@@ -48,7 +54,7 @@ export const PeriodManagement: React.FC<PeriodManagementProps> = ({
     // Chuyển kỳ hiện tại → reset trạng thái khóa khi đổi kỳ
     onUpdatePeriodConfig({ ...periodConfig, periodName: p, isLocked: false, lockedAt: undefined, lockedBy: undefined });
   };
-  const [selectedDeptForAssign, setSelectedDeptForAssign] = useState(DEPARTMENTS[1]);
+  const [selectedDeptForAssign, setSelectedDeptForAssign] = useState<string>(DEPARTMENTS[1]);
   const [newPeriodName, setNewPeriodName] = useState('');
 
   // Task assignment state for department heads
@@ -93,13 +99,14 @@ export const PeriodManagement: React.FC<PeriodManagementProps> = ({
       userName: assignedUser.trim(),
       coopUnit: assignedCoopUnit.trim(),
       assignedDate: assignedDate,
-      deadline: assignedDeadline,
+      planDeadline: assignedDeadline,
+      weight: 1,
       lateReason: assignedLateReason.trim(),
-      note: '',
-      completionStatus: assignedStatus,
+      notes: '',
+      status: assignedStatus,
     };
     
-    onAddTask(newTask);
+    onAddTask(newTask as any);
     
     // addToast is already called inside handleAddTask in App.tsx typically, but let's keep it or remove it. We'll leave it to App.tsx which handles onAddTask to show toast.
     // Wait, let's keep this specific toast since it's richer. Actually App.tsx adds "Thêm thành công".
@@ -150,185 +157,187 @@ export const PeriodManagement: React.FC<PeriodManagementProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Create Period Form */}
-        <div className="lg:col-span-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
-          <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-xs uppercase tracking-wide flex items-center gap-2">
-            <Plus className="w-4 h-4 text-emerald-600" />
-            Tạo Kỳ Đánh Giá Mới
-          </h3>
-          <p className="text-[11px] text-slate-500">
-            Dành cho Lãnh đạo và Trưởng phòng mở kỳ đánh giá KPI mới cho toàn đơn vị.
-          </p>
+      {!isStaff && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Create Period Form */}
+          <div className="lg:col-span-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+            <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-xs uppercase tracking-wide flex items-center gap-2">
+              <Plus className="w-4 h-4 text-emerald-600" />
+              Tạo Kỳ Đánh Giá Mới
+            </h3>
+            <p className="text-[11px] text-slate-500">
+              Dành cho Lãnh đạo và Trưởng phòng mở kỳ đánh giá KPI mới cho toàn đơn vị.
+            </p>
 
-          <form onSubmit={handleCreatePeriod} className="space-y-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tên Kỳ Báo Cáo / Đánh Giá:</label>
-              <input
-                type="text"
-                placeholder="Ví dụ: Quý III năm 2026 hoặc Tháng 08/2026"
-                value={newPeriodName}
-                onChange={(e) => setNewPeriodName(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="flex items-center justify-center px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded shadow-sm hover:bg-emerald-700 transition-colors w-full"
-            >
-              Kích Hoạt Kỳ Này
-            </button>
-          </form>
-
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-            <h4 className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase mb-2">Danh sách các kỳ đã thiết lập:</h4>
-            <div className="space-y-1.5 max-h-[300px] overflow-y-auto custom-scrollbar">
-              {periods.map((p, idx) => (
-                <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold">
-                  <span className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                    {p}
-                  </span>
-                  {selectedPeriod === p && (
-                    <span className="px-2 py-0.5 bg-sky-100 text-sky-800 rounded text-[10px] font-bold">Đang chọn</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Assign Tasks by Dept Head */}
-        <div className="lg:col-span-8 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
-          <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-xs uppercase tracking-wide flex items-center gap-2">
-            <Users className="w-4 h-4 text-sky-600" />
-            Trưởng Phòng Phân Giao Danh Sách Công Việc Cho Cá Nhân
-          </h3>
-          <p className="text-[11px] text-slate-500">
-            Trưởng đơn vị chọn phòng ban phụ trách và phân công danh sách nhiệm vụ công việc cho từng công chức trong đơn vị để xuất hiện trong Danh sách công việc.
-          </p>
-
-          <form onSubmit={handleAssignTask} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tên công việc <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                value={assignedTaskName}
-                onChange={(e) => setAssignedTaskName(e.target.value)}
-                placeholder="Nhập nội dung công việc giao cho cá nhân..."
-                className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
-              />
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleCreatePeriod} className="space-y-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Loại công việc</label>
-                <select
-                  value={assignedJobType}
-                  onChange={(e) => setAssignedJobType(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium cursor-pointer focus:ring-1 focus:ring-sky-500 outline-none"
-                >
-                  <option value="Nhiệm vụ thường xuyên">Nhiệm vụ thường xuyên</option>
-                  <option value="Nhiệm vụ trọng tâm">Nhiệm vụ trọng tâm</option>
-                  <option value="Nhiệm vụ đột xuất">Nhiệm vụ đột xuất</option>
-                </select>
-              </div>
-              
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Phòng ban / Đơn vị</label>
-                <select
-                  value={selectedDeptForAssign}
-                  onChange={(e) => setSelectedDeptForAssign(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium cursor-pointer focus:ring-1 focus:ring-sky-500 outline-none"
-                >
-                  {DEPARTMENTS.slice(1).map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Người/ đơn vị chủ trì</label>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tên Kỳ Báo Cáo / Đánh Giá:</label>
                 <input
                   type="text"
-                  value={assignedUser}
-                  onChange={(e) => setAssignedUser(e.target.value)}
-                  placeholder="Họ và tên cán bộ chủ trì"
-                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
+                  placeholder="Ví dụ: Quý III năm 2026 hoặc Tháng 08/2026"
+                  value={newPeriodName}
+                  onChange={(e) => setNewPeriodName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Đơn vị phối hợp</label>
-                <input
-                  type="text"
-                  value={assignedCoopUnit}
-                  onChange={(e) => setAssignedCoopUnit(e.target.value)}
-                  placeholder="Các đơn vị phối hợp (nếu có)"
-                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Ngày giao việc</label>
-                <input
-                  type="date"
-                  value={assignedDate}
-                  onChange={(e) => setAssignedDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Hạn hoàn thành</label>
-                <input
-                  type="date"
-                  value={assignedDeadline}
-                  onChange={(e) => setAssignedDeadline(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tình trạng</label>
-                <select
-                  value={assignedStatus}
-                  onChange={(e) => setAssignedStatus(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium cursor-pointer focus:ring-1 focus:ring-sky-500 outline-none"
-                >
-                  <option value="Chưa hoàn thành">Chưa hoàn thành</option>
-                  <option value="Đang thực hiện">Đang thực hiện</option>
-                  <option value="Đã hoàn thành">Đã hoàn thành</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Lý do trễ hạn (Nếu có)</label>
-                <input
-                  type="text"
-                  value={assignedLateReason}
-                  onChange={(e) => setAssignedLateReason(e.target.value)}
-                  placeholder="Ghi chú nếu trễ hạn"
-                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="pt-2">
               <button
                 type="submit"
-                className="flex items-center justify-center px-4 py-2.5 bg-sky-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-sky-700 transition-colors w-full"
+                className="flex items-center justify-center px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded shadow-sm hover:bg-emerald-700 transition-colors w-full"
               >
-                Giao Việc & Thêm Vào Bảng Theo Dõi
+                Kích Hoạt Kỳ Này
               </button>
+            </form>
+
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+              <h4 className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase mb-2">Danh sách các kỳ đã thiết lập:</h4>
+              <div className="space-y-1.5 max-h-[300px] overflow-y-auto custom-scrollbar">
+                {periods.map((p, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold">
+                    <span className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                      {p}
+                    </span>
+                    {selectedPeriod === p && (
+                      <span className="px-2 py-0.5 bg-sky-100 text-sky-800 rounded text-[10px] font-bold">Đang chọn</span>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-          </form>
+          </div>
+
+          {/* Assign Tasks by Dept Head */}
+          <div className="lg:col-span-8 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+            <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-xs uppercase tracking-wide flex items-center gap-2">
+              <Users className="w-4 h-4 text-sky-600" />
+              Trưởng Phòng Phân Giao Danh Sách Công Việc Cho Cá Nhân
+            </h3>
+            <p className="text-[11px] text-slate-500">
+              Trưởng đơn vị chọn phòng ban phụ trách và phân công danh sách nhiệm vụ công việc cho từng công chức trong đơn vị để xuất hiện trong Danh sách công việc.
+            </p>
+
+            <form onSubmit={handleAssignTask} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tên công việc <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={assignedTaskName}
+                  onChange={(e) => setAssignedTaskName(e.target.value)}
+                  placeholder="Nhập nội dung công việc giao cho cá nhân..."
+                  className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Loại công việc</label>
+                  <select
+                    value={assignedJobType}
+                    onChange={(e) => setAssignedJobType(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium cursor-pointer focus:ring-1 focus:ring-sky-500 outline-none"
+                  >
+                    <option value="Nhiệm vụ thường xuyên">Nhiệm vụ thường xuyên</option>
+                    <option value="Nhiệm vụ trọng tâm">Nhiệm vụ trọng tâm</option>
+                    <option value="Nhiệm vụ đột xuất">Nhiệm vụ đột xuất</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Phòng ban / Đơn vị</label>
+                  <select
+                    value={selectedDeptForAssign}
+                    onChange={(e) => setSelectedDeptForAssign(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium cursor-pointer focus:ring-1 focus:ring-sky-500 outline-none"
+                  >
+                    {DEPARTMENTS.slice(1).map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Người/ đơn vị chủ trì</label>
+                  <input
+                    type="text"
+                    value={assignedUser}
+                    onChange={(e) => setAssignedUser(e.target.value)}
+                    placeholder="Họ và tên cán bộ chủ trì"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Đơn vị phối hợp</label>
+                  <input
+                    type="text"
+                    value={assignedCoopUnit}
+                    onChange={(e) => setAssignedCoopUnit(e.target.value)}
+                    placeholder="Các đơn vị phối hợp (nếu có)"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Ngày giao việc</label>
+                  <input
+                    type="date"
+                    value={assignedDate}
+                    onChange={(e) => setAssignedDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Hạn hoàn thành</label>
+                  <input
+                    type="date"
+                    value={assignedDeadline}
+                    onChange={(e) => setAssignedDeadline(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tình trạng</label>
+                  <select
+                    value={assignedStatus}
+                    onChange={(e) => setAssignedStatus(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium cursor-pointer focus:ring-1 focus:ring-sky-500 outline-none"
+                  >
+                    <option value="Chưa hoàn thành">Chưa hoàn thành</option>
+                    <option value="Đang thực hiện">Đang thực hiện</option>
+                    <option value="Đã hoàn thành">Đã hoàn thành</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Lý do trễ hạn (Nếu có)</label>
+                  <input
+                    type="text"
+                    value={assignedLateReason}
+                    onChange={(e) => setAssignedLateReason(e.target.value)}
+                    placeholder="Ghi chú nếu trễ hạn"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-medium focus:ring-1 focus:ring-sky-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="flex items-center justify-center px-4 py-2.5 bg-sky-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-sky-700 transition-colors w-full"
+                >
+                  Giao Việc & Thêm Vào Bảng Theo Dõi
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
+      )}
       
       {/* Task Data Viewer List embedded */}
-      <div className="mt-8 border-t border-slate-200 dark:border-slate-800 pt-6">
+      <div className={`${!isStaff ? 'mt-8 border-t border-slate-200 dark:border-slate-800 pt-6' : ''}`}>
         <h3 className="font-extrabold text-slate-900 dark:text-slate-100 text-lg uppercase tracking-wide mb-4">
           Danh Sách Công Việc Đã Giao
         </h3>
@@ -344,6 +353,8 @@ export const PeriodManagement: React.FC<PeriodManagementProps> = ({
             selectedDepartment={selectedDepartment}
             setSelectedDepartment={setSelectedDepartment}
             addToast={addToast}
+            globalRole={globalRole}
+            currentUser={currentUser}
         />
       </div>
     </div>

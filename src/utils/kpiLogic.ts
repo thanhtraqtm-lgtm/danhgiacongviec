@@ -215,3 +215,253 @@ export function evaluateOverallKPI(
 export function computeConversionFactor(evalScore: number): number {
   return Number((evalScore / 5).toFixed(2));
 }
+
+/**
+ * Tính toán kết quả tổng hợp của "Điểm thực hiện nhiệm vụ" từ danh sách công việc (TaskKpiRow[])
+ * Không gán cứng, tính toán thực tế 100% dựa theo công thức chuẩn:
+ * - Hệ số quy đổi = Điểm chấm / 5
+ * - Khối lượng quy đổi = Số lượng * Hệ số quy đổi
+ * - Điểm nhiệm vụ (thang 100) = (Tỷ lệ KL + Tỷ lệ CL + Tỷ lệ TĐ) / 3
+ * - Điểm quy đổi KPI 70đ = (Điểm nhiệm vụ / 100) * 70
+ */
+export function calculateKpiSheetSummaryFromRows(rows: any[]) {
+  if (!rows || !Array.isArray(rows) || rows.length === 0) {
+    return {
+      taskCount: 0,
+      completedTaskCount: 0,
+      kpiQuantityPct: 0,
+      kpiQualityPct: 0,
+      kpiTimelinePct: 0,
+      taskExecutionScore: 0,
+      weightedTask70: 0,
+    };
+  }
+
+  let totalConvertedQty = 0;
+  let totalConvertedActualQty = 0;
+  let totalConvertedActualQuality = 0;
+  let totalConvertedActualTimeline = 0;
+  let completedCount = 0;
+
+  rows.forEach((r) => {
+    const evalScore = Number(r.evalScore) || 0;
+    const conversionFactor = Number((evalScore / 5).toFixed(2));
+    const qty = Number(r.quantity) || 1;
+    const actualQty = Number(r.actualQtyCompleted !== undefined ? r.actualQtyCompleted : qty);
+    const actualQuality = Number(r.actualQualityCompleted !== undefined ? r.actualQualityCompleted : qty);
+    const actualTimeline = Number(r.actualTimelineCompleted !== undefined ? r.actualTimelineCompleted : qty);
+
+    totalConvertedQty += qty * conversionFactor;
+    totalConvertedActualQty += actualQty * conversionFactor;
+    totalConvertedActualQuality += actualQuality * conversionFactor;
+    totalConvertedActualTimeline += actualTimeline * conversionFactor;
+
+    if (actualQty >= qty && evalScore >= 70) {
+      completedCount++;
+    }
+  });
+
+  const denom = totalConvertedQty > 0 ? totalConvertedQty : 1;
+  const kpiQuantityPct = Number(((totalConvertedActualQty / denom) * 100).toFixed(2));
+  const kpiQualityPct = Number(((totalConvertedActualQuality / denom) * 100).toFixed(2));
+  const kpiTimelinePct = Number(((totalConvertedActualTimeline / denom) * 100).toFixed(4));
+
+  const taskExecutionScore = Number(((kpiQuantityPct + kpiQualityPct + kpiTimelinePct) / 3).toFixed(2));
+  const weightedTask70 = Number(((taskExecutionScore / 100) * 70).toFixed(1));
+
+  return {
+    taskCount: rows.length,
+    completedTaskCount: completedCount,
+    kpiQuantityPct,
+    kpiQualityPct,
+    kpiTimelinePct,
+    taskExecutionScore,
+    weightedTask70,
+  };
+}
+
+/**
+ * Đọc dữ liệu công việc thực tế được lưu từ Menu "Điểm thực hiện nhiệm vụ"
+ * Hỗ trợ tra cứu mềm dẻo theo tên (NFC/NFD, hoa thường, khoảng trắng)
+ */
+export function getSavedKpiRowsForUser(fullName: string): any[] | null {
+  if (!fullName) return null;
+  const trimmed = fullName.trim();
+  const nfc = trimmed.normalize('NFC');
+  
+  // 1. Kiểm tra trực tiếp key
+  try {
+    const raw = localStorage.getItem(`kpi_3sheet_rows_${trimmed}`) || localStorage.getItem(`kpi_3sheet_rows_${nfc}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {}
+
+  // 2. Quét các key trong localStorage để khớp chính xác không phân biệt hoa thường
+  try {
+    const targetNorm = nfc.toLowerCase();
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('kpi_3sheet_rows_')) {
+        const userPart = k.replace('kpi_3sheet_rows_', '').normalize('NFC').trim().toLowerCase();
+        if (userPart === targetNorm) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          }
+        }
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
+/**
+ * Đọc bảng tổng hợp kết quả thực tế từ Menu "Điểm thực hiện nhiệm vụ"
+ */
+export function getSavedKpiSummaryForUser(fullName: string): any | null {
+  if (!fullName) return null;
+  const trimmed = fullName.trim();
+  const nfc = trimmed.normalize('NFC');
+
+  try {
+    const raw = localStorage.getItem(`kpi_3sheet_summary_${trimmed}`) || localStorage.getItem(`kpi_3sheet_summary_${nfc}`);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch {}
+
+  try {
+    const targetNorm = nfc.toLowerCase();
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('kpi_3sheet_summary_')) {
+        const userPart = k.replace('kpi_3sheet_summary_', '').normalize('NFC').trim().toLowerCase();
+        if (userPart === targetNorm) {
+          const raw = localStorage.getItem(k);
+          if (raw) return JSON.parse(raw);
+        }
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
+/**
+ * Trích xuất chính xác số công việc và điểm thực tế từ "Điểm thực hiện nhiệm vụ"
+ * LOẠI BỎ HOÀN TOÀN GÁN CỨNG:
+ * - Không lấy từ danh sách phân công công việc mặc định
+ * - Không tự động nhân chia 70/30 khi chưa có điểm nhiệm vụ
+ */
+export function getActualUserKpiTaskData(
+  user: { id?: string; fullName: string; username?: string },
+  sub?: any
+): {
+  taskCount: number;
+  completedTaskCount: number;
+  kpiScore70: number;
+  taskExecutionScore100: number;
+  hasKpiData: boolean;
+} {
+  // 1. Ưu tiên cao nhất: Dữ liệu thực tế các dòng công việc trong Menu "Điểm thực hiện nhiệm vụ" (localStorage)
+  const savedRows = getSavedKpiRowsForUser(user.fullName);
+  if (savedRows && Array.isArray(savedRows) && savedRows.length > 0) {
+    const summary = calculateKpiSheetSummaryFromRows(savedRows);
+    return {
+      taskCount: summary.taskCount,
+      completedTaskCount: summary.completedTaskCount,
+      kpiScore70: summary.weightedTask70,
+      taskExecutionScore100: summary.taskExecutionScore,
+      hasKpiData: true,
+    };
+  }
+
+  // 2. Dữ liệu tổng hợp từ Menu "Điểm thực hiện nhiệm vụ" (localStorage)
+  const savedSummary = getSavedKpiSummaryForUser(user.fullName);
+  if (savedSummary && (savedSummary.taskCount > 0 || (savedSummary.weightedTask70 !== undefined && savedSummary.weightedTask70 > 0))) {
+    return {
+      taskCount: Number(savedSummary.taskCount) || 0,
+      completedTaskCount: Number(savedSummary.completedTaskCount ?? savedSummary.taskCount) || 0,
+      kpiScore70: Number(Number(savedSummary.weightedTask70 || 0).toFixed(1)),
+      taskExecutionScore100: Number(savedSummary.taskExecutionScore || 0),
+      hasKpiData: true,
+    };
+  }
+
+  // 3. Dữ liệu từ phiếu nộp của người dùng có đính kèm kpiRows
+  if (sub?.kpiRows && Array.isArray(sub.kpiRows) && sub.kpiRows.length > 0) {
+    const summary = calculateKpiSheetSummaryFromRows(sub.kpiRows);
+    return {
+      taskCount: summary.taskCount,
+      completedTaskCount: summary.completedTaskCount,
+      kpiScore70: summary.weightedTask70,
+      taskExecutionScore100: summary.taskExecutionScore,
+      hasKpiData: true,
+    };
+  }
+
+  // 4. Dữ liệu điểm thực hiện nhiệm vụ đã nộp chính thức trong phiếu (taskWeightedScore hoặc crit_IV_kpi)
+  if (sub?.taskWeightedScore !== undefined && sub.taskWeightedScore > 0) {
+    const count = Number(sub.taskCount) || 0;
+    const score70 = Number(Number(sub.taskWeightedScore).toFixed(1));
+    return {
+      taskCount: count,
+      completedTaskCount: Number(sub.completedTaskCount ?? count) || 0,
+      kpiScore70: score70,
+      taskExecutionScore100: sub.kpiTaskScore ? Number(sub.kpiTaskScore) : Number(((score70 / 70) * 100).toFixed(1)),
+      hasKpiData: true,
+    };
+  }
+
+  if (sub?.criteria && Array.isArray(sub.criteria) && sub.criteria.length > 0) {
+    const kpiCrit = sub.criteria.find((c: any) => 
+      c.id === 'crit_IV_kpi' || c.id === 'crit_IV_KPI' || c.id === 'crit_IV_kpi_weighted' || 
+      (c.categoryName && (c.categoryName.includes('IV.') || c.categoryName.includes('KPI')))
+    );
+    if (kpiCrit && kpiCrit.selfScore !== undefined && Number(kpiCrit.selfScore) > 0) {
+      const score = Number(Number(kpiCrit.selfScore).toFixed(1));
+      const count = Number(sub.taskCount) || 0;
+      return {
+        taskCount: count,
+        completedTaskCount: Number(sub.completedTaskCount ?? count) || 0,
+        kpiScore70: score,
+        taskExecutionScore100: Number(((score / 70) * 100).toFixed(1)),
+        hasKpiData: true,
+      };
+    }
+  }
+
+  if (sub?.kpiTaskScore !== undefined && sub.kpiTaskScore > 0) {
+    const count = Number(sub.taskCount) || 0;
+    return {
+      taskCount: count,
+      completedTaskCount: Number(sub.completedTaskCount ?? count) || 0,
+      kpiScore70: Number(((sub.kpiTaskScore / 100) * 70).toFixed(1)),
+      taskExecutionScore100: Number(sub.kpiTaskScore),
+      hasKpiData: true,
+    };
+  }
+
+  if (sub?.taskCount !== undefined && sub.taskCount > 0) {
+    return {
+      taskCount: Number(sub.taskCount),
+      completedTaskCount: Number(sub.completedTaskCount ?? sub.taskCount),
+      kpiScore70: 0,
+      taskExecutionScore100: 0,
+      hasKpiData: true,
+    };
+  }
+
+  // 5. Mặc định: Tuyệt đối KHÔNG gán cứng. Nếu chưa có đánh giá nhiệm vụ thực tế thì là 0
+  return {
+    taskCount: 0,
+    completedTaskCount: 0,
+    kpiScore70: 0,
+    taskExecutionScore100: 0,
+    hasKpiData: false,
+  };
+}
