@@ -227,10 +227,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               </>
             )}
           </button>
-
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center mt-4">
-            Sử dụng tài khoản nhân sự đã được nhập trong hệ thống
-          </p>
         </form>
 
         <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-center gap-2">
